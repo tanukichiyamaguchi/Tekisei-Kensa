@@ -10,3 +10,9 @@
 - [付録C 表示文言マスタ](docs/付録C_表示文言マスタ.md)
 - [付録D AI 解説仕様](docs/付録D_AI解説仕様.md)
 - [付録E グラフ仕様](docs/付録E_グラフ仕様.md)
+
+## 検証用データ
+
+- [tests/fixtures/README.md](tests/fixtures/README.md) — 既存システムの回答データ 73 件を匿名化した検証用データの説明
+- `tests/fixtures/existing_results.json` — データ本体
+- `tests/verify_fixtures.py` — 整合性確認スクリプト（`python3 tests/verify_fixtures.py`）
