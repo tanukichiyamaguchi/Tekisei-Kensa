@@ -1210,7 +1210,7 @@ export async function renderResultPdf(args: RenderResultPdfArgs): Promise<Render
 | D07-05 | 設計判断 | AI 入力の整形（相性・リスクの負値の 0 置換、信頼係数の四捨五入、`formatStep`、短縮名） | §2.3 の表。負値の置換は「画面の表示値と一致させ、付録D の絶対閾値の判定結果を変えない」基準（D07-04 と同じ基準） | 03、07、08 |
 | D07-06 | 設計判断 | JSON 出力の強制方式 | 構造化出力（`output_config.format` + `messages.parse`）。strict tool use は代替経路 | 07 |
 | D07-07 | 設計判断 | 配列個数の検証 | 付録D の個数指定より緩い上限で受け入れ、0 個と `levers` の順序違反のみ失敗 | 07、08 |
-| D07-08 | 設計判断（依頼主判断） | コスト重視のモデル代替 | 既定は `claude-opus-5`。`claude-sonnet-5` は依頼主判断で切替可（環境変数のみで変更） | 07 |
+| D07-08 | 決定済み（10 K-03） | コスト重視のモデル代替 | `claude-opus-5` で確定。`claude-sonnet-5` への切替は環境変数のみで可能だが、依頼主は現時点で不要と判断 | 07 |
 | D07-09 | 設計判断（実測後に判断） | `effort` の値 | `high`。実測後に `medium` へ下げる余地 | 07 |
 | D07-10 | 未確認（SDK 仕様） | リクエストオプション `signal` の可否 | 使えれば `signal` + `maxRetries 1`。使えなければ `timeout 240 秒` + `maxRetries 0` | 04、07 |
 | D07-11 | 設計判断（実測後に再判断） | プロンプトキャッシュ | system ブロックに 5 分 TTL の `cache_control` を付ける。命中条件は「前回の生成開始から 5 分以内に次の生成を開始」（生成時間も TTL を消費する。skill）。生成時間の実測（§4.8 `elapsedMs`）と `cache_read_input_tokens` を見て、命中しない運用なら 1 時間 TTL を再検討（§4.4） | 07 |
