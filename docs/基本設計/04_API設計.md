@@ -1837,9 +1837,9 @@ export type UpdateRespondentInput = z.infer<typeof updateRespondentInputSchema>;
 
 ### 5.9 AI 解説 `POST/GET /api/v1/admin/results/{resultId}/ai-analysis`
 
-要件定義書 §6.2 A-09、§6.6、付録D、00 §3.6、02 §3.10、01 §5.4（`maxDuration` 300）に対応します。生成処理そのもの（プロンプト組み立て、provider 呼び出し、JSON 検証、`ai_analyses` への保存、状態遷移）は 07 分冊の `lib/ai/` と `lib/services/ai-analysis.ts` の共同責任で、本書は **API の契約と状態の扱い** を定めます。
+要件定義書 §6.2 A-09、§6.6、付録D、00 §3.6、00 §2.2（`aiAnalyses`、`results.aiGenerationStatus` / `latestAiAnalysisId`）、01（`maxDuration` 300）に対応します。生成処理そのもの（プロンプト組み立て、provider 呼び出し、JSON 検証、`aiAnalyses` への保存、状態遷移）は 07 分冊の `lib/ai/` と `lib/services/ai-analysis.ts` の共同責任で、本書は **API の契約と状態の扱い** を定めます。`results` の AI 関連フィールドのうち 00 §2.2 に無い `aiGenerationStartedAt`（Timestamp または `null`）と `aiGenerationError`（string または `null`）は 07 §6.2 が「02 が確定」としているフィールドで、本書も同じ名前を仮置きします（§10）。
 
-#### 状態遷移（02 D02-14、00 D-10）
+#### 状態遷移（00 D-10、07 §6.2）
 
 ```mermaid
 stateDiagram-v2
@@ -1849,7 +1849,7 @@ stateDiagram-v2
     generating --> completed: provider 成功 + JSON 検証成功
     generating --> failed: provider 失敗 / JSON 検証失敗 / タイムアウト
     completed --> completed: POST（再生成しない。保存済みを返す）
-    generating --> failed: 滞留（started_at から 10 分超）を次の POST/GET が検知
+    generating --> failed: 滞留（aiGenerationStartedAt から 10 分超）を次の POST/GET が検知
 ```
 
 #### `POST /api/v1/admin/results/{resultId}/ai-analysis`
@@ -1859,23 +1859,23 @@ stateDiagram-v2
 | 認可 | admin 以上（対象結果が見えること） |
 | リクエスト | 本文なし |
 | 処理 | 下記の手順。**同期方式**（応答まで生成を待つ。`maxDuration = 300`） |
-| 監査ログ | `result.ai_generate`（`details: { "status": "completed" / "failed", "aiAnalysisId", "inputTokens", "outputTokens" }`。トークン数は 07 §4.8 の `AiGenerateResult.usage` から（stub は `null`）。開始時には書かず、終了時に 1 件） |
+| 監査ログ | `result.ai_generate`（`details: { "status": "completed" / "failed", "aiAnalysisId", "inputTokens", "outputTokens" }`。トークン数は 07 §4.8 の `AiGenerateResult.usage` から（stub は `null`）。開始時には書かず、終了時に成功・失敗の書き込みと同じバッチで 1 件） |
 
 処理手順（`lib/services/ai-analysis.ts`）:
 
-1. `results` を取得（RLS）。無ければ 404 `RESULT_NOT_FOUND`。
-2. `ai_generation_status` で分岐:
-   - `completed` → `ai_analyses` の最新行を返す（200、再生成しない。要件定義書 §6.6）。
-   - `generating` かつ `ai_generation_started_at > now() − 10 分` → 409 `AI_ALREADY_GENERATING`。
-   - `generating` かつ 10 分以上前 → 滞留とみなし `failed` に更新してから続行（設計判断 D04-34: Vercel の関数が途中で打ち切られた場合の復旧）。
+1. `getResult(resultId)` → `assertVisibleToAdmin`。無ければ 404 `RESULT_NOT_FOUND`。`respondents` 1 文書（氏名・職業）を取得する。
+2. `aiGenerationStatus` で分岐（トランザクション前の早期判定）:
+   - `completed` → `aiAnalyses` の最新文書（`latestAiAnalysisId`）を返す（200、再生成しない。要件定義書 §6.6）。
+   - `generating` かつ `aiGenerationStartedAt > now − 10 分` → 409 `AI_ALREADY_GENERATING`。
+   - `generating` かつ 10 分以上前 → 滞留とみなし、手順 4 のトランザクションで `failed` 経由の再開始として扱う（設計判断 D04-34: Vercel の関数が途中で打ち切られた場合の復旧）。
    - `not_generated` / `failed` → 続行。
-3. 日次上限の判定（§2.8）。超過なら 429 `AI_DAILY_LIMIT_EXCEEDED`。
-4. 条件付き UPDATE で `generating` に遷移: `update results set ai_generation_status = 'generating', ai_generation_started_at = now(), ai_generation_error = null where id = resultId and ai_generation_status in ('not_generated', 'failed')`。更新件数が 0 なら別リクエストが先に開始しているため 409 `AI_ALREADY_GENERATING`（二重起動防止。01 §8.4）。
+3. 日次上限の判定（§2.8。`count()` 集計）。超過なら 429 `AI_DAILY_LIMIT_EXCEEDED`。
+4. トランザクション（`beginAiGeneration(resultId, now)`。02 参照）で `generating` に遷移: `results/{resultId}` を `transaction.get` し、`aiGenerationStatus` が `not_generated` / `failed`、または `generating` かつ `aiGenerationStartedAt <= now − 10 分` のときだけ `{ aiGenerationStatus: "generating", aiGenerationStartedAt: serverTimestamp(), aiGenerationError: null }` に `update` する。条件を満たさなければ中断して 409 `AI_ALREADY_GENERATING`（二重起動防止。1.x 版の条件付き `UPDATE` の代替。D04-59。同一結果に対する同時リクエストは楽観ロックにより片方だけがコミットに成功する）。
 5. `AiAnalysisInput`（氏名、職業表示名、`ScoreResult`）を組み立て、`AiProvider.generate()`（07）を呼ぶ。
-6. 成功: `ai_analyses` に INSERT（`generated_by = auth.uid()`）→ `results` を `completed` + `latest_ai_analysis_id` に UPDATE → 監査ログ → 200。
-7. 失敗: `results` を `failed` + `ai_generation_error`（下記の短い理由コード。個人情報・API キー・生の応答本文を含めない）に UPDATE → 監査ログ → 502 `AI_GENERATION_FAILED`（`details.reason` に同じコードを載せる）。
+6. 成功: `saveAiAnalysis(resultId, aiAnalysisDoc, audit)`（`ai-analyses-repository.ts`。02 参照）で `aiAnalyses` 文書の作成（`organizationId`、`resultId`、`provider`、`model`、`promptVersion`、`analysisKind`、`rawText`、`output`、`usage`、`stopReason`、`requestId`、`status: "completed"`、`generatedByUid` = `ctx.uid`（07 §7.1 の `generatedBy`。02 に追加を依頼）、監査フィールド）と `results` の `update`（`aiGenerationStatus: "completed"`、`latestAiAnalysisId`、`aiGenerationError: null`）と `auditLogs` を **1 バッチ** で書く（07 §7.1「同一バッチ」）→ 200。
+7. 失敗: `failAiGeneration(resultId, reason, audit)`（02 参照）で `results` を `{ aiGenerationStatus: "failed", aiGenerationError: reason }` に `update` し、`auditLogs` を同じバッチで書く（下記の短い理由コード。個人情報・API キー・生の応答本文を含めない）→ 502 `AI_GENERATION_FAILED`（`details.reason` に同じコードを載せる）。`aiAnalyses` 文書は作らない（07 §4.6）。
 
-`ai_generation_error` に保存する値（07 §4.6 の `AI_FAILURE_REASONS` と同じ語彙。07 の一覧が正で、本書は service 側が付ける `internal_error` だけを追加する）:
+`aiGenerationError` に保存する値（07 §4.6 の `AI_FAILURE_REASONS` と同じ語彙。07 の一覧が正で、本書は service 側が付ける `internal_error` だけを追加する）:
 
 ```text
 provider_error   5xx / 529 overloaded / 接続エラー（再試行で回復し得る）
@@ -1887,7 +1887,7 @@ invalid_json     応答本文を付録D §2 のスキーマで検証できなか
 truncated        stop_reason = max_tokens
 refusal          stop_reason = refusal
 config_error     プロンプト版・provider 名の不整合
-internal_error   DB エラーなど自システム側の失敗（07 §6.2 の依頼どおり service が付ける）
+internal_error   Firestore の書き込みエラーなど自システム側の失敗（07 §6.2 の依頼どおり service が付ける）
 ```
 
 レスポンス（200。GET と同じ形）:
@@ -1940,7 +1940,7 @@ internal_error   DB エラーなど自システム側の失敗（07 §6.2 の依
 | 項目 | 内容 |
 |---|---|
 | 認可 | admin 以上 |
-| 処理 | `results` の AI 4 列 + `ai_analyses` 最新行。`generating` の滞留（10 分超）を検知したら `failed` に更新して返す |
+| 処理 | `results` の AI 関連 4 フィールド（`aiGenerationStatus`、`aiGenerationStartedAt`、`aiGenerationError`、`latestAiAnalysisId`）+ `aiAnalyses` 最新文書。`generating` の滞留（10 分超）を検知したら `failAiGeneration(resultId, "timeout")` で `failed` に更新して返す（監査ログは書かない。滞留した POST が書けなかった分は補わない） |
 | 監査ログ | なし（結果詳細の `result.view` に含まれる扱い） |
 | レスポンス | POST と同じ形。`latest` は無ければ `null` |
 
