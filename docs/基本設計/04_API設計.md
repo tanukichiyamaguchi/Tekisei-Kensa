@@ -3,8 +3,8 @@
 | 項目 | 内容 |
 |---|---|
 | 文書名 | 適性検査システム 基本設計 04 API・サーバ処理設計 |
-| 版 | 1.0 |
-| 作成日 | 2026-09-17 |
+| 版 | 1.1 |
+| 作成日 | 2026-09-17（1.1 版: 2026-09-19。改版履歴は §12） |
 | 対象 | 実装者（Route Handler、`lib/services/`、`lib/auth/`、`lib/db/` の実装担当）、05〜08 分冊の設計者 |
 
 ## 0. 本書の位置づけ
@@ -14,6 +14,7 @@
 - 用語・識別子・テーブル名・型名は 00 に従います。DB の列定義・RLS・RPC 関数は 02 分冊（`02_データベース設計.md`。以下「02」）、採点・比較の純関数は 03 分冊（以下「03」）、環境変数・ライブラリ・実行基盤は 01 分冊（以下「01」）が定めたものをそのまま使い、本書では参照に留めます。
 - 本書の範囲外: 画面のレイアウトと文言（05・06）、AI プロンプトと PDF レイアウト（07）、テスト計画（08）。
 - 本書と 00 が矛盾した場合は 00 を正とします。本書と 01〜03 の間で食い違いがある箇所は §11 の一覧に明記し、本書での採用案を示しています。
+- 05〜08 が本書に依頼した API・Dto・エラーコードのうち、本書が名称や形を変えて確定したものは §10 の引き渡し事項に「読み替え」として列挙しています（API の契約は本書が正。05 §7.1、06 §8.2 の記載どおり）。
 
 ### 0.1 参照した要件
 
@@ -304,7 +305,7 @@ export class ApiError extends Error {
 | 403 | `ROLE_REQUIRED` | この操作にはオーナー権限が必要です | owner／super_admin 限定 API を admin が呼んだ |
 | 404 | `NOT_FOUND` | 指定されたリソースが見つかりません | UUID 形式不正、未定義パス |
 | 404 | `ORGANIZATION_NOT_FOUND` | 受検リンクが無効です。管理者にお問い合わせください | 受検者登録（組織なし・論理削除済み） |
-| 404 | `SESSION_NOT_FOUND` | 受検セッションが見つかりません | 受検者 API |
+| 404 | `SESSION_NOT_FOUND` | 受検セッションが見つかりません | 送信 API のみ（RPC `finalize_assessment_session()` の例外を変換。§4.5 手順 6）。Cookie とセッション ID の検証（§2.5.2）では行が無い場合も 401 `RESPONDENT_TOKEN_INVALID` に統一し、このコードは返さない |
 | 404 | `RESULT_NOT_FOUND` | 診断結果が見つかりません | 管理者 API（他組織・削除済み・admin に対する幹部データを含む） |
 | 404 | `RESPONDENT_NOT_FOUND` | 受検者が見つかりません | 管理者 API（同上） |
 | 409 | `SESSION_ALREADY_SUBMITTED` | この受検はすでに送信済みです | 回答保存・送信・開始 |
@@ -323,6 +324,7 @@ export class ApiError extends Error {
 - 設計判断 D04-07: 他組織のリソース、論理削除済みのリソース、`admin` が見られない幹部（`executive`）のリソースは、いずれも **404** で返し、403 と区別しません（存在自体を見せない。00 §5、02 D02-06）。
 - 設計判断 D04-08: `AI_GENERATION_FAILED` は 502（上流エラー）にします。500 と区別することで、監視（01 §9）で自システムの障害と外部 API の障害を分けて数えられます。
 - `message` は画面にそのまま表示できる日本語にします（06・05 分冊は原則としてこの文言を表示し、必要なら上書きします）。個人情報・トークン・SQL・スタックトレースを含めません。
+- 05 §7.1 が仮称として挙げた 401 `UNAUTHORIZED` は採用せず、`RESPONDENT_TOKEN_INVALID`（Cookie なし・不一致・行なし）と `RESPONDENT_TOKEN_EXPIRED`（期限切れ）の 2 つに分けます（設計判断 D04-42: 画面の表示は同じ E-04 でよいが、期限切れは「登録し直し」の案内、それ以外は「受検リンクから開き直す」の案内に分けられるようにする）。05 §7.1・§9・D05-26 の読み替えは §10 に列挙します。
 
 ### 2.5 認可の共通処理（`lib/auth/`）
 
@@ -427,17 +429,44 @@ export interface RespondentSessionContext {
  * status の判定（draft 必須）は呼び出し側の service が行う（GET は submitted でも許可するため）
  */
 export async function requireRespondentSession(request: Request, sessionId: string): Promise<RespondentSessionContext>;
+
+/**
+ * Server Component 用。next/headers の cookies() から tk_session を読む以外は requireRespondentSession と同じ。
+ * 05 §1.3 の判定表（R-02〜R-05 の初期表示）が呼ぶ。RequestMeta は headers() から組み立てる（requestId は採番）。
+ */
+export async function requireRespondentSessionFromCookies(sessionId: string): Promise<RespondentSessionContext>;
+
+/**
+ * 受検リンク（/exam?q&p）を開き直したときの再開判定（05 §6.3 の ResumeBanner）。
+ * Cookie のトークンだけから assessment_sessions を 1 行引き、
+ * 「organization_id と kind が一致」「status = draft」「deleted_at is null」「token_expires_at > now()」のときだけ sessionId を返す。
+ * それ以外（Cookie なし・行なし・別組織・別区分・submitted・期限切れ）は null を返し、例外を投げない。個人情報は返さない。
+ */
+export async function findResumableSession(
+  cookieToken: string | null,
+  organizationId: string,
+  kind: RespondentKindValue,
+): Promise<{ readonly sessionId: string; readonly answeredCount: number } | null>;
 ```
 
-処理手順:
+処理手順（`requireRespondentSession`）:
 
 1. `sessionId` が UUID でなければ 404 `NOT_FOUND`。
 2. Cookie `tk_session` を読み、無ければ 401 `RESPONDENT_TOKEN_INVALID`。
-3. `hashRespondentToken(token)` を計算し、サービスロールで `assessment_sessions` を `id = sessionId and resume_token_hash = hash and deleted_at is null` で 1 行取得。無ければ 401 `RESPONDENT_TOKEN_INVALID`（`sessionId` の存在有無を区別しない）。
+3. `hashRespondentToken(token)` を計算し、サービスロールで `assessment_sessions` を `id = sessionId and resume_token_hash = hash and deleted_at is null` で 1 行取得。無ければ 401 `RESPONDENT_TOKEN_INVALID`（`sessionId` の存在有無を区別しない。404 `SESSION_NOT_FOUND` は返さない）。
 4. `token_expires_at <= now()` なら 401 `RESPONDENT_TOKEN_EXPIRED`。
 5. `respondents` から `kind` を取得してコンテキストを返す。
 
-- 受検者 API はサービスロール（RLS バイパス）で動くため、**全ての読み書きを `sessionId` 1 件に限定** し、`organization_id` はコンテキストの値を使います（01 §8.2、00 D-23）。リクエストで組織 ID を受け取るのは登録 API（§4.2）だけです。
+処理手順（`findResumableSession`。設計判断 D04-43）:
+
+1. `cookieToken` が無ければ `null`。
+2. `hashRespondentToken(cookieToken)` で `assessment_sessions` を `resume_token_hash = hash and deleted_at is null` で 1 行取得（`resume_token_hash` は UNIQUE。02 §3.6）。無ければ `null`。
+3. `organization_id = organizationId`、`status = 'draft'`、`token_expires_at > now()` を満たさなければ `null`。
+4. `respondents.kind = kind` でなければ `null`（05 §6.3: 区分の取り違えを防ぐ）。
+5. `answers` の件数を数え、`{ sessionId, answeredCount }` を返す（05 の `ResumeBanner` は `sessionId` だけを使う。`answeredCount` は「n 問まで回答済み」の表示用で、氏名などは含めない）。
+
+- 受検者 API はサービスロール（RLS バイパス）で動くため、**全ての読み書きを `sessionId` 1 件に限定** し、`organization_id` はコンテキストの値を使います（01 §8.2、00 D-23）。リクエストで組織 ID を受け取るのは登録 API（§4.2）と受検リンク検証 API（§4.1。`findResumableSession` を呼ぶ）だけです。
+- `findResumableSession` は Cookie の所持者が「自分の」`draft` セッションを見つけるだけの関数で、`sessionId` を返した後の実際の再開は `requireRespondentSession` の通常の検証（トークン一致）を経ます。トークンを持たない第三者は `sessionId` を得られません。
 
 ### 2.6 監査ログ（`lib/services/audit.ts`）
 
@@ -463,9 +492,13 @@ export interface AuditEntry {
   readonly action: AuditAction;
   readonly targetTable: string | null;
   readonly targetId: string | null;
-  readonly details: Readonly<Record<string, string | number | boolean | null>>;
+  readonly details: AuditDetails;
   readonly request: RequestMeta;
 }
+
+/** details の値は文字列・数値・真偽値・null か、それらの配列（例: account.update の fields）。ネストしたオブジェクトは入れない */
+export type AuditDetailValue = string | number | boolean | null;
+export type AuditDetails = Readonly<Record<string, AuditDetailValue | ReadonlyArray<AuditDetailValue>>>;
 
 /** 追記専用。失敗しても業務処理は成功させる（ログに warn を出す）。設計判断 D04-11 */
 export async function writeAuditLog(client: SupabaseClient<Database>, entry: AuditEntry): Promise<void>;
@@ -476,7 +509,8 @@ export async function writeAuditLog(client: SupabaseClient<Database>, entry: Aud
 | 書き込みクライアント | 管理者の操作は **利用者セッションのクライアント**（RLS ポリシー `audit_logs_insert_self` により `actor_id = auth.uid()` が強制される。02 §6.3）。受検者の操作はサービスロール |
 | タイミング | 更新系は本処理の **成功後**。閲覧系（`result.view` など）はデータ取得の成功後。失敗した操作は記録しない（失敗はアプリログ、01 §8.6） |
 | 失敗時 | 監査ログの INSERT が失敗しても本処理の応答は変えない（設計判断 D04-11: 閲覧をログ障害で止めない。ただし `logger.warn` で `requestId` とともに記録し、監視対象にする） |
-| `details` | 個人情報を入れない（02 §8.6）。値は `{ before, after }` のように列の値だけ |
+| `details` | 個人情報を入れない（02 §8.6）。値は `{ before, after }` のように列の値だけ。配列は `account.update` の `fields`（02 §8.6 の例 `{ "fields": ["name"] }`）のように文字列の配列に限る（`AuditDetails` 型） |
+| `admin.signup` | 招待受理 `POST /auth/invite`（§6.2）がサービスロールで書く（`actor_kind = 'admin'`、`actor_id` = 作成した Auth ユーザーの ID。設計判断 D04-36 改）。`login-events`（§5.1）では書かない |
 | `ip_address` | `x-forwarded-for` の先頭要素を `inet` に変換できる場合のみ設定。変換できなければ NULL |
 | `session.start` | 02 §8.6 に無い action を本書で追加（受検開始「開始する」の記録。設計判断 D04-12）。02 の `ck_audit_logs_action`（`^[a-z_]+\.[a-z_]+$`）を満たす |
 
@@ -628,6 +662,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ resu
 | PATCH | `/api/v1/admin/me` | 氏名・メールアドレス・パスワードの変更 | admin 以上 | §5.1 |
 | POST | `/api/v1/admin/me/login-events` | ログイン成功の記録（`admin.login`）。追加 | admin 以上 | §5.1 |
 | POST | `/api/v1/admin/organization/invite-token` | 管理者追加用リンクの再発行。追加（02 D02-02） | owner／super_admin | §5.2 |
+| GET | `/api/v1/admin/admin-users` | 同一組織の管理者一覧（アカウント画面 M-07。06 D06-20 の依頼）。追加 | owner／super_admin | §5.11 |
 | GET | `/api/v1/admin/results` | 回答一覧（検索・並び替え・チーム・除外の絞り込み） | admin 以上（幹部は owner のみ） | §5.3 |
 | GET | `/api/v1/admin/results/{resultId}` | 結果詳細（全指標・受検者情報・AI 解説の状態と本文） | 同上 | §5.4 |
 | GET | `/api/v1/admin/results/{resultId}/comparison` | 比較計算（都度計算、非永続化） | 同上 | §5.5 |
@@ -646,6 +681,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ resu
 | GET | `/auth/callback` | Supabase Auth のコード→セッション交換（パスワード再設定・メール確認） | §6.1 |
 | POST | `/auth/invite` | 招待トークンによる管理者追加（01 D01-11） | §6.2 |
 
+- 役割変更・利用停止・管理者削除の API は本フェーズでは **提供しません**（§5.12。02 §7.5 の運用者対応）。
 - 受検者登録（`POST /api/v1/respondent/sessions`）は要件定義書 §6.2 A-12 の「受検リンク発行」に対応する管理者側の操作を **必要としません**。受検リンクは組織 ID から `GET /api/v1/admin/me` が組み立てて返す固定 URL であり（00 §3.7）、受検者ごとの事前登録はありません（要件定義書 §5 の業務フロー）。
 
 ## 4. 受検者 API
@@ -661,7 +697,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ resu
 | 認可 | なし |
 | パス | `organizationId`: UUID |
 | クエリ | `kind`: `applicant` / `executive`（省略可。URL の `p=user` → `applicant`、`p=executives` → `executive` への変換は 05 分冊の画面側で行う。00 D-12） |
-| 処理 | `organizations` を `id = organizationId and deleted_at is null` で取得。無ければ 404 `ORGANIZATION_NOT_FOUND` |
+| 処理 | `organizations` を `id = organizationId and deleted_at is null` で取得。無ければ 404 `ORGANIZATION_NOT_FOUND`。あわせて Cookie `tk_session` があれば `findResumableSession(cookieToken, organizationId, kind)`（§2.5.2）を呼び、再開可能な `draft` セッションを `resumable` に入れる（`kind` 省略時は `applicant` として判定） |
 | 監査ログ | なし |
 
 レスポンス（200）:
@@ -670,9 +706,21 @@ export async function GET(request: Request, { params }: { params: Promise<{ resu
 {
   "organizationId": "8f0b4b6e-2f0e-4a1c-9c56-1d7d9b1a2c33",
   "organizationName": "サンプル歯科医院",
-  "kind": "applicant"
+  "kind": "applicant",
+  "resumable": { "sessionId": "c1d2e3f4-5a6b-4c7d-8e9f-0a1b2c3d4e5f", "answeredCount": 57 }
 }
 ```
+
+- `resumable` は再開できるセッションが無いとき `null`。05 §6.3 の `ResumeBanner` はこの値で表示を決めます（Server Component で初期表示するときは同名の service `getOrganizationForAssessment` が `cookies()` からトークンを読んで同じ判定をします。§8.3）。
+- Cookie が無効・別組織・別区分・送信済み・期限切れのいずれでも `resumable: null` を返し、エラーにはしません（受検リンクの検証自体は成功しているため）。
+
+エラー:
+
+| HTTP | code | 条件 |
+|---:|---|---|
+| 404 | `NOT_FOUND` | `organizationId` が UUID でない |
+| 404 | `ORGANIZATION_NOT_FOUND` | 組織なし・論理削除済み |
+| 422 | `VALIDATION_ERROR` | `kind` が `applicant` / `executive` 以外 |
 
 - 01 D01-27 の `organizations.is_active`（受付停止）は 02 のテーブル定義（02 §3.2）に **含まれていません**。本書は `deleted_at is null` のみで判定し、`is_active` が 02 に追加された場合は同じ条件に `is_active = true` を加えます（§11 D04-15）。
 
@@ -774,7 +822,8 @@ export async function registerRespondent(input: RegisterRespondentInput, request
 4. RPC `register_respondent()`（§4.2.2）を呼び、`respondent_id` と `session_id` を得る。
 5. 応答に Cookie を付けて返す。**生のトークンは応答ボディに含めない**（Cookie のみ。02 §7.4）。
 
-- 設計判断 D04-16: 既存は「1 回の受検登録 = 1 受検者行」（00 §1.1）であり、同じ人が再度リンクを開けば別の受検者行ができます。重複登録の抑止（同一電話番号の検出など）は要件に無いため行いません。
+- 推定: 既存では受検者が登録のたびに User レコードとして作成される（要件定義書 §8.1）ため、同一人物の再登録は別レコードになると推定します（同一人物の再登録の扱いは要件定義書・付録に記載なし）。新システムでも 00 §1.1 の定義「1 行 = 1 回の受検登録」に従い、同じ人が再度リンクから登録すれば別の受検者行ができます。
+- 設計判断 D04-16: 重複登録の抑止（同一電話番号の検出など）は要件に無いため行いません。誤って二重に登録された受検者は管理者が一覧から削除できます（要件定義書 §6.2 A-05）。同一ブラウザからの再訪は §4.1 の `resumable` で再開を促します（05 §6.3）。
 
 #### 4.2.2 RPC `register_respondent()`（02 への追加依頼）
 
@@ -864,8 +913,17 @@ grant execute on function public.register_respondent(uuid, public.respondent_kin
 }
 ```
 
-- `answers` は `questionNo` 昇順。144 件でも約 4 KB のため分割しません。
+- `answers` は `questionNo` 昇順の **配列** です（05 §7.1 の仮の `Record<QuestionNo, ChoiceCode>` ではない。設計判断 D04-44: JSON のキーが数値文字列になる `Record` より、配列の方が zod での検証と TypeScript の型が素直になる。画面側は `new Map(answers.map(a => [a.questionNo, a.choiceCode]))` で引く）。144 件でも約 4 KB のため分割しません。
+- 再開位置 `resumePageNo`（05 §6.2）は応答に **含めません**。05 D05-08 のとおり画面側が `answers` から導出します（`lastSavedStep` / `lastSavedPage` は参考値。§4.4 D04-18）。
 - 受検者の氏名・電話番号は返しません（画面で使わない。要件定義書 §7 S-03・S-04 に表示なし）。
+
+エラー:
+
+| HTTP | code | 条件 |
+|---:|---|---|
+| 401 | `RESPONDENT_TOKEN_INVALID` | Cookie なし・不一致・行なし（削除済みを含む） |
+| 401 | `RESPONDENT_TOKEN_EXPIRED` | `token_expires_at` 経過 |
+| 404 | `NOT_FOUND` | `sessionId` が UUID でない |
 
 #### `POST /api/v1/respondent/sessions/{sessionId}/start`
 
@@ -875,8 +933,28 @@ grant execute on function public.register_respondent(uuid, public.respondent_kin
 |---|---|
 | 認可 | セッショントークン、`status = draft`（`submitted` は 409 `SESSION_ALREADY_SUBMITTED`） |
 | リクエスト | 本文なし（`Content-Type` 不要） |
-| 処理 | `started_at is null` のときだけ `started_at = now()` を設定（冪等）。`audit_logs` に `session.start` |
-| レスポンス | 200 `{ "sessionId": "...", "startedAt": "2026-09-17T01:25:00.000Z" }` |
+| 処理 | `started_at is null` のときだけ `started_at = now()` を設定（冪等）。`token_expires_at = now() + 7 日` に延長し、Cookie を同じ期限で再発行する（01 D01-12、05 §6.1 に合わせる。設計判断 D04-45）。`audit_logs` に `session.start`（初回のみ。2 回目以降の冪等な呼び出しでは書かない） |
+| レスポンス | 200（下記） |
+
+レスポンス（200）:
+
+```json
+{
+  "sessionId": "c1d2e3f4-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+  "startedAt": "2026-09-17T01:25:00.000Z",
+  "tokenExpiresAt": "2026-09-24T01:25:00.000Z"
+}
+```
+
+- 05 §7.1 は `start` の応答を `RespondentSessionDto`（進行状態）としていますが、本書は上の最小形にします（設計判断 D04-45: `start` 直後の設問ページは Server Component が `getSessionProgress` で初期表示するため、応答に回答を含める必要がない）。
+
+エラー:
+
+| HTTP | code | 条件 |
+|---:|---|---|
+| 401 | `RESPONDENT_TOKEN_INVALID` / `RESPONDENT_TOKEN_EXPIRED` | Cookie 不正・期限切れ |
+| 404 | `NOT_FOUND` | `sessionId` が UUID でない |
+| 409 | `SESSION_ALREADY_SUBMITTED` | 送信済み |
 
 ### 4.4 回答の保存 `PUT /api/v1/respondent/sessions/{sessionId}/answers`
 
@@ -888,12 +966,11 @@ grant execute on function public.register_respondent(uuid, public.respondent_kin
 | 処理 | `answers` に `insert ... on conflict (session_id, question_no) do update`（02 §3.7）。`assessment_sessions` の `last_saved_step` / `last_saved_page` / `last_answered_at` を更新し、`token_expires_at` を `now() + 7 日` に延長。Cookie も同じ期限で再発行 |
 | 監査ログ | なし（回答内容は評価情報。保存のたびに記録しない。送信時に `session.submit` が残る） |
 
-リクエスト:
+リクエスト（`pageNo` は 05 §5.3.1 の **通しページ番号 1〜20**。1.1 版で `step` / `page` から変更）:
 
 ```json
 {
-  "step": 2,
-  "page": 3,
+  "pageNo": 8,
   "answers": [
     { "questionNo": 51, "choiceCode": 1 },
     { "questionNo": 52, "choiceCode": 3 },
@@ -908,14 +985,16 @@ zod スキーマ:
 // lib/services/schemas/respondent.ts（続き）
 import { choiceCodeSchema, scoredQuestionNoSchema } from "./common";
 
+/** 通しページ番号（05 §5.3.1）。4 ステップ × 5 ページ = 20（03 §2.3 QUESTION_PAGE_LAYOUT から導出） */
+export const examPageNoSchema = z.number().int().min(1).max(20);
+
 export const saveAnswersInputSchema = z
   .object({
-    step: z.number().int().min(1).max(4),
-    page: z.number().int().min(1).max(5),
+    pageNo: examPageNoSchema,
     answers: z
       .array(z.object({ questionNo: scoredQuestionNoSchema, choiceCode: choiceCodeSchema }))
       .min(1)
-      .max(144),
+      .max(8),
   })
   .superRefine((v, ctx) => {
     const seen = new Set<number>();
@@ -929,15 +1008,42 @@ export const saveAnswersInputSchema = z
 export type SaveAnswersInput = z.infer<typeof saveAnswersInputSchema>;
 ```
 
+`pageNo` と `step` / `page` の変換（service が使う純関数。`lib/masters/exam-pages.ts` に置き、05 の `lib/presentation/exam-pages.ts` からも同じ関数を再エクスポートして使う。設計判断 D04-46: service は `lib/presentation/` を import しないため、変換関数は `lib/masters/` 側に置く）:
+
+```ts
+// lib/masters/exam-pages.ts（純関数。I/O なし）
+import { ACTIVE_QUESTIONS, QUESTION_PAGE_LAYOUT } from "@/lib/masters/questions";
+import type { QuestionNo } from "@/lib/scoring/types";
+
+export const EXAM_PAGES_PER_STEP = QUESTION_PAGE_LAYOUT.pageSizes.length;                       // 5
+export const EXAM_PAGE_COUNT = QUESTION_PAGE_LAYOUT.stepCount * EXAM_PAGES_PER_STEP;             // 20
+
+export function toStep(pageNo: number): number {          // ceil(pageNo / 5)
+  return Math.ceil(pageNo / EXAM_PAGES_PER_STEP);
+}
+export function toPageInStep(pageNo: number): number {    // ((pageNo − 1) mod 5) + 1
+  return ((pageNo - 1) % EXAM_PAGES_PER_STEP) + 1;
+}
+export function toPageNo(step: number, pageInStep: number): number {  // (step − 1) × 5 + pageInStep
+  return (step - 1) * EXAM_PAGES_PER_STEP + pageInStep;
+}
+/** pageNo に属する設問番号の集合（QuestionDefinition.step / page で判定。02 §3.5、03 §2.3） */
+export function questionNosOfPage(pageNo: number): ReadonlySet<QuestionNo> {
+  const step = toStep(pageNo);
+  const page = toPageInStep(pageNo);
+  return new Set(ACTIVE_QUESTIONS.filter((q) => q.step === step && q.page === page).map((q) => q.questionNo));
+}
+```
+
 処理手順（`lib/services/answer-saving.ts`）:
 
 1. `requireRespondentSession`。`status !== "draft"` なら 409 `SESSION_ALREADY_SUBMITTED`。
-2. `questionNo` が `lib/masters/questions.ts` の `is_active = true` の設問であることを確認（1〜144 はすべて true のため、スキーマの範囲検証で足りる。将来 `is_active` を変えたときのために service でも確認する）。
+2. `questionNosOfPage(input.pageNo)` を求め、`answers[].questionNo` がすべてその集合に含まれることを確認。含まれない設問があれば 422 `VALIDATION_ERROR`（`details.issues[].path = "answers[i].questionNo"`、`message = "このページの設問ではありません"`）。これにより `is_active = true`（1〜144）の確認も兼ねる。
 3. `answers` を一括 upsert（1 クエリ。`organization_id` はコンテキストの値）。
-4. `assessment_sessions` を更新（`last_saved_step`、`last_saved_page`、`last_answered_at = now()`、`token_expires_at = now() + 7 日`）。
+4. `assessment_sessions` を更新（`last_saved_step = toStep(pageNo)`、`last_saved_page = toPageInStep(pageNo)`、`last_answered_at = now()`、`token_expires_at = now() + 7 日`）。02 §3.6 の CHECK（`last_saved_step` 1〜4、`last_saved_page` 1〜5）は変換後の値で満たされる。
 5. 200 を返し、Cookie を再発行。
 
-- 設計判断 D04-18: `step` / `page` と `answers` の設問番号の整合（そのページに属する設問か）は検証しません。05 分冊のページ割り当て（00 D-08）が変わっても API を変えないためです。`last_saved_step` / `last_saved_page` は「再開位置」の目安として保存するだけで、採点には使いません。
+- 設計判断 D04-18（1.1 版で改）: 入力は 05 §5.3.1 の通しページ番号 `pageNo` とし、`step` / `page` への変換は service が行います。設問番号が `pageNo` のページに属することは **サーバで検証** します（05 §7.1 の前提に合わせる）。ページ割り当て（00 D-08）は 03 の `QUESTION_PAGE_LAYOUT` と設問マスタの `step` / `page` に一元化されているため、割り当てを変えても API の契約は変わりません（旧版の「整合を検証しない」理由は解消）。`last_saved_step` / `last_saved_page` は「再開位置」の参考値として保存するだけで、採点にも 05 の再開判定（D05-08: `answers` から導出）にも使いません。
 - 設計判断 D04-19: 部分保存（ページ内の一部の設問だけ）も受け付けます。未回答チェックは画面（05）と送信 API（§4.5）で行います。
 
 レスポンス（200）:
@@ -945,6 +1051,7 @@ export type SaveAnswersInput = z.infer<typeof saveAnswersInputSchema>;
 ```json
 {
   "sessionId": "c1d2e3f4-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+  "pageNo": 8,
   "savedCount": 3,
   "answeredCount": 60,
   "totalCount": 144,
@@ -954,6 +1061,8 @@ export type SaveAnswersInput = z.infer<typeof saveAnswersInputSchema>;
 }
 ```
 
+- 05 §7.1 の `SaveAnswersDto.resumePageNo` は含めません（05 D05-08 のとおり画面側が保存済み回答から導出する。§10）。
+
 エラー:
 
 | HTTP | code | 条件 |
@@ -961,7 +1070,7 @@ export type SaveAnswersInput = z.infer<typeof saveAnswersInputSchema>;
 | 401 | `RESPONDENT_TOKEN_INVALID` / `RESPONDENT_TOKEN_EXPIRED` | Cookie 不正・期限切れ |
 | 404 | `NOT_FOUND` | `sessionId` が UUID でない |
 | 409 | `SESSION_ALREADY_SUBMITTED` | 送信済み（DB トリガー `trg_answers_reject_after_submit` の例外も同じコードに変換） |
-| 422 | `VALIDATION_ERROR` | 設問番号が 1〜144 以外、選択肢が 1〜5 以外、重複 |
+| 422 | `VALIDATION_ERROR` | `pageNo` が 1〜20 以外、設問番号が 1〜144 以外、選択肢が 1〜5 以外、重複、`pageNo` のページに属さない設問番号、1 リクエスト 9 件以上 |
 
 ### 4.5 送信 `POST /api/v1/respondent/sessions/{sessionId}/submit`
 
@@ -1002,6 +1111,7 @@ export async function submitSession(ctx: RespondentSessionContext): Promise<{ re
 
 - `resultId` と採点結果は受検者に返しません（要件定義書 §4: 受検者は結果を閲覧しない）。
 - 既存の「2 秒待機後に遷移」（要件定義書 §5）は再現しません。採点は同期で完了してから応答します。
+- `ANSWERS_INCOMPLETE` の欠落設問番号は `details.missing`（05 §7.1 の仮称 `details.missingQuestionNos` ではない）。05 は `pageNoOfQuestion(missing[0])` で未回答ページへ誘導します（§10）。
 
 エラー:
 
@@ -1009,6 +1119,9 @@ export async function submitSession(ctx: RespondentSessionContext): Promise<{ re
 |---:|---|---|
 | 409 | `SESSION_ALREADY_SUBMITTED` | 送信済み |
 | 422 | `ANSWERS_INCOMPLETE` | Q1〜Q144 に欠落。`details: { "missing": [141, 142, 143, 144] }` |
+| 401 | `RESPONDENT_TOKEN_INVALID` / `RESPONDENT_TOKEN_EXPIRED` | Cookie 不正・期限切れ |
+| 404 | `NOT_FOUND` | `sessionId` が UUID でない |
+| 404 | `SESSION_NOT_FOUND` | RPC `finalize_assessment_session()` が行を見つけられない（トークン検証の直後に削除された場合のみ。通常は発生しない） |
 | 500 | `INTERNAL_ERROR` | RPC の予期しない失敗（採点結果は保存されない。再送信可能） |
 
 ### 4.6 受検フロー全体（シーケンス）
@@ -1029,7 +1142,8 @@ sequenceDiagram
     S-->>API: sessionId + トークン
     API-->>R: 201 + Set-Cookie tk_session
     R->>API: POST sessions/{id}/start
-    API->>DB: started_at, audit session.start
+    API->>DB: started_at, token 延長, audit session.start
+    API-->>R: 200 + Set-Cookie（期限更新）
     loop 各ページ
         R->>API: PUT sessions/{id}/answers（1 ページ分）
         API->>DB: answers upsert, token 延長
@@ -1085,14 +1199,51 @@ sequenceDiagram
 - `links.adminInvite` の `admin_invite_token` は `organizations` 行から読みます。RLS `organizations_select_own` で自組織の行は全列読めるため（02 §6.4 の `grant select on organizations`）、`admin` にも招待リンクが見えます。要件定義書 §6.2 A-12 では管理者追加用リンクはアカウント画面（全管理者が見られる画面）に表示されているため、これを踏襲します（設計判断 D04-22）。
 - `code` / `customerNumber` は NULL のとき `null`。
 
+エラー（`requireAdmin` 共通。以降の管理者 API でも同じため、各 API の表では省略する）:
+
+| HTTP | code | 条件 |
+|---:|---|---|
+| 401 | `UNAUTHENTICATED` | Auth セッションなし（middleware が先に返す。§8.5） |
+| 403 | `ADMIN_NOT_REGISTERED` | Auth にはいるが `admin_users` に行がない |
+| 403 | `ADMIN_SUSPENDED` | `is_suspended = true` または `deleted_at` 設定済み |
+
 #### `PATCH /api/v1/admin/me`
 
 | 項目 | 内容 |
 |---|---|
 | 認可 | admin 以上 |
 | リクエスト | `name`、`email`、`password` のいずれか 1 つ以上。`password` 変更時は `currentPassword` 必須 |
-| 処理 | `name` → `admin_users.name` を UPDATE（RLS `admin_users_update_self`）。`email` → `supabase.auth.updateUser({ email })`（利用者セッション。確認メールが送られ、確認後に反映）。`password` → `signInWithPassword(現在のメール, currentPassword)` で現在のパスワードを検証してから `updateUser({ password })` |
-| 監査ログ | `account.update`（`details: { "fields": ["name", "email"] }`。値は入れない） |
+| 処理 | `name` → `admin_users.name` を UPDATE（RLS `admin_users_update_self`）。`email` → `supabase.auth.updateUser({ email })`（利用者セッション。確認メールが送られ、確認後に反映）。`password` → **Cookie に結び付かない一時クライアント**（下記）で `signInWithPassword(ctx.email, currentPassword)` を呼んで現在のパスワードを検証し、成功したらその一時クライアントは破棄して、利用者セッションのクライアントで `updateUser({ password })` を実行する |
+| 監査ログ | `account.update`（`details: { "fields": ["name", "email"] }`。値は入れない。`fields` は変更した項目名の配列で、§2.6 `AuditDetails` の配列値） |
+
+現在のパスワードの検証に使う一時クライアント（設計判断 D04-47）:
+
+```ts
+// lib/auth/password-check.ts
+import { createClient } from "@supabase/supabase-js";
+import { publicEnv } from "@/lib/utils/env";
+
+/**
+ * 現在のパスワードを検証する。成功しても Cookie・セッションは一切変更しない。
+ * createUserClient()（01 §5.5）は cookies() の setAll でセッションを書き戻すため、
+ * そこで signInWithPassword を呼ぶと新しいセッションが発行され Auth Cookie が置き換わる。
+ * 検証だけが目的なので persistSession: false の使い捨てクライアントを使う。
+ */
+export async function verifyCurrentPassword(email: string, currentPassword: string): Promise<boolean> {
+  const env = publicEnv();
+  const temp = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+  const { data, error } = await temp.auth.signInWithPassword({ email, password: currentPassword });
+  if (error || !data.session) return false;
+  // 発行されたセッションは保存せず、サーバ側でも即座に失効させる（失敗しても検証結果には影響しない）
+  await temp.auth.signOut({ scope: "local" }).catch(() => undefined);
+  return true;
+}
+```
+
+- 検証失敗は 422 `CURRENT_PASSWORD_MISMATCH`。`signInWithPassword` は Supabase Auth のログイン試行のレート制限（01 §8.4 の Auth 組み込み制限）を受けるため、短時間に繰り返すと Auth 側のエラーになる。この場合も 422 `CURRENT_PASSWORD_MISMATCH` ではなく 429 `RATE_LIMITED` に変換する（Auth のエラーコードが `over_request_rate_limit` のとき）。
+- `signOut({ scope: "local" })` は一時クライアント内のメモリ上のセッションを捨てるだけで、利用者の既存セッション（Cookie）には影響しない。
 
 リクエスト:
 
@@ -1137,22 +1288,26 @@ export type UpdateMeInput = z.infer<typeof updateMeInputSchema>;
 | 422 | `VALIDATION_ERROR` | 項目なし、形式不正、パスワード短い |
 | 422 | `CURRENT_PASSWORD_MISMATCH` | 現在のパスワードが不一致 |
 | 409 | `EMAIL_ALREADY_REGISTERED` | Auth が重複メールを拒否 |
+| 429 | `RATE_LIMITED` | 現在のパスワード検証が Auth のログイン試行制限に掛かった |
 
 - パスワードの強度規則（01 D01-10: 8 文字以上、英字と数字を含む）は Supabase Auth 側の設定で強制されます。API 側は長さのみ検証し、Auth のエラーは 422 `VALIDATION_ERROR`（`issues[0].path = "password"`）に変換します。
 - 設計判断 D04-23: 要件定義書 §6.2 A-12 に「現在のパスワード」の入力は記載がありません（未確認）。個人情報を扱う管理画面のため、パスワード変更時は現在のパスワードの再入力を必須にします。06 分冊はフォームに項目を追加してください。
 
 #### `POST /api/v1/admin/me/login-events`
 
-02 §8.6 の `admin.login`（および招待経由の初回ログインでの `admin.signup` の補完）を記録するための API です（設計判断 D04-24: Supabase Auth のログインはブラウザと Auth サーバの間で完結し、サーバ側で成功を検知する場所が無いため、ログイン画面が成功直後にこの API を 1 回呼ぶ）。
+02 §8.6 の `admin.login` を記録するための API です（設計判断 D04-24: Supabase Auth のログインはブラウザと Auth サーバの間で完結し、サーバ側で成功を検知する場所が無いため、ログイン画面が成功直後にこの API を 1 回呼ぶ）。
 
 | 項目 | 内容 |
 |---|---|
 | 認可 | admin 以上 |
 | リクエスト | 本文なし |
-| 処理 | `audit_logs` に `admin.login`。`audit_logs` に同じ `actor_id` の `admin.signup` が無く、かつ `admin_users.created_at` が 24 時間以内なら `admin.signup` も併せて記録 |
+| 処理 | `audit_logs` に `admin.login` を 1 件 INSERT（利用者セッションのクライアント。RLS `audit_logs_insert_self`）。**それ以外の読み書きはしない** |
 | レスポンス | 204 |
 
+- 1.0 版の「`audit_logs` に `admin.signup` が無ければ補完する」は取り下げます（設計判断 D04-36 改）。理由: この API は利用者セッションのクライアントで動き、`audit_logs` の SELECT は owner／super_admin 限定（02 §6.3 `audit_logs_select_owner`、02 §5.2）のため、`admin` 役割では判定が常に「無い」となり二重記録になる。`admin.signup` は招待受理 `POST /auth/invite`（§6.2）がサービスロールで書きます。
 - 呼び忘れやブロックがあっても業務には影響しません（監査記録の欠落として扱い、06 分冊はログイン成功後に必ず呼ぶ）。`admin.login` の実行元 IP は `x-forwarded-for` から取得します。
+
+エラー: `requireAdmin` 共通のもののみ（401／403）。
 
 ### 5.2 招待トークンの再発行 `POST /api/v1/admin/organization/invite-token`
 
@@ -1163,7 +1318,22 @@ export type UpdateMeInput = z.infer<typeof updateMeInputSchema>;
 | 認可 | owner／super_admin（`requireOwner`）。`admin` は 403 `ROLE_REQUIRED` |
 | リクエスト | 本文なし |
 | 処理 | RPC `rotate_admin_invite_token()`（02 §7.3）。RPC 内で権限確認と監査ログ（`organization.rotate_invite_token`）が行われる |
-| レスポンス | 200 `{ "adminInvite": "https://…/admin/signup?q=<新トークン>", "rotatedAt": "…" }` |
+| レスポンス | 200（下記） |
+
+レスポンス（200）:
+
+```json
+{
+  "adminInvite": "https://example.invalid/admin/signup?q=<新しい admin_invite_token>",
+  "rotatedAt": "2026-09-17T03:00:00.000Z"
+}
+```
+
+エラー:
+
+| HTTP | code | 条件 |
+|---:|---|---|
+| 403 | `ROLE_REQUIRED` | `admin` が呼んだ（`requireOwner`。RPC の `FORBIDDEN` 例外も同じコードに変換） |
 
 - 再発行すると旧リンクは即時無効になります。06 分冊はアカウント画面に「管理者追加用リンクを再発行する」ボタン（オーナーのみ表示）と確認ダイアログを置きます。
 
@@ -1245,6 +1415,12 @@ export type ListResultsQuery = z.infer<typeof listResultsQuerySchema>;
 4. `count: "exact"` で `total` を取得。
 5. 監査ログ `result.list`。
 
+エラー:
+
+| HTTP | code | 条件 |
+|---:|---|---|
+| 422 | `VALIDATION_ERROR` | `q` が 100 文字超、`teamCode` / `excluded` / `kind` / `sort` / `order` / `page` / `pageSize` が許可値以外 |
+
 ### 5.4 結果詳細 `GET /api/v1/admin/results/{resultId}`
 
 要件定義書 §6.2 A-07、§7 の結果詳細（7 セクション）、§9 性能（1〜2 リクエストで描画）に対応します。**このレスポンス 1 つで、比較を除く全セクションを描画できる** ことを保証します。比較（評価・合致度・立ち位置・比較対象系列）は §5.5 の 2 つ目のリクエストです。
@@ -1311,12 +1487,21 @@ export type ListResultsQuery = z.infer<typeof listResultsQuerySchema>;
       "model": "（AI_MODEL の値）",
       "promptVersion": "（AI_PROMPT_VERSION の値）",
       "generatedAt": "2026-09-17T02:00:00.000Z",
+      "reliability": 92.65,
       "output": { "summary": "…", "verdict": { "sokusenryoku": "高い", "teichaku_risk": "低い", "sougou": "推奨" }, "strengths": [], "cautions": [], "questions": [], "retention": { "levers": [], "sign": "…", "action": "…" } }
     }
   }
 }
 ```
 
+エラー:
+
+| HTTP | code | 条件 |
+|---:|---|---|
+| 404 | `NOT_FOUND` | `resultId` が UUID でない |
+| 404 | `RESULT_NOT_FOUND` | 他組織・削除済み・`admin` に対する幹部データ（RLS で行が返らない。D04-07） |
+
+- 06 §8.2 が依頼した `aiGenerationStatus` / `aiGenerationError` / `latestAiAnalysis` は、本書では `aiAnalysis.status` / `aiAnalysis.error` / `aiAnalysis.latest` にまとめています（§5.9 の GET と同じ形にして画面の型を 1 つにするため）。06 §8.2 の任意項目 `availableTeamCodes`（D06-09）は **採用しません**（設計判断 D04-48: 「チームごとの人数」は閲覧者の RLS で数えると `fetch_population()` の母集団（幹部を含む。00 D-06）と一致せず、比較の `populationSize` と食い違う値を画面に出すことになる。06 D06-09 は「含まれない場合は全チームを同じ表記で表示」で成立する）。
 - `scores` は 00 §3.4 の `ScoreResult` と **同じキー名**（指標キーは snake_case の `TraitKey` などをそのまま使う。00 §3.1 の「JSON キーは camelCase」の例外。設計判断 D04-28: `TraitKey` 等は識別子であり、DB 列名・マスタ・画面・テストで同じ文字列を使う方が誤りが少ない）。
 - 数値は丸めません（03 §9）。表示の丸め・色分け・文言の出し分けは 06 分冊の `lib/presentation/` が行います。上の数値は形式を示す例であり、整合した実データではありません。
 - `aiAnalysis.output` は付録D §2 のスキーマそのもの（00 §3.6 `AiAnalysisOutput`）。`latest` は生成が一度も成功していなければ `null`。
@@ -1338,9 +1523,9 @@ export type ListResultsQuery = z.infer<typeof listResultsQuerySchema>;
 ```json
 {
   "resultId": "a7c1e2d3-4b5f-4a6e-9d8c-7b6a5f4e3d2c",
-  "scope": { "kind": "team", "teamCode": "A" },
+  "scope": { "kind": "organization" },
   "scoringVersion": "1.0.0",
-  "populationSize": 12,
+  "populationSize": 55,
   "includesSubject": true,
   "traitAverages": {
     "cooperativeness": 18.406666666666666, "adaptability": 18.773333333333333, "deliberateness": 14.96, "humility": 12.613333333333333,
@@ -1367,7 +1552,7 @@ export type ListResultsQuery = z.infer<typeof listResultsQuerySchema>;
 - `traitAverages` はレーダーの「比較対象」系列（付録E §1）にそのまま使い、`traitDiffs`・`axisDeviations`・`matchScore`・`deviationScore`・`grade`・`position` と **同じ母集団** から計算されています（要件定義書 §11 の 10 番）。
 - `includesSubject` は `fetch_population()` の `result_id` に対象の `resultId` が含まれるかどうかです（00 D-05 の仮置き「本人を含める」を画面で説明できるようにする。設計判断 D04-29）。対象受検者が除外（`is_excluded = true`）または別チームなら `false` になります。
 - `populationSize = 1`（本人のみ）でも 200 で返します（03 D3-09）。06 分冊は `populationSize` と `includesSubject` を表示して注記します。
-- 上の数値例は検証用データ `sample`（tests/fixtures/README.md）の観測値を入力にした 03 §7.7 の期待値（思考の傾向の不具合修正後）です。母集団の平均そのものは新システムでは再現しません（03 D3-17）。
+- 上の数値例は検証用データ `sample`（tests/fixtures/README.md。比較組織「組織全体」選択時の観測値）を入力にした 03 §7.7 の期待値（思考の傾向の不具合修正後）です。そのため `scope` は `organization` にしています。`populationSize: 55` は README が示唆する差分の分母（55 件）に合わせた **例示** で、新システムで同じ件数になることを意味しません。母集団の平均そのものは新システムでは再現しません（03 D3-17）。`scope=team` の応答は `"scope": { "kind": "team", "teamCode": "A" }` になる以外は同じ形です。
 
 エラー:
 
@@ -1447,6 +1632,20 @@ export type UpdateRespondentInput = z.infer<typeof updateRespondentInputSchema>;
   "updatedAt": "2026-09-17T02:15:00.000Z"
 }
 ```
+
+処理手順（`lib/services/respondent-management.ts` の `updateRespondent`）:
+
+1. `respondents` を `id = respondentId` で 1 行取得（RLS）。無ければ 404 `RESPONDENT_NOT_FOUND`（他組織・削除済み・`admin` に対する幹部を含む。08 I-21 の期待どおり）。
+2. 入力と現在値を比べ、変更のある列だけ UPDATE（`.eq("id", respondentId)`、`select("id, team_code, is_excluded, updated_at")` で更新後の行を受け取る）。更新件数が 0 なら、手順 1 と UPDATE の間に削除された場合なので 404 `RESPONDENT_NOT_FOUND`。
+3. 変更があった項目ごとに監査ログ。
+
+エラー:
+
+| HTTP | code | 条件 |
+|---:|---|---|
+| 404 | `NOT_FOUND` | `respondentId` が UUID でない |
+| 404 | `RESPONDENT_NOT_FOUND` | RLS で見えない行（他組織・削除済み・`admin` に対する幹部）。取得または UPDATE の件数 0 |
+| 422 | `VALIDATION_ERROR` | 項目なし、`teamCode` が `A`〜`Z`／`null` 以外、`isExcluded` が boolean 以外 |
 
 - 変更が無い（同じ値）場合も 200 を返し、監査ログは書きません。
 - 除外・チームの変更は次回の比較計算（§5.5）から反映されます。比較値を保存していないため再計算処理は不要です（要件定義書 §11 の 6 番）。
