@@ -1949,66 +1949,65 @@ internal_error   Firestore の書き込みエラーなど自システム側の�
 
 ### 5.10 PDF 出力 `GET /api/v1/admin/results/{resultId}/pdf`
 
-要件定義書 §6.2 A-10、§9 出力（A4 縦、2 モード）、付録E §7、01 §5.4（`maxDuration` 120、`puppeteer-core` + `@sparticuz/chromium`）に対応します。生成方式・レイアウト・Storage の利用有無は 07 分冊が確定し、本書は API の契約と認可を定めます。
+要件定義書 §6.2 A-10、§9 出力（A4 縦、2 モード）、付録E §7、01（`maxDuration` 120、`puppeteer-core` + `@sparticuz/chromium`）に対応します。生成方式・レイアウト・Cloud Storage for Firebase の利用有無（本フェーズでは保存しない。07 D07-21）は 07 分冊が確定し、本書は API の契約と認可を定めます。
 
 | 項目 | 内容 |
 |---|---|
 | 認可 | admin 以上（対象結果が見えること） |
 | クエリ | `mode=full` / `mode=restricted`（§2.3 `pdfModeSchema`）。`restricted` は評価・組織との合致度・リスクを非表示（00 §1.8）。`scope` / `teamCode`（省略可）: 比較組織を選択した状態で出力するとき、§5.5 と同じ形式で渡す。省略時は比較セクションを「比較組織を選択すると表示されます」の表示のままにする |
-| 処理 | (1) 対象結果の可視性を確認（RLS）。(2) 07 の `lib/pdf/` に `resultId`、`mode`、`scope`、`AdminContext` を渡して PDF のバイト列を得る。(3) `application/pdf` でストリーム返却 |
-| 応答ヘッダー | `Content-Type: application/pdf`、`Content-Disposition: attachment; filename="result-{resultId 先頭 8 文字}-{mode}.pdf"`（ファイル名に氏名を含めない。01 §8.5）、`Cache-Control: no-store` |
+| 処理 | (1) `getResult(resultId)` → `assertVisibleToAdmin`。`scope` 指定時は `fetchPopulation` で母集団が 0 件でないことを確認（読み取りは印刷用ページ側でも行うため、ここでは `count()` 集計で件数だけを見てもよい。実装時確認）。(2) 07 の `lib/pdf/` に `resultId`、`mode`、`scope`、`AdminContext` を渡して PDF のバイト列を得る。(3) `application/pdf` でストリーム返却 |
+| 応答ヘッダー | `Content-Type: application/pdf`、`Content-Disposition: attachment; filename="result-{resultId 先頭 8 文字}-{mode}.pdf"`（ファイル名に氏名を含めない。01）、`Cache-Control: no-store` |
 | 監査ログ | `result.pdf_export`（`details: { "mode": "restricted", "scope": "organization" }`） |
 | エラー | 404 `RESULT_NOT_FOUND`、409 `POPULATION_EMPTY`（`scope` 指定時に母集団 0 件。設計判断 D04-35: 比較セクションを空にして出力するのではなくエラーにし、画面側で `scope` を外して再要求させる）、500 `PDF_GENERATION_FAILED` |
 
-- 印刷用ページ（`app/(admin)/admin/results/[resultId]/print/...`。07 分冊）を Chromium から取得する際の認可は、01 D01-26 の推奨どおり **PDF 生成時に発行する短命トークン** を使います。本書はそのトークンの契約だけを定めます（§7.2）。
+- 印刷用ページ（`app/(admin)/admin/results/[resultId]/print/...`。07 分冊）を Chromium から取得する際の認可は、**PDF 生成時に発行する短命トークン** を使います。本書はそのトークンの契約だけを定めます（§7.2）。
 - `mode=restricted` でも API のパスとクエリで指定するだけで、非表示処理は印刷用ページ（06・07）が行います。API は `mode` を印刷用ページに渡します。
-- Storage に保存する場合（07 判断、01 §8.5）も API の契約は同じです（署名付き URL を返す方式に変える場合は `302` リダイレクトではなく、`{ "downloadUrl": "…", "expiresAt": "…" }` の JSON を返す `POST …/pdf` を別途追加する。本フェーズは同期ストリーム返却を基本とする）。
+- Cloud Storage for Firebase に保存する場合（07 判断）も API の契約は同じです（署名付き URL を返す方式に変える場合は `302` リダイレクトではなく、`{ "downloadUrl": "…", "expiresAt": "…" }` の JSON を返す `POST …/pdf` を別途追加する。本フェーズは同期ストリーム返却を基本とする）。
 
 ### 5.11 管理者一覧 `GET /api/v1/admin/admin-users`
 
-06 §3.7 のアカウント画面（M-07）「管理者一覧（オーナーのみ）」が依頼した API（06 D06-20、06 §8.2）を **採用** します（設計判断 D04-49）。要件定義書 §6.2 A-12 には管理者一覧の記載がありません（未確認）。依頼範囲「アカウント（管理者一覧、招待、役割）」に基づく 06 の判断を受け、DB 側の準備（02 §5.2: owner／super_admin は組織内の `admin_users` を SELECT できる。RLS `admin_users_select_self_or_owner`、02 §6.3）が既にあるため、読み取り専用の一覧として追加します。
+06 §3.7 のアカウント画面（M-07）「管理者一覧（オーナーのみ）」が依頼した API（06 D06-20、06 §8.2）を **採用** します（設計判断 D04-49）。要件定義書 §6.2 A-12 には管理者一覧の記載がありません（未確認）。依頼範囲「アカウント（管理者一覧、招待、役割）」に基づく 06 の判断を受け、読み取り専用の一覧として追加します。
 
 | 項目 | 内容 |
 |---|---|
 | 認可 | owner／super_admin（`requireOwner`）。`admin` は 403 `ROLE_REQUIRED` |
 | クエリ | なし（1 組織あたりの管理者は少数のため、ページングしない） |
-| 処理 | `admin_users` を `select("id, name, role, is_suspended, created_at")` で取得（RLS `admin_users_select_self_or_owner` が `organization_id = 自組織 and deleted_at is null` を担保する。アプリ層では条件を追加しない）。並び順は `created_at` 昇順（先に登録した管理者＝通常はオーナーが先頭） |
-| 監査ログ | なし（個人情報を含まない管理者のメタデータのみ。02 §8.6 の記録対象に無い） |
+| 処理 | `listAdminUsers(organizationId)`（`admin-users-repository.ts`。02 参照）で `adminUsers` を `organizationId == 自組織` かつ `deletedAt == null` でクエリし、`createdAt` 昇順（先に登録した管理者＝通常はオーナーが先頭）。メールアドレスは Admin SDK の `getUsers(uids)`（1 回あたり 100 件まで。実装時確認）でまとめて引く（00 §2.2「一覧表示では Admin SDK の `getUser` で引く」） |
+| 監査ログ | なし（管理者のメタデータのみ。メールアドレスは含むが閲覧者は owner に限られる） |
 
 レスポンス（200）:
 
 ```json
 {
   "items": [
-    { "adminUserId": "3d5f1c0a-7b2e-4d9f-8a1b-2c3d4e5f6a7b", "name": "山田 花子", "role": "owner", "isSuspended": false, "createdAt": "2026-09-01T00:00:00.000Z" },
-    { "adminUserId": "4e6a2d1b-8c3f-4e0a-9b2c-3d4e5f6a7b8c", "name": "山田 次郎", "role": "admin", "isSuspended": true, "createdAt": "2026-09-10T09:30:00.000Z" }
+    { "adminUserId": "3d5f1c0a-7b2e-4d9f-8a1b-2c3d4e5f6a7b", "name": "山田 花子", "email": "（Firebase Auth のメールアドレス）", "role": "owner", "isSuspended": false, "createdAt": "2026-09-01T00:00:00.000Z" },
+    { "adminUserId": "4e6a2d1b-8c3f-4e0a-9b2c-3d4e5f6a7b8c", "name": "山田 次郎", "email": "（同上）", "role": "admin", "isSuspended": true, "createdAt": "2026-09-10T09:30:00.000Z" }
   ],
   "total": 2
 }
 ```
 
-- **メールアドレスは含めません**。メールアドレスは `auth.users` にのみあり（02 D02-01）、利用者セッションのクライアントでは他の管理者の `auth.users` を読めないためです。06 は氏名・役割・状態・登録日だけを表示します（06 §3.7 の項目と一致）。
+- **2.0 版で `email` を含めます**（1.x 版は RLS の制約で含められなかった）。Firebase Auth に存在しない uid（運用で削除された直後）は `email: null`。06 は氏名・メールアドレス・役割・状態・登録日を表示できます（06 §3.7 の項目に `email` を追加してよい。§10）。
 - `super_admin` の行も返します（00 D-14: owner と同じ扱い。表示上の役割名は 06）。
-- 停止中（`is_suspended = true`）の管理者は返しますが、削除済み（`deleted_at` 設定済み）は RLS により返りません。
+- 停止中（`isSuspended == true`）の管理者は返しますが、削除済み（`deletedAt` 設定済み）はクエリ条件により返りません。
 - 06 §8.2 の依頼項目名 `id` は本書では `adminUserId`（00 §3.1 の「ID は `xxxId`」の規約）で確定します（§10）。
 
 エラー:
 
 | HTTP | code | 条件 |
 |---:|---|---|
-| 401 | `UNAUTHENTICATED` | Auth セッションなし（`requireAdmin` 共通。§5.1） |
+| 401 | `UNAUTHENTICATED` | セッション Cookie なし（`requireAdmin` 共通。§5.1） |
 | 403 | `ADMIN_NOT_REGISTERED` / `ADMIN_SUSPENDED` | `requireAdmin` 共通（§5.1） |
 | 403 | `ROLE_REQUIRED` | `admin` が呼んだ（`requireOwner`） |
 
 ### 5.12 本フェーズで API を提供しない操作（役割変更・利用停止・管理者削除）
 
-役割変更（`admin_users.role`）、利用停止（`is_suspended`）、管理者の論理削除（`deleted_at`）の API は **本フェーズでは提供しません**（設計判断 D04-50）。根拠:
+役割変更（`adminUsers.role` とカスタムクレームの `role`）、利用停止（`adminUsers.isSuspended` + Auth の `disabled` + `revokeRefreshTokens`。00 §5）、管理者の論理削除（`adminUsers.deletedAt`）の API は **本フェーズでは提供しません**（設計判断 D04-50 改（2.0 版））。根拠:
 
-- 02 §7.5「本フェーズでは画面を作らず、運用者がサービスロールで実行する」および 02 §5.2 の権限表「役割変更・利用停止・管理者の削除: owner ×、admin ×（本フェーズは運用者が SQL で実施）」。
-- 02 §6.4 の列権限は `authenticated` に `admin_users` の `update (name)` しか与えていないため、利用者セッションのクライアント（D04-21）では `role` / `is_suspended` / `deleted_at` を更新できません。API を作るにはサービスロールか `security definer` RPC の追加が必要で、02 の権限設計を変えることになります。
-- 要件定義書 §6.2 A-12 に役割変更・停止の画面操作は記載がありません（未確認）。
+- 00 §4.2「役割変更・利用停止・管理者削除の API は本フェーズでは提供しません（運用者が `scripts/set-admin-role` で Admin SDK により行う）」。
+- これらの操作はカスタムクレームの更新（`setCustomUserClaims`）と既存セッションの失効（`revokeRefreshTokens`）を伴い、誤操作で組織のオーナー自身を締め出せる。画面からの操作にする場合は、最後のオーナーを停止できない等の保護を設計する必要があり、要件定義書 §6.2 A-12 に役割変更・停止の画面操作は記載がない（未確認）ため本フェーズでは運用者対応とする。
 
-実装者への指示: `app/api/v1/admin/admin-users/[adminUserId]/route.ts` などの PATCH／DELETE は **作らない**。運用者が 02 §7.5 の SQL を実行し、監査ログ `admin.role_change` / `admin.suspend` / `admin.delete` を `actor_kind = 'system'` で同じトランザクションに残します（02 §8.6）。将来 API 化する場合は、02 に `security definer` RPC（権限確認と監査ログを内包）の追加を依頼したうえで本書に §5.13 として追加します。
+実装者への指示: `app/api/v1/admin/admin-users/[adminUserId]/route.ts` などの PATCH／DELETE は **作らない**。運用者が `scripts/set-admin-role`（00 §3.3。02 が手順を定める）を実行し、監査ログ `admin.role_change` / `admin.suspend` / `admin.delete` を `actorKind: "system"` で同じバッチに残します（`AuditAction` にはこの 3 つを含めない。スクリプト側で `auditLogs` に直接書く）。将来 API 化する場合は本書に §5.13 として追加します。
 
 ## 6. 認証系の Route Handler（`/api/v1` の外）
 
