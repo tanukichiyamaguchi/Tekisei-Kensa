@@ -3,8 +3,8 @@
 | 項目 | 内容 |
 |---|---|
 | 文書名 | 適性検査システム 基本設計 07 AI 解説・PDF 出力設計 |
-| 版 | 1.3 |
-| 作成日 | 2026-09-17（1.1 版: 2026-09-21、1.2 版: 2026-09-21 最終点検、1.3 版: 2026-09-21 K-06（Supabase → Firebase）に伴う部分改版。§13） |
+| 版 | 1.4 |
+| 作成日 | 2026-09-17（1.1 版: 2026-09-21、1.2 版: 2026-09-21 最終点検、1.3 版: 2026-09-21 K-06（Supabase → Firebase）に伴う部分改版、1.4 版: 2026-09-21 Firebase 化後の分冊間整合（02・04 の 2.1 版に合わせた）。§13） |
 | 対象 | `lib/ai/`、`lib/pdf/`、印刷用ページ、`lib/services/ai-analysis.ts` / `pdf-export.ts` の 07 担当部分を実装する担当者。04（API）、06（管理者画面）、08（テスト）の担当者 |
 
 ## 0. 本書の位置づけ
@@ -343,7 +343,7 @@ export function parseAiOutputText(text: string): AiAnalysisOutput {
 - `AiAnalysisOutputParsed` は 00 §3.6 の `AiAnalysisOutput` と構造が一致します（`readonly` の有無だけが異なる）。provider は `AiAnalysisOutput` 型で返します。
 - 設計判断 D07-07: 配列長の検証は付録D の「2〜4個」「3〜5個」より緩い上限（6・8）で **失敗扱いにせず受け入れ** ます。理由: 付録D の個数は文体の指示であり、1 個多い・少ないだけで生成失敗にして再生成コストを払うより、そのまま表示する方が利用者の利益になる。0 個と `levers` の順序違反だけは失敗にします（画面の 7 ブロックが成立しないため）。
 - `describe()` の文言は付録D §2 の説明を転記したものです（スキーマの `description` としてモデルに渡ります）。
-- ファイル名は `lib/ai/schema.ts` を正とします（08 §2.6 PR-5.1 と U-10 の `lib/ai/validate.ts` は本書に合わせた改版を依頼。§11）。方式 A では `zodOutputFormat(AiAnalysisOutputSchema)` が、方式 C と stub では `parseAiOutputText()` が同じスキーマを使うため、スキーマの定義は 1 箇所です（08 D08-10「スキーマの二重管理を避ける」に対応）。
+- ファイル名は `lib/ai/schema.ts` を正とします（08 §2.6 PR-5.1 と U-10 は 08 1.1 版で本書に合わせて改版済み。§11）。方式 A では `zodOutputFormat(AiAnalysisOutputSchema)` が、方式 C と stub では `parseAiOutputText()` が同じスキーマを使うため、スキーマの定義は 1 箇所です（08 D08-10「スキーマの二重管理を避ける」に対応）。
 
 ### 3.3 付録D §2 スキーマとの対応表
 
@@ -544,7 +544,7 @@ SDK 例外との対応（skill `shared/error-codes.md` の TypeScript 列。`API
 | `inputTokens`、`outputTokens`、`cacheReadInputTokens`、`cacheCreationInputTokens` | `response.usage`（skill「Verifying Cache Hits」） |
 | `elapsedMs` | 呼び出し前後の時刻差 |
 
-- 監査ログ `result.ai_generate` の `details` に `inputTokens` / `outputTokens` を追加します（`auditLogs.details` は個人情報を含まない map。02。04 §5.9 の `{ status, aiAnalysisId }` への追加。本書から 04 への依頼。§11）。月次のコスト集計に使えます。
+- 監査ログ `result.ai_generate` の `details` に `inputTokens` / `outputTokens` を含めます（`auditLogs.details` は個人情報を含まない map。02 §3.8。04 §5.9 で `{ status, aiAnalysisId, inputTokens, outputTokens }` として確定済み）。月次のコスト集計に使えます。
 
 ## 5. provider インターフェース（`lib/ai/`）
 
@@ -772,14 +772,14 @@ stateDiagram-v2
 
 | 責任 | 担当 |
 |---|---|
-| 状態の判定・遷移・二重起動防止・日次上限・監査ログ | サービス（04 §5.9 手順 1〜7） |
+| 状態の判定・遷移・二重起動防止・日次上限・監査ログ | サービス（04 §5.9 手順 1〜7）と 02 のリポジトリ関数（`markAiGenerationStarted({ resultId, viewer, staleAfterMs })`・`saveAiAnalysis()`・`markAiGenerationFailed()`・`countAiAnalysesSince()`。02 §8.6）。滞留判定（10 分）は `staleAfterMs` として 04 が渡し、02 がトランザクション内で行う |
 | プロンプト組み立て、API 呼び出し、検証、エラー分類 | provider（本書 §2〜§5） |
-| `aiAnalyses` 文書の値の組み立て | サービス。`AiGenerateResult` から §7.1 の対応で写す |
-| `failed` 時の `results.aiGenerationError` | `AiProviderError.reason` の文字列（§4.6）。provider が投げた例外以外（Firestore の書き込みエラーなど）は `internal_error` とする（サービス側の定数。04 への依頼） |
+| `aiAnalyses` 文書の値の組み立て | 02 の `saveAiAnalysis({ resultId, viewer, generated: AiGenerateResult, reliability, meta })` が §7.1 の対応で写す（`organizationId`・`respondentId` は `results` 文書の値を使う。02 §10 I-7） |
+| `failed` 時の `results.aiGenerationError` | `AiProviderError.reason` の文字列（§4.6）。provider が投げた例外以外（Firestore の書き込みエラーなど）は `internal_error` とする（04 §5.9 手順 7 で確定） |
 
 ### 6.3 タイムアウトと Vercel の実行時間制限への対処
 
-§4.5 の内訳のとおり、provider の 240 秒タイムアウト（`signal` と SDK `timeout`）を `maxDuration` 300 秒の内側で先に発火させます。打ち切られた場合の復旧は 04 §5.9 手順 2 の滞留検知（`results.aiGenerationStartedAt` から 10 分。フィールド名は 02 が確定）に依存します。ブラウザ側は 06 §3.5.9 のポーリング（3 秒間隔、最大 10 分。04 D04-34 の滞留判定と同じ）で状態を追います。
+§4.5 の内訳のとおり、provider の 240 秒タイムアウト（`signal` と SDK `timeout`）を `maxDuration` 300 秒の内側で先に発火させます。打ち切られた場合の復旧は 04 §5.9 手順 2・4 の滞留検知（`results.aiGenerationStartedAt` から 10 分。02 §3.5 で確定。GET で検知した場合も 02 の `markAiGenerationFailed()` により監査ログ `result.ai_generate`（`failed`、`timeout`）が残る）に依存します。ブラウザ側は 06 §3.5.9 のポーリング（3 秒間隔、最大 10 分。04 D04-34 の滞留判定と同じ）で状態を追います。
 
 ### 6.4 再試行の方針
 
@@ -788,7 +788,7 @@ stateDiagram-v2
 | SDK（`maxRetries: 1`） | 408/409/429/5xx と接続エラーを 1 回だけ自動再試行（skill「Client config」） | 時間予算（§4.5） |
 | provider | 追加の再試行はしない（`invalid_json` でも再生成しない） | 1 回の生成が数十秒〜数分になり得るため、自動再生成は `maxDuration` を超えるリスクが高い。`invalid_json` は構造化出力の採用でまれになる見込み |
 | サービス・画面 | `failed` の結果に「再試行」ボタン（06 §3.5.9）。利用者操作で `POST` を再送する | D-10、04 §5.9 |
-| 日次上限 | 再試行も `aiAnalyses` の文書数ではなく成功件数で数える（失敗は文書を作らないため上限を消費しない。04 §2.8 の判定方法の帰結。件数の数え方（`count()` 集計クエリか、日次カウンタ文書か）は 04 が確定。実装時確認: 集計クエリの制約。00 D-30） | 04 §2.8 |
+| 日次上限 | 再試行も `aiAnalyses` の文書数ではなく成功件数で数える（失敗は文書を作らないため上限を消費しない）。数え方は 02 の `countAiAnalysesSince({ organizationId, since: 当日 0 時（Asia/Tokyo） })`（`count()` 集計。02 Q14）で確定（04 §2.8。実装時確認: 不等号条件を含む集計クエリの制約。09 §6.4 の 27） | 04 §2.8、02 §8.6 |
 
 ### 6.5 非同期化の判断基準（将来）
 
@@ -812,10 +812,10 @@ stateDiagram-v2
 | `requestId` | `AiGenerateResult.requestId` | provider |
 | `status` | `completed`（失敗時は文書を作らないため常に `completed`。00 §2.2 の `status` は将来の非同期化（§6.5）に備えたもの） | サービス |
 | `reliability` | `input.result.reliability`（生成時点の真値。付録D §1、要件定義書 §8.6） | サービス |
-| `generatedBy` | クレームの `uid`（ログイン中の管理者。00 §5） | サービス |
+| `generatedBy` | クレームの `uid`（ログイン中の管理者。00 §5）。02 §3.6 で同名に確定（04 2.0 版の `generatedByUid` は取り下げ） | サービス（`viewer.uid`） |
 | `createdAt`、`updatedAt` | `FieldValue.serverTimestamp()`（00 §2.1 の監査フィールド。1.x 版の `generated_at` は `createdAt` に統合） | サービス |
 
-- `results.latestAiAnalysisId` を新しい文書の ID に向け、`aiGenerationStatus = "completed"` にします（04 §5.9 手順 6）。`aiAnalyses` の作成と `results` の更新は同一バッチ（またはトランザクション）で行い、片方だけが残らないようにします（00 §2.2 の複数文書書き込みの方針）。履歴は残りますが（00 §2.2「生成履歴」）、本フェーズでは再生成しないため 1 結果 1 文書です。
+- `results.latestAiAnalysisId` を新しい文書の ID に向け、`aiGenerationStatus = "completed"` にします（04 §5.9 手順 6）。`aiAnalyses` の作成と `results` の更新と監査ログ `result.ai_generate` は 02 の `saveAiAnalysis()` が同一バッチで行い、片方だけが残らないようにします（00 §2.2 の複数文書書き込みの方針。02 §8.6）。履歴は残りますが（00 §2.2「生成履歴」）、本フェーズでは再生成しないため 1 結果 1 文書です。
 - `aiAnalyses` は組織に属する文書のため `organizationId` を必ず持ち、読み取り時はサーバでクレームの `organizationId` と照合します（00 §2.1）。論理削除の対象外です（00 §2.2）。
 
 ### 7.2 表示
@@ -910,11 +910,11 @@ sequenceDiagram
     B->>API: ダウンロードを開始する（mode, scope, teamCode）
     API->>S: exportPdf(ctx, { resultId, mode, scope })
     S->>DB: 対象結果の可視性確認（organizationId とクレームの照合、幹部の役割制限）、scope 指定時は母集団件数確認（0 件なら 409 POPULATION_EMPTY）
-    S->>S: issuePdfToken({ resultId, organizationId, adminUserId, mode, scope })（04 §7.2）
+    S->>S: issuePdfToken({ resultId, organizationId, adminUid, role, mode, scope })（04 §7.2）
     S->>P: renderResultPdf({ printUrl, token })
     P->>CH: launch（@sparticuz/chromium）
     CH->>PP: GET /admin/results/{resultId}/print?mode=&scope=&teamCode=&token=
-    PP->>PP: verifyPdfToken、Admin SDK で results/respondents/aiAnalyses/母集団を取得、可視性を再検証（04 §7.2）
+    PP->>PP: verifyPdfToken、トークンの { adminUid, organizationId, role } を Viewer として 02 のリポジトリ関数で results/respondents/aiAnalyses/母集団を取得（可視性はリポジトリ内で判定。04 §7.2）
     PP-->>CH: HTML（06 の部品を印刷用レイアウトで配置）
     CH->>CH: レーダー描画完了を待つ（data-print-ready）
     CH->>CH: page.pdf（A4 縦）
@@ -930,8 +930,8 @@ sequenceDiagram
 |---|---|
 | パス | `app/(admin)/admin/results/[resultId]/print/page.tsx`（01 §5.4、06 §9 の配置案を採用）。ルートグループは `(admin)` だが、**管理者 Cookie を要求せず**、クエリ `token` だけで認可する（04 §7.2） |
 | レイアウト | `app/(admin)/admin/results/[resultId]/print/layout.tsx` を置き、管理者画面のサイドメニュー・ヘッダー（`AdminShell`）を描画しない最小のラッパーにする。00 §3.3 のルートレイアウト（`app/layout.tsx`）の内側では `html` / `body` を再定義できないため、1.1 版の「最小の `html` / `body`」はこの読み替えとする（06 §1.3 D06-27）。06 の `app/(admin)/admin/layout.tsx` は CSS の読み込みだけで認証チェックを持たないため、印刷用ページは本書の認可（下記）だけで開け、06 の部品が必要とする CSS クラスは継承される。印刷用 CSS（§9.5）とフォント（§9.7）はこの `print/layout.tsx` で読み込む |
-| 認可の流れ | (1) `token` が無い／検証失敗 → 404（`verifyPdfToken` は `ApiError(404, NOT_FOUND)` を投げる。04 §7.2）。(2) トークンの `resultId` とパスの `[resultId]` の一致、`mode` / `scope` / `teamCode` とクエリの一致を確認（クエリの改ざん防止。不一致は 404）。(3) Admin SDK で取得した `results` 文書の `organizationId` とトークンの `organizationId` の一致を確認。(4) 文書の `respondentKind == "executive"` なら、トークンの `adminUserId`（= Firebase Auth の `uid`）の役割が `owner` / `super_admin` であることを `adminUsers/{uid}` の `role` で確認し（印刷用ページは Cookie を持たずクレームを読めないため、文書の複製値を使う。00 §5）、あわせて `isSuspended == false`・`deletedAt == null` を確認する（04 §7.2「アプリ層で再検証」）。いずれかに失敗したら 404 |
-| データ取得 | Admin SDK（`lib/firebase/admin.ts` 経由の `lib/db/` リポジトリ。00 §2.5）で `results` 1 文書 + `respondents` 1 文書 + `aiAnalyses`（`results.latestAiAnalysisId` の 1 文書）+ `scope` 指定時は `fetchPopulation()`（02）→ `compareWithPopulation`（03）。取得関数は 04 の `getResultDetail` / `getComparison` と同じ mapper（`toScoreResult` など。02 `lib/db/mappers/`）を使い、管理者 API の認可 3 段階（00 §4.1）の代わりに上記 (3)(4) を行う `lib/services/print-data.ts`（本書が追加。§11）に置く。Admin SDK はセキュリティルールの対象外（全拒否ルールでも読める。00 §2.5）ため、認可は必ずこの関数のコードで行う |
+| 認可の流れ | (1) `token` が無い／検証失敗 → 404（`verifyPdfToken` は `ApiError(404, NOT_FOUND)` を投げる。04 §7.2）。(2) トークンの `resultId` とパスの `[resultId]` の一致、`mode` / `scope` / `teamCode` とクエリの一致を確認（クエリの改ざん防止。不一致は 404）。(3) Admin SDK で取得した `results` 文書の `organizationId` とトークンの `organizationId` の一致を確認。(4) 文書の `respondentKind == "executive"` なら、トークンのペイロードの `role`（発行時のクレームの値。04 §7.2 D04-39 で 2.0 版に追加）が `owner` / `super_admin` であることを確認する。`adminUsers/{uid}` は再読しない（トークンは 120 秒の短命で、発行時に `requireAdmin` が停止・削除・役割を確認済み。1.3 版の文書再読は取り下げ。04 §7.2、08 I-47 (g)）。実装上は `{ uid: adminUid, organizationId, role }` を 02 の `Viewer` として `getResult({ resultId, viewer })` に渡せば、リポジトリが (3)(4) を同じ規則で判定して `null` を返す。いずれかに失敗したら 404 |
+| データ取得 | Admin SDK（`lib/firebase/admin.ts` 経由の `lib/db/` リポジトリ。00 §2.5）で `getResult({ resultId, viewer })` + `getRespondent({ respondentId, viewer })` + `getAiAnalysis({ aiAnalysisId: results.latestAiAnalysisId, resultId, organizationId })` + `scope` 指定時は `fetchPopulation({ organizationId, scope })`（02 §8.5）→ `compareWithPopulation`（03）。取得関数は 04 の `getResultDetail` / `getComparison` と同じリポジトリ・mapper（`toScoreResult` など。02 `lib/db/mappers/`）を使い、管理者 API の認可 3 段階（00 §4.1）の代わりにトークンから作った `Viewer` で上記 (3)(4) を行う `lib/services/print-data.ts`（本書が追加。§11）に置く。Admin SDK はセキュリティルールの対象外（全拒否ルールでも読める。00 §2.5）ため、認可は必ずこの関数のコードで行う |
 | 描画 | 06 の `components/admin/result/*` と `components/charts/*` を `components/pdf/PrintResultDocument.tsx` から再利用する。操作要素（戻る、ダウンロード、AI 解説の表示切替、第二候補を見る、他項目の一覧）は描画しない（06 §9）。`PdfSectionVisibility`（§9.5）を props で渡す |
 | 監査ログ | 書かない（04 §7.2。GET 側で 1 件） |
 | 検索避け | `robots: { index: false, follow: false }` を `metadata` で指定し、応答ヘッダー `X-Robots-Tag: noindex, nofollow` と `Referrer-Policy: no-referrer`（URL にトークンが載るため）を付ける。01 §8.7 の `next.config.ts`（`printPageHeaders`）で反映済み |
@@ -1191,9 +1191,9 @@ export async function renderResultPdf(args: RenderResultPdfArgs): Promise<Render
 |---|---|
 | 00（共通定義） | 反映済み（00 1.1 版）: (1) §3.6 の `AiProvider` を本書 §5.1 の形（`GenerateOptions`（`signal` 付き）、`AiGenerateResult`、`name` のユニオン `"anthropic" \| "stub"`）に更新。(2) §3.2 に `PDF_CHROMIUM_EXECUTABLE_PATH` と `PDF_TOKEN_SECRET` を掲載（D-27）。`VERCEL_AUTOMATION_BYPASS_SECRET` と `VERCEL` は 01 D01-30 のとおり載せない。残る依頼はない |
 | 01（構成） | (1) `AI_MODEL` の初期値 `claude-opus-5`、`AI_PROMPT_VERSION` の初期値 `recruitment-v1`（`.env.example` に記載。01 1.1 版 §4.1 で反映済み）。(2) 起動時検証に「`AI_PROMPT_VERSION` が `PROMPT_REGISTRY` に存在する」を追加（§2.2。01 1.1 版 §4.3 で反映済み）。(3) 環境変数 `PDF_CHROMIUM_EXECUTABLE_PATH`（任意）と `VERCEL_AUTOMATION_BYPASS_SECRET`（Vercel 自動設定、Preview 専用）は 01 1.1 版 §4.1・§4.3 の `serverSchema`（`z.string().optional()`）に反映済みであることを確認した。追加の依頼: §4.1 の `PDF_CHROMIUM_EXECUTABLE_PATH` の設定場所「Vercel・CI には置かない」を「Vercel には置かない（CI では `e2e.yml` が Playwright の Chromium のパスを設定する。08 §3.4.2）」に改める（§9.12）。(4) PDF 生成方式を `puppeteer-core` + `@sparticuz/chromium` で確定（D07-16）。関数メモリ 1 GB 以上（§9.10）。(5) Preview の Deployment Protection に対する Protection Bypass for Automation の有効化（§9.13、D07-23。01 D01-31 で確定済み）。(6) `public/fonts/` に Noto Sans JP（OFL）を同梱（§9.7。01 §2 で反映済み。サブセット化はしない）。(7) 印刷用ページに `X-Robots-Tag: noindex` と `Referrer-Policy: no-referrer`（§9.4）。(8) Cloud Storage for Firebase は本フェーズでは使わない（`FIREBASE_STORAGE_BUCKET` は任意。`storage.rules` は全拒否。D07-21、00 §2.1・§3.2）。(9) `PDF_TOKEN_SECRET` の追加（04 D04-40）を支持。(10) 本書は環境変数を `serverEnv()` / `isVercel()` / `appBaseUrl()`（01）経由でのみ読み、`process.env` を直接読まない（§5.2、§9.8、§9.13）。(11) 将来 PDF を Storage に保存する場合の仕様は本書 §9.11（`pdf-exports/{organizationId}/{resultId}/{mode}-{timestamp}.pdf`、利用者は読み取り不可・Admin SDK の署名付き URL 60 秒のみ、ライフサイクル 24 時間）を正とし、01 は Storage の設定（バケット、`storage.rules` のデプロイ、サービスアカウントの署名権限）だけを持つ。(12) Firebase Auth のメールテンプレートと同様、AI 解説・PDF に Firebase 固有の設定は無い |
-| 02（Firestore データモデル） | (1) `aiAnalyses` のフィールドは §7.1 の表（`provider` の値は `anthropic` / `stub`、`output` は付録D §2 のキーのままの map、`verdict` の別フィールドへの抜粋はしない、`usage`・`stopReason`・`requestId`・`reliability`・`generatedBy` を持つ、`createdAt` が生成日時）。1.x 版の `raw_json`・`verdict_*`・`generated_at` は廃止。(2) `results` の AI 関連フィールドは `aiGenerationStatus`（00 §1.8 の 4 値）、`aiGenerationError`（§4.6 の `AiFailureReason` の文字列または `internal_error` のみ。自由文は保存しない）、`aiGenerationStartedAt`（滞留検知用。04 D04-34）、`latestAiAnalysisId`。名称は 02 が確定してよいが、本書・04・06 は上記の名称で参照している。(3) `aiAnalyses` の作成と `results` の更新を同一バッチで行うリポジトリ関数を用意する（§7.1）。(4) 1.x 版の Storage マイグレーション（`create_storage_pdf_exports.sql`）と `pdf_exports_select_same_org` ポリシーは廃止（Firebase では `storage.rules` 全拒否のみ。§9.11） |
+| 02（Firestore データモデル） | **1.4 版: (1)〜(4) は 02 2.1 版 §3.5・§3.6・§8.6・§14 に反映済み**（`generatedBy` の名称も 02 §3.6 で確定）。(1) `aiAnalyses` のフィールドは §7.1 の表（`provider` の値は `anthropic` / `stub`、`output` は付録D §2 のキーのままの map、`verdict` の別フィールドへの抜粋はしない、`usage`・`stopReason`・`requestId`・`reliability`・`generatedBy` を持つ、`createdAt` が生成日時）。1.x 版の `raw_json`・`verdict_*`・`generated_at` は廃止。(2) `results` の AI 関連フィールドは `aiGenerationStatus`（00 §1.8 の 4 値）、`aiGenerationError`（§4.6 の `AiFailureReason` の文字列または `internal_error` のみ。自由文は保存しない）、`aiGenerationStartedAt`（滞留検知用。04 D04-34）、`latestAiAnalysisId`。名称は 02 が確定してよいが、本書・04・06 は上記の名称で参照している。(3) `aiAnalyses` の作成と `results` の更新を同一バッチで行うリポジトリ関数を用意する（§7.1）。(4) 1.x 版の Storage マイグレーション（`create_storage_pdf_exports.sql`）と `pdf_exports_select_same_org` ポリシーは廃止（Firebase では `storage.rules` 全拒否のみ。§9.11） |
 | 03（採点） | AI 入力の整形規則を §2.3 で確定（相性・リスクの負値は 0、資質の 100 超はそのまま、信頼係数は四捨五入、16 尺度は `formatStep`）。`lib/presentation/rounding.ts` の `formatStep` と `negative-values.ts` の `clampForSlider` / `clampPercent` を `lib/ai/input.ts` から再利用する |
-| 04（API・services） | (1) `GenerateOptions.signal` を受け取る（§4.2、§5.1）。(2) 失敗理由は `AiProviderError.reason`（§4.6）を保存し、`details.reason` に載せる。Firestore の書き込みエラー等は `internal_error`。402（課金）は `auth_error` かつ `retryable: false`（§4.6）。(3) 監査ログ `result.ai_generate` の `details` に `inputTokens` / `outputTokens` を追加（§4.8）。(4) `exportPdf` は **`appBaseUrl()`（01 §4.3）** でオリジンを求め（`RequestMeta` からは求めない。D07-22）、`issuePdfToken` → `renderResultPdf`（§9.8）の順で呼び、全体 90 秒の `AbortSignal` を渡す（§9.10）。(5) 印刷用ページのデータ取得関数 `lib/services/print-data.ts`（Admin SDK + アプリ層の可視性再検証。`adminUsers/{uid}` の `role`・`isSuspended`・`deletedAt` を文書から確認）を 02 の mapper を使って本書側が実装する（§9.4）。(8) 日次上限の件数の数え方（集計クエリかカウンタ文書か）を確定する（§6.4）。(6) 管理者認証ミドルウェアから `/admin/results/*/print` を除外（§9.4）。(7) 非同期化する場合の変更点は §6.5 |
+| 04（API・services） | **1.4 版: (1)〜(8) は 04 2.0〜2.1 版に反映済み**（(5) は「トークンの `role` で再検証。`adminUsers` は再読しない」に本書側を合わせた。(8) は `countAiAnalysesSince()` の `count()` 集計で確定）。(1) `GenerateOptions.signal` を受け取る（§4.2、§5.1）。(2) 失敗理由は `AiProviderError.reason`（§4.6）を保存し、`details.reason` に載せる。Firestore の書き込みエラー等は `internal_error`。402（課金）は `auth_error` かつ `retryable: false`（§4.6）。(3) 監査ログ `result.ai_generate` の `details` に `inputTokens` / `outputTokens` を追加（§4.8）。(4) `exportPdf` は **`appBaseUrl()`（01 §4.3）** でオリジンを求め（`RequestMeta` からは求めない。D07-22）、`issuePdfToken` → `renderResultPdf`（§9.8）の順で呼び、全体 90 秒の `AbortSignal` を渡す（§9.10）。(5) 印刷用ページのデータ取得関数 `lib/services/print-data.ts`（Admin SDK + アプリ層の可視性再検証。トークンの `role` を `Viewer` として 02 のリポジトリ関数に渡す）を本書側が実装する（§9.4）。(8) 日次上限の件数の数え方は `countAiAnalysesSince()`（02 Q14）で確定（§6.4）。(6) 管理者認証ミドルウェアから `/admin/results/*/print` を除外（§9.4）。(7) 非同期化する場合の変更点は §6.5 |
 | 05（受検者画面） | 影響なし（受検者は AI 解説・PDF に触れない） |
 | 06（管理者画面） | (1) `PdfSectionVisibility` は `lib/pdf/visibility.ts` に置き、各セクション部品が `visibility?` を受け取る（§9.5）。(2) 第二候補は PDF で続けて印字（D07-18）。(3) AI 解説は `completed` **かつ `full`** のときのみ掲載し、**`restricted` では掲載しない**（D07-15）。06 §3.5.11 の提案「`restricted` でも掲載する（判定はリスク値ではないため）」は、付録D §3 が `cautions` へのリスク数値の引用を必須としている（「最低 3 箇所は実際の数値を引用する」）ため不採用。06 は 1.2 版で §3.5.11・§9 を本書に合わせて改版済み（06 D06-29）。(4) `PrintReadyMarker` のために `TraitRadar` / `AptitudeRadar` / `SocialStyleRadar` が `onMounted?: () => void` を受け取れるようにする（§9.6。06 1.1 版で反映済み）。(5) `DonutGaugeProps.size = 96` を PDF で使う。(6) 06 §9 の依頼により `PdfSectionVisibility.showPosition`（当面 `true`）を 1.2 版で追加した（§9.5、06 D06-26） |
 | 08（テスト） | §10 の AI-01〜AI-09、PDF-01〜PDF-08。08 §9 の「07 が確定すべき事項」への回答: (1) AI 出力検証のファイル名は **`lib/ai/schema.ts`** を正とし、08 §2.6 PR-5.1 と U-10 の `lib/ai/validate.ts` を `schema.ts` に改版する。(2) 構造化出力（方式 A）を使い、U-10 のスキーマは `AiAnalysisOutputSchema` と同一定義（D08-10 のとおり二重管理しない）。方式 C・stub 用のテキスト検証は同ファイルの `parseAiOutputText()`（§3.2）で、U-10 の「コードフェンス付きテキスト・先頭が `{` でないテキスト・余分なキーを拒否」はこの関数と `.strict()` で満たす。(3) stub の不正 JSON モードは D08-22 の提案どおり `respondentName = "__INVALID_JSON__"` で切り替える（D07-24、§5.4）。(4) U-12 の stub の `model` は `options.model`（`AI_MODEL` の値）で一致。(5) U-11 の「未置換の山括弧が残らない」は、テンプレートを `{{...}}` 形式で保持する（§2.3）ため「**未置換の `{{`／`}}` が残らない**」に改める（付録D の山括弧はそもそもテンプレート定数に無い）。(6) フォントは `public/fonts/` に置き、サブセット化しない（§9.7）。R-03 / D08-09 の「`lib/pdf/fonts/` に同梱、サブセット化を検討」と R-04 の「Chromium + フォント」を、「`public/fonts/`（静的配信、関数バンドル外）、R-04 の対象は Chromium のみ」に改版する。(7) `e2e.yml`（§3.4.2）に Playwright の Chromium の実行パスを `PDF_CHROMIUM_EXECUTABLE_PATH` に設定するステップを追加する（§9.12）。(8) E-21 の `restricted` の検査に「AI 解説が含まれない」を加える（PDF-03） |
@@ -1243,3 +1243,4 @@ export async function renderResultPdf(args: RenderResultPdfArgs): Promise<Render
 | 1.3 | 2026-09-21 | K-06（Supabase → Firebase。10）に伴う部分改版。§0・§0.2 の決定事項 1 と分冊境界、§1.1 の流れ図（Firestore・Admin SDK・同一バッチ）、§2.2・§2.3・§3.3・§3.4・§4.5・§4.6・§4.8・§5.1・§5.4・§6.2〜§6.4・§7.1・§7.2 の `aiAnalyses`・`results` のフィールド名（`output`・`rawText`・`analysisKind`・`promptVersion`・`aiGenerationError`・`aiGenerationStartedAt`・`latestAiAnalysisId`）と保存形（D07-25）、§9.3・§9.4 の印刷用ページのデータ取得と可視性再検証（Admin SDK、`adminUsers/{uid}` の `role`）、§9.9、§9.11 を Cloud Storage for Firebase に読み替え（本フェーズは未使用のまま。D07-21）、§10 AI-08、§11 の 01・02・04 への引き渡し、D-10。Claude API の呼び出し仕様（§4）、プロンプト（§2）、PDF の生成方式・Vercel の実行時間・Chromium（§9）は変更なし |
 | 1.2 | 2026-09-21 | 最終点検（09）。06 §9 の依頼により `PdfSectionVisibility.showPosition`（当面 `true`。06 D06-26）を追加（§9.5、§11）。§6.3 のポーリング上限を 06 §3.5.9 と同じ 10 分に訂正。§9.4 のレイアウト行を 06 D06-27 の読み替えに、検索避け・ミドルウェア行を 01 §8.7・§5.5、04 D04-41 で確定済みに更新。§9.12・§11 の「00 §3.2 未掲載」「01 への改版依頼」を反映済みに更新 |
 | 1.1 | 2026-09-21 | レビュー指摘への対応。must: `restricted` の PDF に AI 解説を掲載しない（付録D §3 の必須引用のため。§7.2、§9.5、§10 PDF-03、§11、D07-15）。should: 印刷用ページのオリジンを `appBaseUrl()` に（§9.8、§9.13、D07-22）、環境変数の読み取りを `serverEnv()` / `isVercel()` に統一し非 null 断言を排除（§4.2、§5.2、§9.8）、`PDF_CHROMIUM_EXECUTABLE_PATH` の 00 §3.2 追記依頼と CI での設定（§9.12、§11）、Storage 仕様の 01／02 の食い違いを 01 §8.5 で確定（§9.11、§11、D07-21）、08 への回答（`schema.ts`、`parseAiOutputText()`、`.strict()`、stub の不正 JSON モードと `model`、U-11 の `{{…}}` 検査。§3.2、§5.4、§10、§11、D07-24）、フォント配置の理由とサブセット化の判断（§9.7、D07-20）、SelectPDF の記述を推定に（§9.2）、資質の 100 超と相性の負値の扱いの理由を揃えた（§2.2、§2.3、D07-04、D07-05）、`lib/pdf/` のツリーに `errors.ts` / `templates.ts` / `protection-bypass.ts` を追加（§9.8）、402 を `auth_error`・`retryable: false` に（§4.6、§5.3）、§4.4・§4.5 の参照誤りの訂正、キャッシュ TTL の命中条件（§4.4、D07-11） |
+| 1.4 | 2026-09-21 | Firebase 化後の分冊間整合。02 2.1 版・04 2.1 版に合わせ、§4.8（監査ログ `details` のトークン数は 04 §5.9 で確定）、§6.2（状態遷移は 02 の `markAiGenerationStarted`・`saveAiAnalysis`・`markAiGenerationFailed`・`countAiAnalysesSince` と 04 §5.9 の分担）、§6.3（GET で滞留を検知した場合も監査ログが残る）、§6.4（日次上限は `count()` 集計で確定）、§7.1（`generatedBy` で確定、同一バッチは `saveAiAnalysis()`）、§9.3・§9.4（印刷トークンの `adminUid`・`role`。可視性の再検証はトークンの `role` で行い `adminUsers` を再読しない）、§11 の 02・04 宛てを反映済みに更新。Claude API の呼び出し仕様・プロンプト・PDF の生成方式は変更なし |
