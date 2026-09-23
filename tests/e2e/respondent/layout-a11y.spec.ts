@@ -1,6 +1,8 @@
 // レイアウトとアクセシビリティ（05/T-16、T-17。08 §2.4 完了条件「幅 320px で横スクロールがない」）
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+
+import { expect, test } from "../support/fixtures";
 
 import {
   answerCurrentPage,
@@ -11,7 +13,6 @@ import {
   savePagesViaApi,
   startViaApi,
 } from "../support/respondent";
-import { readState } from "../support/state";
 
 async function expectNoHorizontalScroll(page: Page, label: string) {
   const { scrollWidth, clientWidth } = await page.evaluate(() => ({
@@ -44,9 +45,9 @@ async function expectAccessible(page: Page, label: string) {
 test.describe("受検者画面のレイアウトとアクセシビリティ", () => {
   test("05/T-17: 幅 320px で横スクロールがなく、ボタン・入力欄・選択肢の高さは 48px 以上", async ({
     page,
+    organizationId,
   }) => {
     await page.setViewportSize({ width: 320, height: 640 });
-    const { organizationId } = readState();
     await page.goto(linkUrl(organizationId));
     await expectNoHorizontalScroll(page, "R-01");
     await expectMinHeight(page, ".exam-button", 48);
@@ -68,8 +69,8 @@ test.describe("受検者画面のレイアウトとアクセシビリティ", ()
 
   test("05/T-16: 各入力に label、各設問に legend、axe の重大な違反なし（R-01・R-02・R-03・R-05）", async ({
     page,
+    organizationId,
   }) => {
-    const { organizationId } = readState();
     await page.goto(linkUrl(organizationId));
     await expectAccessible(page, "R-01");
     // 未入力で押した後（赤枠・エラー文言）
@@ -96,8 +97,10 @@ test.describe("受検者画面のレイアウトとアクセシビリティ", ()
     await expectAccessible(page, "R-05");
   });
 
-  test("無効なページ番号は 404 と固定文言（05 §5.6 page_not_found）", async ({ page }) => {
-    const { organizationId } = readState();
+  test("無効なページ番号は 404 と固定文言（05 §5.6 page_not_found）", async ({
+    page,
+    organizationId,
+  }) => {
     const sessionId = await registerViaApi(page, organizationId);
     await startViaApi(page, sessionId);
     for (const bad of ["0", "21", "1.5", "abc"]) {

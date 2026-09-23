@@ -1,5 +1,7 @@
 // E-04 二重送信、送信後の戻る、Cookie なし、期限切れ（05/T-12〜T-15、T-15a、T-15b）
-import { expect, test, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+
+import { expect, test } from "../support/fixtures";
 
 import { emulatorTask } from "../support/admin";
 import {
@@ -10,11 +12,9 @@ import {
   savePagesViaApi,
   startViaApi,
 } from "../support/respondent";
-import { readState } from "../support/state";
 
 /** 19 ページ分を保存済みにして最終ページを開く */
-async function openLastPage(page: Page): Promise<string> {
-  const { organizationId } = readState();
+async function openLastPage(page: Page, organizationId: string): Promise<string> {
   const sessionId = await registerViaApi(page, organizationId);
   await startViaApi(page, sessionId);
   await savePagesViaApi(page, sessionId, 19);
@@ -28,8 +28,9 @@ const completeUrl = (sessionId: string) => new RegExp(`/exam/${sessionId}/comple
 test.describe("E-04 送信と無効なセッション", () => {
   test("05/T-12: 「送信する」を連打しても submit は 1 回で、完了画面に着地する", async ({
     page,
+    organizationId,
   }) => {
-    const sessionId = await openLastPage(page);
+    const sessionId = await openLastPage(page, organizationId);
     const calls = recordApiCalls(page);
     await answerCurrentPage(page, 20);
     await page.getByTestId("submit-button").click();
@@ -46,8 +47,9 @@ test.describe("E-04 送信と無効なセッション", () => {
 
   test("05/T-12: 送信済みの 409 も成功扱いで完了画面へ（別タブで送信済みの場合）", async ({
     page,
+    organizationId,
   }) => {
-    const sessionId = await openLastPage(page);
+    const sessionId = await openLastPage(page, organizationId);
     await answerCurrentPage(page, 20);
     // 別タブ相当: 画面の外で最終ページを保存して送信する
     await savePagesViaApi(page, sessionId, 20);
@@ -62,8 +64,9 @@ test.describe("E-04 送信と無効なセッション", () => {
 
   test("05/T-13: 送信後に設問・開始の URL を開くと完了画面へ。ブラウザの戻るでも回答画面に戻れない", async ({
     page,
+    organizationId,
   }) => {
-    const sessionId = await openLastPage(page);
+    const sessionId = await openLastPage(page, organizationId);
     // 履歴にページ 19 → 20 を積み、「次へ」で最終ページへ進んだ状態にする
     await page.goto(`/exam/${sessionId}/questions/19`);
     await page.getByTestId("next-button").click();
@@ -86,8 +89,8 @@ test.describe("E-04 送信と無効なセッション", () => {
   test("05/T-14: Cookie なしで開くと 404 と固定文言（個人情報を出さない）", async ({
     page,
     browser,
+    organizationId,
   }) => {
-    const { organizationId } = readState();
     const sessionId = await registerViaApi(page, organizationId);
     const other = await browser.newContext();
     const stranger = await other.newPage();
@@ -106,8 +109,8 @@ test.describe("E-04 送信と無効なセッション", () => {
 
   test("05/T-15: 期限切れは開くと 404 の再登録案内、表示中なら保存で E-04 を全面表示", async ({
     page,
+    organizationId,
   }) => {
-    const { organizationId } = readState();
     const sessionId = await registerViaApi(page, organizationId);
     await startViaApi(page, sessionId);
     await page.goto(`/exam/${sessionId}/questions/1`);
@@ -133,8 +136,8 @@ test.describe("E-04 送信と無効なセッション", () => {
 
   test("05/T-15a: start が 5xx なら R-02 に留まり E-01、再試行で成功すると設問ページへ", async ({
     page,
+    organizationId,
   }) => {
-    const { organizationId } = readState();
     const sessionId = await registerViaApi(page, organizationId);
     await page.route("**/start", (route) =>
       route.fulfill({
@@ -154,8 +157,9 @@ test.describe("E-04 送信と無効なセッション", () => {
 
   test("05/T-15b: submit が ANSWERS_INCOMPLETE なら E-03 と「未回答のページへ移動」", async ({
     page,
+    organizationId,
   }) => {
-    const sessionId = await openLastPage(page);
+    const sessionId = await openLastPage(page, organizationId);
     await page.route("**/submit", (route) =>
       route.fulfill({
         status: 422,

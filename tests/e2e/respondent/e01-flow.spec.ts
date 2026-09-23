@@ -1,8 +1,7 @@
 // E-01 受検リンク → 登録 → 開始 → 20 ページ回答 → 送信確認 → 完了（05/T-02、T-07、T-11、T-18、決定事項 3）
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../support/fixtures";
 
 import { INACTIVE_QUESTION_TEXTS, questionNosOfPage } from "../support/questions";
-import { readState } from "../support/state";
 import {
   answerCurrentPage,
   e2eName,
@@ -13,8 +12,8 @@ import {
 
 test("E-01 受検リンクから 144 問に回答して送信し、完了画面に結果・個人情報を出さない", async ({
   page,
+  organizationId,
 }) => {
-  const { organizationId } = readState();
   const name = e2eName();
   const phoneNumber = "090-3333-4444";
   const calls = recordApiCalls(page);

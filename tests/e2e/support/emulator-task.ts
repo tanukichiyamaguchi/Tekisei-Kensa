@@ -9,18 +9,13 @@ import { adminFirestore } from "@/lib/firebase/admin";
 async function run(task: string | undefined, args: string[]): Promise<unknown> {
   const db = adminFirestore();
   switch (task) {
-    case "create-organizations": {
-      const main = await createOrganization({
-        name: "E2E 歯科医院",
+    case "create-organization": {
+      const org = await createOrganization({
+        name: args[0] ?? "E2E 歯科医院",
         code: null,
         customerNumber: null,
       });
-      const other = await createOrganization({
-        name: "E2E 別医院",
-        code: null,
-        customerNumber: null,
-      });
-      return { organizationId: main.organizationId, otherOrganizationId: other.organizationId };
+      return { organizationId: org.organizationId };
     }
     case "expire-session": {
       // 期限切れの再現（08 §3.4.3 E-04）。E2E に限った直接書き込み

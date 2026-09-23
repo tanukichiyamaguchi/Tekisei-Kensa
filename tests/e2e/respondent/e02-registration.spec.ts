@@ -1,5 +1,5 @@
 // E-02 登録の入力チェック（05/T-03〜T-05、05 §5.1.4〜§5.1.6）
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../support/fixtures";
 
 import { emulatorTask } from "../support/admin";
 import {
@@ -9,13 +9,12 @@ import {
   recordApiCalls,
   sessionIdFromUrl,
 } from "../support/respondent";
-import { readState } from "../support/state";
 
 test.describe("E-02 受検者登録の入力チェック", () => {
   test("05/T-03: 未入力で押すと送信せずに全項目を赤枠と V-xx、最初の項目へフォーカス、V-00", async ({
     page,
+    organizationId,
   }) => {
-    const { organizationId } = readState();
     const calls = recordApiCalls(page);
     await page.goto(linkUrl(organizationId));
     await pressAriaDisabled(page.getByTestId("register-submit"));
@@ -35,8 +34,10 @@ test.describe("E-02 受検者登録の入力チェック", () => {
     expect(calls).toEqual([]);
   });
 
-  test("blur で項目ごとに検証し、正しい値になった時点で赤枠を消す", async ({ page }) => {
-    const { organizationId } = readState();
+  test("blur で項目ごとに検証し、正しい値になった時点で赤枠を消す", async ({
+    page,
+    organizationId,
+  }) => {
     await page.goto(linkUrl(organizationId));
     const phone = page.getByRole("textbox", { name: "電話番号", exact: true });
     await phone.fill("12345");
@@ -52,8 +53,8 @@ test.describe("E-02 受検者登録の入力チェック", () => {
 
   test("05/T-04: 全角の電話番号・前後の空白は正規化して登録され、区分は p から決まる", async ({
     page,
+    organizationId,
   }) => {
-    const { organizationId } = readState();
     const name = e2eName();
     await page.goto(linkUrl(organizationId, "executives"));
     await page.getByRole("textbox", { name: "お名前", exact: true }).fill(`\u3000${name}\u3000`);
@@ -81,8 +82,8 @@ test.describe("E-02 受検者登録の入力チェック", () => {
 
   test("05/T-05: q・p の不正、存在しない組織は 404 と固定文言（理由を区別しない）", async ({
     page,
+    organizationId,
   }) => {
-    const { organizationId } = readState();
     for (const url of [
       `/exam?q=${organizationId}&p=admin`,
       `/exam?q=${organizationId}`,
@@ -99,8 +100,10 @@ test.describe("E-02 受検者登録の入力チェック", () => {
     }
   });
 
-  test("登録の直前に組織が使えなくなった場合（404）は E-05 を表示する", async ({ page }) => {
-    const { organizationId } = readState();
+  test("登録の直前に組織が使えなくなった場合（404）は E-05 を表示する", async ({
+    page,
+    organizationId,
+  }) => {
     await page.route("**/api/v1/respondent/sessions", (route) =>
       route.fulfill({
         status: 404,

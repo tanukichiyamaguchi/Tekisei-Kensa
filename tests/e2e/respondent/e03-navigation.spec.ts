@@ -1,5 +1,7 @@
 // E-03 未回答で「次へ」、「戻る」の部分保存、再読み込み、再開（05/T-06〜T-10、T-19）
-import { expect, test, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+
+import { createOrganization, expect, test } from "../support/fixtures";
 
 import { questionNosOfPage } from "../support/questions";
 import {
@@ -12,11 +14,9 @@ import {
   savePagesViaApi,
   startViaApi,
 } from "../support/respondent";
-import { readState } from "../support/state";
 
 /** 登録・開始を API で済ませ、ページ 1 を開く */
-async function openFirstPage(page: Page): Promise<string> {
-  const { organizationId } = readState();
+async function openFirstPage(page: Page, organizationId: string): Promise<string> {
   const sessionId = await registerViaApi(page, organizationId);
   await startViaApi(page, sessionId);
   await page.goto(`/exam/${sessionId}`);
@@ -37,8 +37,9 @@ function putBodies(page: Page): Array<{ pageNo: number; answers: unknown[] }> {
 test.describe("E-03 設問ページの操作と再開", () => {
   test("05/T-06: 未回答があると遷移せず、未回答カードを赤枠にして最初の未回答へフォーカス。全回答で PUT 1 回", async ({
     page,
+    organizationId,
   }) => {
-    const sessionId = await openFirstPage(page);
+    const sessionId = await openFirstPage(page, organizationId);
     const calls = recordApiCalls(page);
     const questions = questionNosOfPage(1);
     await answerCurrentPage(page, 1, () => 2, questions.length - 2);
@@ -72,8 +73,9 @@ test.describe("E-03 設問ページの操作と再開", () => {
 
   test("05/T-09: 3 問だけ選んで「戻る」→ PUT に 3 件、前ページへ。戻ってくると 3 問が選択済み", async ({
     page,
+    organizationId,
   }) => {
-    const sessionId = await openFirstPage(page);
+    const sessionId = await openFirstPage(page, organizationId);
     await answerCurrentPage(page, 1);
     await page.getByTestId("next-button").click();
     await page.waitForURL(questionUrl(sessionId, 2));
@@ -97,8 +99,9 @@ test.describe("E-03 設問ページの操作と再開", () => {
 
   test("「戻る」の部分保存に失敗しても遷移し、戻ると選択が sessionStorage から復元される。E-02 の再試行で保存できる", async ({
     page,
+    organizationId,
   }) => {
-    const sessionId = await openFirstPage(page);
+    const sessionId = await openFirstPage(page, organizationId);
     await answerCurrentPage(page, 1);
     await page.getByTestId("next-button").click();
     await page.waitForURL(questionUrl(sessionId, 2));
@@ -120,8 +123,11 @@ test.describe("E-03 設問ページの操作と再開", () => {
     ]);
   });
 
-  test("05/T-10: 未保存の選択は再読み込みで sessionStorage から復元される", async ({ page }) => {
-    const sessionId = await openFirstPage(page);
+  test("05/T-10: 未保存の選択は再読み込みで sessionStorage から復元される", async ({
+    page,
+    organizationId,
+  }) => {
+    const sessionId = await openFirstPage(page, organizationId);
     const chosen = await answerCurrentPage(page, 1, () => 4, 4);
     await page.reload();
     await expect(page).toHaveURL(questionUrl(sessionId, 1));
@@ -131,8 +137,8 @@ test.describe("E-03 設問ページの操作と再開", () => {
 
   test("05/T-08: ページ 3 まで保存すると /exam/{id} と先のページは /questions/4 へ。保存済みのページは開き直せる", async ({
     page,
+    organizationId,
   }) => {
-    const { organizationId } = readState();
     const sessionId = await registerViaApi(page, organizationId);
     await startViaApi(page, sessionId);
     await savePagesViaApi(page, sessionId, 3, 2);
@@ -153,8 +159,9 @@ test.describe("E-03 設問ページの操作と再開", () => {
 
   test("05/T-19: 同一組織・同一区分の draft があると再開バナー（氏名なし）。別区分・別組織では出さない", async ({
     page,
+    organizationId,
   }) => {
-    const { organizationId, otherOrganizationId } = readState();
+    const otherOrganizationId = createOrganization("E2E 別医院");
     const sessionId = await registerViaApi(page, organizationId);
     await startViaApi(page, sessionId);
     await savePagesViaApi(page, sessionId, 1);
