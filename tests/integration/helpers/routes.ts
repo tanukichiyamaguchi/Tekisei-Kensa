@@ -1,8 +1,6 @@
 // Route Handler を Request を組み立てて直接呼ぶ（08 §3.3.1）
-type Handler = (
-  req: Request,
-  ctx: { params: Promise<Record<string, string>> },
-) => Promise<Response>;
+// params の型は Route Handler ごとに異なる（{ sessionId: string } など）ため never で受ける
+type Handler = (req: Request, ctx: { params: Promise<never> }) => Promise<Response>;
 
 export interface CallInit {
   readonly method: string;
@@ -27,7 +25,7 @@ export async function callRoute(handler: Handler, init: CallInit): Promise<Respo
     headers,
     ...(body === undefined ? {} : { body }),
   });
-  return handler(request, { params: Promise.resolve(init.params ?? {}) });
+  return handler(request, { params: Promise.resolve(init.params ?? {}) as Promise<never> });
 }
 
 /** Set-Cookie から name=value を取り出して Cookie ヘッダー形式にする */

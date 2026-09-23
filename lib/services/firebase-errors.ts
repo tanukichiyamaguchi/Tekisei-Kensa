@@ -46,6 +46,10 @@ export function translateRepositoryError(error: RepositoryError): ApiError {
     case "ANSWERS_INCOMPLETE":
       return new ApiError(422, "ANSWERS_INCOMPLETE", "未回答の設問があります", {
         missing: error.details.missing ?? [],
+        // 不正な値の設問番号は、ある場合だけ入れる（04 §4.5）
+        ...(Array.isArray(error.details.invalid) && error.details.invalid.length > 0
+          ? { invalid: error.details.invalid }
+          : {}),
       });
     case "INVITE_TOKEN_INVALID":
       return API_ERRORS.inviteTokenInvalid();
