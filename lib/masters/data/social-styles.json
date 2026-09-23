@@ -1,0 +1,47 @@
+{
+  "generatedFrom": ["scripts/lib/labels.ts"],
+  "sourceHash": {
+    "scripts/lib/labels.ts": "sha256:c66f2b3734a8bdebd3cf11f707033a713e4c0ab16517393c7206b7a4d2dd7174"
+  },
+  "generatorVersion": "1",
+  "scoringVersion": "1.0.0",
+  "kind": "social_style",
+  "items": [
+    {
+      "key": "driving",
+      "labelEn": "Driving",
+      "labelKatakana": "ドライビング",
+      "labelJa": "実行型",
+      "color": "rgba(149,112,161)",
+      "sortOrder": 1,
+      "chartOrder": 1
+    },
+    {
+      "key": "expressive",
+      "labelEn": "Expressive",
+      "labelKatakana": "エクスプレッシブ",
+      "labelJa": "直感型",
+      "color": "rgba(229,179,83)",
+      "sortOrder": 2,
+      "chartOrder": 2
+    },
+    {
+      "key": "analytical",
+      "labelEn": "Analytical",
+      "labelKatakana": "アナリティカル",
+      "labelJa": "分析型",
+      "color": "rgba(65,166,123)",
+      "sortOrder": 3,
+      "chartOrder": 4
+    },
+    {
+      "key": "amiable",
+      "labelEn": "Amiable",
+      "labelKatakana": "エミアブル",
+      "labelJa": "温和型",
+      "color": "rgba(65,148,175)",
+      "sortOrder": 4,
+      "chartOrder": 3
+    }
+  ]
+}

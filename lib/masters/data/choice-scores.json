@@ -1,0 +1,77 @@
+{
+  "generatedFrom": ["docs/付録B_採点ロジック仕様.md", "scripts/lib/labels.ts"],
+  "sourceHash": {
+    "docs/付録B_採点ロジック仕様.md": "sha256:67993b14b31b64a858095786c39315abea7dd514534e8f3392daf012b433b3b8",
+    "scripts/lib/labels.ts": "sha256:c66f2b3734a8bdebd3cf11f707033a713e4c0ab16517393c7206b7a4d2dd7174"
+  },
+  "generatorVersion": "1",
+  "scoringVersion": "1.0.0",
+  "kind": "choice_score",
+  "items": [
+    {
+      "choiceCode": 1,
+      "label": "そう思う",
+      "score": 2,
+      "reliability": 1,
+      "social_plus": 5,
+      "social_minus": -2.5,
+      "score_important": 3,
+      "score_compat": 5,
+      "score_compat_minus": 5,
+      "score_type": 2,
+      "social_important": 7.5
+    },
+    {
+      "choiceCode": 2,
+      "label": "どちらかと言えばそう思う",
+      "score": 1.5,
+      "reliability": 1,
+      "social_plus": 2.5,
+      "social_minus": -1.25,
+      "score_important": 1.5,
+      "score_compat": 3,
+      "score_compat_minus": 3,
+      "score_type": 1,
+      "social_important": 3.75
+    },
+    {
+      "choiceCode": 3,
+      "label": "どちらでもない",
+      "score": 1,
+      "reliability": -0.5,
+      "social_plus": 0,
+      "social_minus": 0,
+      "score_important": 0,
+      "score_compat": 0,
+      "score_compat_minus": 0,
+      "score_type": 0,
+      "social_important": 0
+    },
+    {
+      "choiceCode": 4,
+      "label": "どちらかと言えばそう思わない",
+      "score": 0.5,
+      "reliability": 1,
+      "social_plus": -1.25,
+      "social_minus": 2.5,
+      "score_important": -1.5,
+      "score_compat": -3,
+      "score_compat_minus": -3,
+      "score_type": -1,
+      "social_important": -2.5
+    },
+    {
+      "choiceCode": 5,
+      "label": "そう思わない",
+      "score": 0,
+      "reliability": 1,
+      "social_plus": -2.5,
+      "social_minus": 5,
+      "score_important": -3,
+      "score_compat": -5,
+      "score_compat_minus": -5,
+      "score_type": -2,
+      "social_important": -5
+    }
+  ]
+}

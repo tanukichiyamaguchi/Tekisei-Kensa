@@ -1,0 +1,1623 @@
+{
+  "generatedFrom": ["docs/付録A_設問一覧.md", "lib/masters/question-layout.ts"],
+  "sourceHash": {
+    "docs/付録A_設問一覧.md": "sha256:6434bcdde60e50dbae51cb1dc4b476ab24960b115c0553c84b82fa2c4030cc54",
+    "lib/masters/question-layout.ts": "sha256:0496dfe3e38874592ef54194908ecfc9430e4e57dd9fa1e68b97bdbaa1a0464e"
+  },
+  "generatorVersion": "1",
+  "scoringVersion": "1.0.0",
+  "kind": "question",
+  "items": [
+    {
+      "questionNo": 1,
+      "text": "人の好き嫌いが多い",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 1
+    },
+    {
+      "questionNo": 2,
+      "text": "大勢の前でも平気である",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 1
+    },
+    { "questionNo": 3, "text": "約束は必ず守る", "isActive": true, "isScored": true, "step": 1, "page": 1 },
+    {
+      "questionNo": 4,
+      "text": "まとめやくを担当するのは負担に感じる",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 1
+    },
+    {
+      "questionNo": 5,
+      "text": "夢や希望がいっぱいある",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 1
+    },
+    {
+      "questionNo": 6,
+      "text": "何事も最後までキチンとできる",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 1
+    },
+    {
+      "questionNo": 7,
+      "text": "不満がたくさんある",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 1
+    },
+    {
+      "questionNo": 8,
+      "text": "気難しい性格といわれる",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 2
+    },
+    {
+      "questionNo": 9,
+      "text": "自分の利害を考えてから行動する",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 2
+    },
+    {
+      "questionNo": 10,
+      "text": "テキパキと仕事を処理することができる",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 2
+    },
+    {
+      "questionNo": 11,
+      "text": "気になることが頭の中で飛躍するたちだ",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 2
+    },
+    {
+      "questionNo": 12,
+      "text": "おとなしくしているよりは身軽に行動したい",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 2
+    },
+    {
+      "questionNo": 13,
+      "text": "ルーズな人にははっきりと注意する",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 2
+    },
+    {
+      "questionNo": 14,
+      "text": "たびたび劣等感を感じる",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 2
+    },
+    {
+      "questionNo": 15,
+      "text": "目的達成のためなら嘘をつくこともある",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 3
+    },
+    { "questionNo": 16, "text": "驚きやすい", "isActive": true, "isScored": true, "step": 1, "page": 3 },
+    {
+      "questionNo": 17,
+      "text": "気持ちが落ち込むことが多い",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 3
+    },
+    {
+      "questionNo": 18,
+      "text": "初対面の人には緊張する",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 3
+    },
+    {
+      "questionNo": 19,
+      "text": "人から頼りにされることが多い",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 3
+    },
+    {
+      "questionNo": 20,
+      "text": "時々一人になりたいと思う",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 3
+    },
+    {
+      "questionNo": 21,
+      "text": "｢・・・すべき｣｢・・・ねばならない｣という言い方をよくする",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 3
+    },
+    {
+      "questionNo": 22,
+      "text": "親しい人でも警戒心を持って接している",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 4
+    },
+    {
+      "questionNo": 23,
+      "text": "他人のマナーやエチケットは気になる",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 4
+    },
+    {
+      "questionNo": 24,
+      "text": "人にはいつも気軽に対応できる",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 4
+    },
+    {
+      "questionNo": 25,
+      "text": "架空の事を考え思いめぐらす事が多い",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 4
+    },
+    {
+      "questionNo": 26,
+      "text": "周りの人と一緒になってはしゃぐ事が好き",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 4
+    },
+    {
+      "questionNo": 27,
+      "text": "常になにかしていたい",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 4
+    },
+    {
+      "questionNo": 28,
+      "text": "自分よりも能力の高い人が多い",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 4
+    },
+    {
+      "questionNo": 29,
+      "text": "うれしい気持ちはすぐに表現したい",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 5
+    },
+    {
+      "questionNo": 30,
+      "text": "悲観的になることが多い",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 5
+    },
+    {
+      "questionNo": 31,
+      "text": "いろいろな人と話すより一人のほうが落ち着く",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 5
+    },
+    {
+      "questionNo": 32,
+      "text": "最後の詰めが甘い",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 5
+    },
+    {
+      "questionNo": 33,
+      "text": "人のあつかいがうまい方だ",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 5
+    },
+    {
+      "questionNo": 34,
+      "text": "のんきな性格だと思っている",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 5
+    },
+    {
+      "questionNo": 35,
+      "text": "親切にされると裏を考えることが多い",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 5
+    },
+    {
+      "questionNo": 36,
+      "text": "神経質な性格だと思っている",
+      "isActive": true,
+      "isScored": true,
+      "step": 1,
+      "page": 5
+    },
+    {
+      "questionNo": 37,
+      "text": "他人より一歩先の行動を取ることが多い",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 1
+    },
+    {
+      "questionNo": 38,
+      "text": "ビデオやテレビを長時間みる事がある",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 1
+    },
+    {
+      "questionNo": 39,
+      "text": "感情が高ぶったり落ち込んだりする事が多い",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 1
+    },
+    {
+      "questionNo": 40,
+      "text": "新しいものにはすぐ興味を示す",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 1
+    },
+    {
+      "questionNo": 41,
+      "text": "正しいと思ったら周りを気にせず実行する",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 1
+    },
+    {
+      "questionNo": 42,
+      "text": "人前では赤面しやすい",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 1
+    },
+    {
+      "questionNo": 43,
+      "text": "喜怒哀楽の多い方だと思う",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 1
+    },
+    {
+      "questionNo": 44,
+      "text": "時間が足りなくなる事が多い",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 2
+    },
+    {
+      "questionNo": 45,
+      "text": "大勢の中にいても孤独を感じることがある",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 2
+    },
+    {
+      "questionNo": 46,
+      "text": "異性と打ち解けるのに時間がかかる",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 2
+    },
+    {
+      "questionNo": 47,
+      "text": "グループの中ではいつも引っ込んでいる",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 2
+    },
+    {
+      "questionNo": 48,
+      "text": "物事を深刻に考えてしまうたちだ",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 2
+    },
+    {
+      "questionNo": 49,
+      "text": "時々人の本心を確かめたいと思う",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 2
+    },
+    {
+      "questionNo": 50,
+      "text": "心配性だと思う",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 2
+    },
+    {
+      "questionNo": 51,
+      "text": "いつも元気である",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 3
+    },
+    {
+      "questionNo": 52,
+      "text": "気分が落ち着かずいろいろと気になる",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 3
+    },
+    {
+      "questionNo": 53,
+      "text": "あわてて行動して失敗した経験が多い",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 3
+    },
+    {
+      "questionNo": 54,
+      "text": "上司にも意見が言える",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 3
+    },
+    {
+      "questionNo": 55,
+      "text": "何事も事実に基づいて判断する",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 3
+    },
+    {
+      "questionNo": 56,
+      "text": "決心がつかず迷うことが多い",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 3
+    },
+    {
+      "questionNo": 57,
+      "text": "集中できずイライラすることがある",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 3
+    },
+    {
+      "questionNo": 58,
+      "text": "ぼんやり考え込む事が多い",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 4
+    },
+    {
+      "questionNo": 59,
+      "text": "人前にたつのは避けたい",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 4
+    },
+    {
+      "questionNo": 60,
+      "text": "人の世話は面倒に感じる",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 4
+    },
+    {
+      "questionNo": 61,
+      "text": "自分の可能性は無限にあると思う",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 4
+    },
+    {
+      "questionNo": 62,
+      "text": "細かい作業に取り組むのは好きである",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 4
+    },
+    {
+      "questionNo": 63,
+      "text": "人は他人のことなど本当は大切に考えないと思う",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 4
+    },
+    {
+      "questionNo": 64,
+      "text": "周りに人がいると気になる",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 4
+    },
+    {
+      "questionNo": 65,
+      "text": "ハキハキとした返事ができる",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 5
+    },
+    {
+      "questionNo": 66,
+      "text": "ぼんやりといろんなことを想像するのが好き",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 5
+    },
+    {
+      "questionNo": 67,
+      "text": "他人の失敗に関しては寛大に考える方だ",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 5
+    },
+    { "questionNo": 68, "text": "好奇心が強い", "isActive": true, "isScored": true, "step": 2, "page": 5 },
+    {
+      "questionNo": 69,
+      "text": "短気な性格である",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 5
+    },
+    {
+      "questionNo": 70,
+      "text": "他人と違うことをするのは恥ずかしい",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 5
+    },
+    {
+      "questionNo": 71,
+      "text": "何かあると冷静さを失いやすい",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 5
+    },
+    {
+      "questionNo": 72,
+      "text": "悩んでいることがたくさんある",
+      "isActive": true,
+      "isScored": true,
+      "step": 2,
+      "page": 5
+    },
+    {
+      "questionNo": 73,
+      "text": "欲しいものは手に入れないと気がすまない",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 1
+    },
+    {
+      "questionNo": 74,
+      "text": "初対面の人でも気軽にうちとけて話せる",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 1
+    },
+    {
+      "questionNo": 75,
+      "text": "自分から話すよりは聞き手に回るほうが多い",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 1
+    },
+    {
+      "questionNo": 76,
+      "text": "決められた時間には正確な方だ",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 1
+    },
+    {
+      "questionNo": 77,
+      "text": "運の悪いことが多い",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 1
+    },
+    {
+      "questionNo": 78,
+      "text": "人が見ていない方が落ち着いて仕事ができる",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 1
+    },
+    {
+      "questionNo": 79,
+      "text": "何でも気軽に引き受ける",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 1
+    },
+    {
+      "questionNo": 80,
+      "text": "現状の自分から脱皮したいと思っている",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 2
+    },
+    {
+      "questionNo": 81,
+      "text": "さまざまな種類の仕事を経験したい",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 2
+    },
+    {
+      "questionNo": 82,
+      "text": "変化のある生活をおくりたい",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 2
+    },
+    {
+      "questionNo": 83,
+      "text": "困難にぶつかると弱気になる",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 2
+    },
+    {
+      "questionNo": 84,
+      "text": "占いなどに気分が左右されやすい",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 2
+    },
+    {
+      "questionNo": 85,
+      "text": "感情のコントロールが苦手である",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 2
+    },
+    {
+      "questionNo": 86,
+      "text": "自己嫌悪に落ち入る事が多い",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 2
+    },
+    {
+      "questionNo": 87,
+      "text": "できるだけ多くの人と出会いたい",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 3
+    },
+    {
+      "questionNo": 88,
+      "text": "引っ込み思案な面がある",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 3
+    },
+    {
+      "questionNo": 89,
+      "text": "実行の前にはもう一度考え直して見る方だ",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 3
+    },
+    {
+      "questionNo": 90,
+      "text": "間違ったときに言い訳をすることが多い",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 3
+    },
+    {
+      "questionNo": 91,
+      "text": "周りには疑り深い人が多い",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 3
+    },
+    {
+      "questionNo": 92,
+      "text": "些細なことが耳障りに感じることがある",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 3
+    },
+    {
+      "questionNo": 93,
+      "text": "周りとのバランスを考えて仕事をする方だ",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 3
+    },
+    {
+      "questionNo": 94,
+      "text": "頭の中で理想を追うのは楽しい",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 4
+    },
+    {
+      "questionNo": 95,
+      "text": "頼まれた仕事はとりあえず引き受けてみる",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 4
+    },
+    {
+      "questionNo": 96,
+      "text": "ボランテイアなどにも積極的に参加したい",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 4
+    },
+    {
+      "questionNo": 97,
+      "text": "実行する前に失敗を心配することが多い",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 4
+    },
+    {
+      "questionNo": 98,
+      "text": "気に入らない時にはすぐに顔に出る",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 4
+    },
+    {
+      "questionNo": 99,
+      "text": "思い悩むことがたびたびある",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 4
+    },
+    {
+      "questionNo": 100,
+      "text": "多くの人との広いつきあいは苦手である",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 4
+    },
+    {
+      "questionNo": 101,
+      "text": "他人の期待に対し過剰な努力をしてしまう",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 5
+    },
+    {
+      "questionNo": 102,
+      "text": "上役と話をするのは緊張する",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 5
+    },
+    {
+      "questionNo": 103,
+      "text": "いつも人の行動の裏を考えてしまう",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 5
+    },
+    {
+      "questionNo": 104,
+      "text": "もっと本当の自分を理解してほしい",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 5
+    },
+    {
+      "questionNo": 105,
+      "text": "細かいことに気がつく方である",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 5
+    },
+    {
+      "questionNo": 106,
+      "text": "限られた時間でも効率よく仕事をこなせる",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 5
+    },
+    {
+      "questionNo": 107,
+      "text": "言いたい事は遠慮なく言ってしまう",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 5
+    },
+    {
+      "questionNo": 108,
+      "text": "嫌いな人は避けて通りたい",
+      "isActive": true,
+      "isScored": true,
+      "step": 3,
+      "page": 5
+    },
+    {
+      "questionNo": 109,
+      "text": "落ち着いて理屈を考えるよりまずは行動する",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 1
+    },
+    {
+      "questionNo": 110,
+      "text": "逆境に直面しても自ら打開できる",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 1
+    },
+    {
+      "questionNo": 111,
+      "text": "突然のトラブルにはあわてやすい",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 1
+    },
+    {
+      "questionNo": 112,
+      "text": "感情が顔に出やすい",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 1
+    },
+    {
+      "questionNo": 113,
+      "text": "小さな不正でもうやむやにしない",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 1
+    },
+    {
+      "questionNo": 114,
+      "text": "過去の失敗を思い出してたびたび悲しくなる",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 1
+    },
+    {
+      "questionNo": 115,
+      "text": "一人きりのほうが気持ちが楽である",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 1
+    },
+    {
+      "questionNo": 116,
+      "text": "仲間のために働くことにもやりがいを感じる",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 2
+    },
+    {
+      "questionNo": 117,
+      "text": "計画的に仕事をする方だ",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 2
+    },
+    {
+      "questionNo": 118,
+      "text": "人間の本心は自己中心的で身勝手だと思う",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 2
+    },
+    {
+      "questionNo": 119,
+      "text": "心を傷つけられやすい方だと思う",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 2
+    },
+    {
+      "questionNo": 120,
+      "text": "新しい環境にもすぐなじめる方だ",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 2
+    },
+    {
+      "questionNo": 121,
+      "text": "相手のミスや欠点によく気がつく",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 2
+    },
+    {
+      "questionNo": 122,
+      "text": "口数は多い方だと思う",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 2
+    },
+    {
+      "questionNo": 123,
+      "text": "本能的に行動することが多い",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 3
+    },
+    {
+      "questionNo": 124,
+      "text": "人の言葉をさえぎっても、自分の意見を述べる",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 3
+    },
+    {
+      "questionNo": 125,
+      "text": "最近なにかと自信がない",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 3
+    },
+    {
+      "questionNo": 126,
+      "text": "何かあったときは気分が動揺しやすい",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 3
+    },
+    {
+      "questionNo": 127,
+      "text": "不安を感じて暗い気持ちになることが多い",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 3
+    },
+    {
+      "questionNo": 128,
+      "text": "多くの人と親しくなりたい",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 3
+    },
+    {
+      "questionNo": 129,
+      "text": "恥ずかしがりやだと思う",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 3
+    },
+    {
+      "questionNo": 130,
+      "text": "困っている人を見ると黙っていられない",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 4
+    },
+    {
+      "questionNo": 131,
+      "text": "会話中に全く他の事を考えていることがある",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 4
+    },
+    {
+      "questionNo": 132,
+      "text": "管理されていないと人は怠けるものだと思う",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 4
+    },
+    {
+      "questionNo": 133,
+      "text": "物の置き方や並び方などを気にすることが多い",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 4
+    },
+    {
+      "questionNo": 134,
+      "text": "相手の返事や反応が遅いとイライラすることがある",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 4
+    },
+    {
+      "questionNo": 135,
+      "text": "時々本心を人に聞いてもらいたいと思う",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 4
+    },
+    {
+      "questionNo": 136,
+      "text": "追い込まれると力を発揮する",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 4
+    },
+    {
+      "questionNo": 137,
+      "text": "思いついたらすぐ実行したい",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 5
+    },
+    {
+      "questionNo": 138,
+      "text": "他人の失礼な態度には抗議する",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 5
+    },
+    {
+      "questionNo": 139,
+      "text": "困ったとき、味方になってくれる人が必ずいる",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 5
+    },
+    {
+      "questionNo": 140,
+      "text": "つまらない仕事に対しても全力をつくす",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 5
+    },
+    {
+      "questionNo": 141,
+      "text": "感情が高ぶると涙が出やすい",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 5
+    },
+    {
+      "questionNo": 142,
+      "text": "仕事は忙しい方が好きだ",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 5
+    },
+    {
+      "questionNo": 143,
+      "text": "精神的に疲れていると思う",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 5
+    },
+    {
+      "questionNo": 144,
+      "text": "食べ物の好き嫌いが多い",
+      "isActive": true,
+      "isScored": true,
+      "step": 4,
+      "page": 5
+    },
+    {
+      "questionNo": 145,
+      "text": "行動的、野心的、エネルギッシュである",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 146,
+      "text": "向上心があるほうだ",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 147,
+      "text": "決断力があるほうだ",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 148,
+      "text": "人間関係より仕事を優先したい",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 149,
+      "text": "正義感が強いほうだ",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 150,
+      "text": "ペースが速いと言われる",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 151,
+      "text": "保身的な態度を取るのは嫌いだ",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 152,
+      "text": "場を仕切ったり、リーダーシップをとることを好む",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 153,
+      "text": "自分をコントロールしようとする人には反発してしまう",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 154,
+      "text": "人に怖い、キツいと言われたことがある",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 155,
+      "text": "自分の弱いところは見せたくない",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 156,
+      "text": "人をなかなか信用しない",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 157,
+      "text": "人の気持ちには鈍感なほうだと思う",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 158,
+      "text": "優しい感情を表すことは苦手だ",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 159,
+      "text": "褒められると何か裏があるのでは？ と思うことがある",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 160,
+      "text": "人と活気のあることをするのが好きだ",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 161,
+      "text": "細かいとはあまり気にとめない",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 162,
+      "text": "計画を立てたり、計画通りに動くのは苦手だ",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 163,
+      "text": "あきっぽいとよく言われる",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 164,
+      "text": "新しい仕事を始めるのは得意だ",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 165,
+      "text": "事務処理など、ルーティンワークは苦手だ",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 166,
+      "text": "場を仕切るのが好き、もしくは得意だ",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 167,
+      "text": "調子がいいヤツだと言われることがある",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 168,
+      "text": "話題を提供することが得意だ",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 169,
+      "text": "過去の規則や慣習にとらわれるのはおかしい",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 170,
+      "text": "人を褒めるのが得意で、褒められるのも好き",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 171,
+      "text": "意見を求められると嬉しい",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 172,
+      "text": "初めての人でも気軽にコミュケーションを交わせる",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 173,
+      "text": "感情表現は豊かなほうだと思う",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 174,
+      "text": "一緒にいてよく楽しいと言われる",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 175,
+      "text": "データや資料を集め、分析するのは苦にならない",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 176,
+      "text": "計画通りに実行するのが好きだ",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 177,
+      "text": "客観的、冷静だとよく言われる",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 178,
+      "text": "失敗や間違いは、できるだけしたくない",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 179,
+      "text": "ルーティンワークは苦にならない",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 180,
+      "text": "人から頑固、真面目と言われることがある",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 181,
+      "text": "孤立してもあまり苦にならない",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 182,
+      "text": "自分から主張することは少ない",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 183,
+      "text": "話が長いと言われる",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 184,
+      "text": "自分のことを話すのは苦手だ",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 185,
+      "text": "急に意見を求められても困る",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 186,
+      "text": "まずはリスクから考える傾向がある",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 187,
+      "text": "一つのことを継続して、とことんやるのが好きだ",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 188,
+      "text": "石橋をたたいて渡るほうだ",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 189,
+      "text": "感情表現はあまり豊かではない",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 190,
+      "text": "人をサポートする仕事が好きだ",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 191,
+      "text": "決断する時は、じっくり考えたい",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 192,
+      "text": "人の心や空気を読むのが得意だ",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 193,
+      "text": "困っている人や悩んでいる人の相談を受けることが多い",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 194,
+      "text": "リスクを冒すのは苦手",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 195,
+      "text": "ビジネスよりも人を優先したい",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 196,
+      "text": "話しやすいとよく言われる",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 197,
+      "text": "相手の反応が気になる",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 198,
+      "text": "気配りができるほうだと思う",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 199,
+      "text": "できるだけ人と対立したくない",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 200,
+      "text": "頼まれるとノーと言えない",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 201,
+      "text": "感謝や労いの言葉をかけられると、やる気が湧いてくる",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 202,
+      "text": "上を目指すよりも、現場でみんなを支えたい",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 203,
+      "text": "優しい、穏やかだと言われる",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    },
+    {
+      "questionNo": 204,
+      "text": "単独仕事より、チーム仕事の方が好きだ",
+      "isActive": false,
+      "isScored": false,
+      "step": null,
+      "page": null
+    }
+  ]
+}
