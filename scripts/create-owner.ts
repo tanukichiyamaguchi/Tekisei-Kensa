@@ -3,6 +3,7 @@
 //   pnpm owner:create --org-name "〇〇歯科医院" [--org-code "..."] [--customer-number "..."] \
 //     --email owner@example.com --display-name "院長"
 //   既存組織にオーナーを追加する / 途中で失敗した作成をやり直す: --organization-id <ID> を付ける
+//   GitHub Actions（.github/workflows/firebase-ops.yml）から実行する場合は --hide-invite-link を付ける（招待リンクをログに残さない）
 //
 // メールは送らない。オーナーはログイン画面の「パスワードをお忘れの方」から再設定メールで初期パスワードを設定する。
 // 本番・検証プロジェクトに対する実行は依頼主または運用責任者が行う（実装者は Emulator に対してのみ実行する。01）。
@@ -76,7 +77,12 @@ async function existingUid(email: string): Promise<string | null> {
  */
 export async function createOwner(
   input: CreateOwnerOptions,
-  deps: { readonly baseUrl: string; readonly print: (line: string) => void },
+  deps: {
+    readonly baseUrl: string;
+    readonly print: (line: string) => void;
+    /** 招待リンクを出力しない（GitHub Actions など、出力がログに残る場所で実行する場合。10 K-12） */
+    readonly hideInviteLink?: boolean;
+  },
 ): Promise<CreateOwnerResult> {
   const parsed = optionsSchema.safeParse(input);
   if (!parsed.success) {
@@ -113,9 +119,15 @@ export async function createOwner(
     organizationId = created.organizationId;
     link = inviteLink(deps.baseUrl, created.inviteToken);
     deps.print(`組織を作成しました: organizationId = ${organizationId}`);
-    deps.print(
-      `管理者追加用リンク（この 1 回だけ表示します。安全な経路でオーナーに渡してください）: ${link}`,
-    );
+    if (deps.hideInviteLink) {
+      deps.print(
+        "管理者追加用リンクはログに残さないため表示しません。必要になったらオーナーが管理画面で発行し直してください（旧リンクは無効になります）",
+      );
+    } else {
+      deps.print(
+        `管理者追加用リンク（この 1 回だけ表示します。安全な経路でオーナーに渡してください）: ${link}`,
+      );
+    }
   }
 
   const account = {
@@ -156,6 +168,7 @@ async function main(): Promise<void> {
       "customer-number": { type: "string" },
       email: { type: "string" },
       "display-name": { type: "string" },
+      "hide-invite-link": { type: "boolean" },
     },
     strict: true,
   });
@@ -179,6 +192,7 @@ async function main(): Promise<void> {
         VERCEL_URL: undefined,
       }),
       print: (line) => console.log(line),
+      hideInviteLink: values["hide-invite-link"] === true,
     },
   );
 }

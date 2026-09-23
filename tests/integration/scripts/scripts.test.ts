@@ -138,6 +138,17 @@ describe("I-09 scripts/create-owner", () => {
     ).rejects.toMatchObject({ code: "auth/email-already-exists" });
   });
 
+  it("hideInviteLink のときは招待リンクを出力しない（組織は作られ、戻り値にはリンクがある）", async () => {
+    const out = capture();
+    const r = await createOwner(
+      { orgName: "ログ非表示歯科", email: uniqueEmail("hidden-link"), displayName: "院長" },
+      { baseUrl: BASE_URL, print: out.print, hideInviteLink: true },
+    );
+    expect(out.lines.some((l) => l.includes("/admin/signup"))).toBe(false);
+    expect(out.lines.some((l) => l.includes("表示しません"))).toBe(true);
+    expect(await getDocForTest("organizations", r.organizationId)).not.toBeNull();
+  });
+
   it("入力誤りは UsageError（組織名なし・両方指定・存在しない組織・メール形式）", async () => {
     const deps = { baseUrl: BASE_URL, print: () => undefined };
     await expect(createOwner({ email: uniqueEmail("x"), displayName: "" }, deps)).rejects.toThrow(

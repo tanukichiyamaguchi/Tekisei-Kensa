@@ -1,0 +1,104 @@
+# 運用スクリプトを GitHub Actions で実行する（10 K-12。依頼主はローカル環境を使わないため）。手動実行のみ。
+#   task = verify       … pnpm firebase:verify（実装時確認。検証用プロジェクトのみ）
+#   task = create-owner … pnpm owner:create（組織と初期オーナーの作成。招待リンクはログに出さない）
+# GitHub Environments `staging` / `production` に次を置く（production には必須レビュアーを設定する）:
+#   Secret   FIREBASE_SERVICE_ACCOUNT_KEY … アプリ用サービスアカウント鍵 JSON の Base64（01 §4.6。Vercel と同じ値）
+#   Variable NEXT_PUBLIC_FIREBASE_PROJECT_ID、NEXT_PUBLIC_FIREBASE_API_KEY、NEXT_PUBLIC_APP_BASE_URL
+name: firebase-ops
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 適用先
+        type: choice
+        options: [staging, production]
+        required: true
+      task:
+        description: 実行する処理
+        type: choice
+        options: [verify, create-owner]
+        required: true
+      org_name:
+        description: "[create-owner] 新しく作る組織名（既存組織に追加する場合は空にして organization_id を入れる）"
+        type: string
+        required: false
+      org_code:
+        description: "[create-owner] 組織コード（任意）"
+        type: string
+        required: false
+      customer_number:
+        description: "[create-owner] 顧客番号（任意）"
+        type: string
+        required: false
+      organization_id:
+        description: "[create-owner] 既存組織の ID（途中で失敗した作成のやり直し・既存組織へのオーナー追加）"
+        type: string
+        required: false
+      email:
+        description: "[create-owner] オーナーのメールアドレス（ログでは伏せ字になる）"
+        type: string
+        required: false
+      display_name:
+        description: "[create-owner] オーナーの表示名（例: 院長）"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-ops-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target }} # production には必須レビュアーを設定
+    timeout-minutes: 15
+    env:
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ vars.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+      NEXT_PUBLIC_FIREBASE_API_KEY: ${{ vars.NEXT_PUBLIC_FIREBASE_API_KEY }}
+      NEXT_PUBLIC_APP_BASE_URL: ${{ vars.NEXT_PUBLIC_APP_BASE_URL }}
+      FIREBASE_SERVICE_ACCOUNT_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
+    steps:
+      - name: 設定の確認
+        run: |
+          missing=""
+          for name in NEXT_PUBLIC_FIREBASE_PROJECT_ID NEXT_PUBLIC_FIREBASE_API_KEY FIREBASE_SERVICE_ACCOUNT_KEY; do
+            if [ -z "${!name}" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "Environment「${{ inputs.target }}」に次の設定がありません:$missing"; exit 1; fi
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: 実装時確認（pnpm firebase:verify）
+        if: inputs.task == 'verify'
+        run: |
+          if [ "${{ inputs.target }}" != "staging" ]; then
+            echo "firebase:verify は検証用プロジェクト（staging）でのみ実行します"; exit 1; fi
+          args=(--confirm-project "$NEXT_PUBLIC_FIREBASE_PROJECT_ID")
+          if [ -n "$NEXT_PUBLIC_APP_BASE_URL" ]; then args+=(--referer "${NEXT_PUBLIC_APP_BASE_URL%/}/"); fi
+          pnpm -s firebase:verify "${args[@]}"
+      - name: 組織と初期オーナーの作成（pnpm owner:create）
+        if: inputs.task == 'create-owner'
+        env:
+          ORG_NAME: ${{ inputs.org_name }}
+          ORG_CODE: ${{ inputs.org_code }}
+          CUSTOMER_NUMBER: ${{ inputs.customer_number }}
+          ORGANIZATION_ID: ${{ inputs.organization_id }}
+          OWNER_EMAIL: ${{ inputs.email }}
+          DISPLAY_NAME: ${{ inputs.display_name }}
+        run: |
+          if [ -z "$OWNER_EMAIL" ]; then echo "email を入力してください"; exit 2; fi
+          echo "::add-mask::$OWNER_EMAIL"
+          args=(--email "$OWNER_EMAIL" --display-name "$DISPLAY_NAME" --hide-invite-link)
+          if [ -n "$ORGANIZATION_ID" ]; then args+=(--organization-id "$ORGANIZATION_ID"); fi
+          if [ -n "$ORG_NAME" ]; then args+=(--org-name "$ORG_NAME"); fi
+          if [ -n "$ORG_CODE" ]; then args+=(--org-code "$ORG_CODE"); fi
+          if [ -n "$CUSTOMER_NUMBER" ]; then args+=(--customer-number "$CUSTOMER_NUMBER"); fi
+          pnpm -s owner:create "${args[@]}"

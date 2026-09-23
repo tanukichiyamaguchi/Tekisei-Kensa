@@ -70,6 +70,8 @@ pnpm dev                          # http://localhost:3000
 | `pnpm firebase:verify`      | 検証用プロジェクトに対する実装時確認（08 D08-33。`--confirm-project <ID>` が必要）          |
 | `pnpm firestore:deploy`     | ルール・インデックスのデプロイ（通常は GitHub Actions の `firebase-deploy` を使う）         |
 
+検証用・本番用の Firebase プロジェクトに対する運用スクリプト（`owner:create`、`firebase:verify`）は、GitHub の Actions タブから `firebase-ops` ワークフローを手動実行して行います（10 K-12）。ルール・インデックスのデプロイは `firebase-deploy` ワークフローです。
+
 主なディレクトリ:
 
 - `lib/scoring/` — 採点エンジン（純関数。`scoreAnswers`、`compareWithPopulation`）。基本設計 03
