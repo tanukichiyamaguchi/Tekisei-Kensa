@@ -188,3 +188,35 @@ export async function syncAdminUserFromClaims(input: {
   });
   return { changed: true };
 }
+
+/** PATCH /api/v1/admin/me（04 §5.1）: Firebase Auth の displayName・email・password を更新する（確認メールは送らない。D04-57） */
+export async function updateAdminAuthUser(
+  uid: string,
+  patch: {
+    readonly displayName?: string | undefined;
+    readonly email?: string | undefined;
+    readonly password?: string | undefined;
+  },
+): Promise<void> {
+  const properties: { displayName?: string; email?: string; password?: string } = {};
+  if (patch.displayName !== undefined) properties.displayName = patch.displayName;
+  if (patch.email !== undefined) properties.email = patch.email;
+  if (patch.password !== undefined) properties.password = patch.password;
+  if (Object.keys(properties).length === 0) return;
+  await adminAuth().updateUser(uid, properties);
+}
+
+const GET_USERS_CHUNK = 100;
+
+/** uid → Firebase Auth のメールアドレス（getUsers を 100 件ずつ。Auth に無い uid は null。04 §5.11） */
+export async function getAdminEmails(
+  uids: readonly string[],
+): Promise<ReadonlyMap<string, string | null>> {
+  const out = new Map<string, string | null>(uids.map((uid) => [uid, null]));
+  for (let i = 0; i < uids.length; i += GET_USERS_CHUNK) {
+    const chunk = uids.slice(i, i + GET_USERS_CHUNK);
+    const { users } = await adminAuth().getUsers(chunk.map((uid) => ({ uid })));
+    for (const user of users) out.set(user.uid, user.email ?? null);
+  }
+  return out;
+}
