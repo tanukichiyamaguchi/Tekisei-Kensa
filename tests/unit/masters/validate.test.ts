@@ -6,7 +6,7 @@ import choiceScoresJson from "@/lib/masters/data/choice-scores.json";
 import questionsJson from "@/lib/masters/data/questions.json";
 import socialStylesJson from "@/lib/masters/data/social-styles.json";
 import traitsJson from "@/lib/masters/data/traits.json";
-import { OCCUPATIONS, occupationLabel } from "@/lib/masters/occupations";
+import { getOccupationLabel, isOccupationCode, OCCUPATIONS } from "@/lib/masters/occupations";
 import { stepAndPageOf } from "@/lib/masters/question-layout";
 import {
   MasterValidationError,
@@ -166,8 +166,12 @@ describe("設問のステップ・ページ割り当て", () => {
 describe("職業マスタ（00 §1.10）", () => {
   it("9 件、コード順", () => {
     expect(OCCUPATIONS.map((o) => o.code)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
-    expect(occupationLabel(3)).toBe("歯科助手(アシスタント・受付)");
-    expect(occupationLabel(6)).toBe("TC");
-    expect(occupationLabel(9)).toBe("その他");
+    expect(getOccupationLabel(3)).toBe("歯科助手(アシスタント・受付)");
+    expect(getOccupationLabel(6)).toBe("TC");
+    expect(getOccupationLabel(9)).toBe("その他");
+    expect(() => getOccupationLabel(10)).toThrow(RangeError);
+    expect(isOccupationCode(1)).toBe(true);
+    expect(isOccupationCode(0)).toBe(false);
+    expect(isOccupationCode("1")).toBe(false);
   });
 });

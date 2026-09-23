@@ -21,10 +21,17 @@ export const OCCUPATIONS: readonly OccupationDefinition[] = Object.freeze([
   { code: 9, key: "other", label: "その他" },
 ] as const satisfies readonly OccupationDefinition[]);
 
-const LABEL_BY_CODE = Object.fromEntries(OCCUPATIONS.map((o) => [o.code, o.label])) as Readonly<
-  Record<OccupationCode, string>
->;
+const LABEL_BY_CODE: ReadonlyMap<number, string> = new Map(
+  OCCUPATIONS.map((o) => [o.code, o.label]),
+);
 
-export function occupationLabel(code: OccupationCode): string {
-  return LABEL_BY_CODE[code];
+export function isOccupationCode(value: unknown): value is OccupationCode {
+  return typeof value === "number" && LABEL_BY_CODE.has(value);
+}
+
+/** 職業コード → 表示名（07 §2.3 の AI 入力、06 の回答一覧で使う）。未知のコードは RangeError */
+export function getOccupationLabel(code: number): string {
+  const label = LABEL_BY_CODE.get(code);
+  if (label === undefined) throw new RangeError(`未知の職業コードです: ${code}`);
+  return label;
 }
