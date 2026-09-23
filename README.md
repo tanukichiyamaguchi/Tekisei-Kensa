@@ -33,26 +33,52 @@
 
 ## 開発
 
-実装計画は [08 実装計画とテスト計画](docs/基本設計/08_実装計画とテスト計画.md) のマイルストーン（M0〜M6）に沿って進めます。現在は M1（採点エンジンと単体テスト）まで実装済みです。Next.js の画面、Firebase（Firestore・Auth）と Emulator 上の結合テストは M2 以降で追加します。
+実装計画は [08 実装計画とテスト計画](docs/基本設計/08_実装計画とテスト計画.md) のマイルストーン（M0〜M6）に沿って進めます。現在は M2（Firestore のデータモデル・認証・アクセス層・運用スクリプト）まで実装済みです。受検者画面は M3、管理画面は M4 で追加します。
 
-必要なもの: Node.js 22 系（`.nvmrc`）、pnpm（`package.json` の `packageManager` の版。Corepack で有効化）。
+必要なもの: Node.js 22 系（`.nvmrc`）、pnpm（`package.json` の `packageManager` の版。Corepack で有効化）、Java 21（Firebase Emulator の実行に必要）。
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm ci                 # lint・format・typecheck・マスタ再生成検査・単体テスト（CI と同じ）
+pnpm ci                    # lint・format・typecheck・マスタ再生成検査・単体テスト（CI と同じ）
+pnpm test:integration:emu  # Firebase Emulator を起動して結合テストを実行し、終了後に止める
 ```
 
-| コマンド                    | 内容                                                     |
-| --------------------------- | -------------------------------------------------------- |
-| `pnpm test`                 | 単体テスト（Vitest、`tests/unit/`）                      |
-| `pnpm typecheck`            | TypeScript の型検査                                      |
-| `pnpm lint` / `pnpm format` | ESLint / Prettier の検査（`pnpm format:write` で整形）   |
-| `pnpm masters:generate`     | 付録A・付録B から `lib/masters/data/*.json` を再生成する |
-| `pnpm masters:check`        | 生成物が付録と一致しているかを検査する（CI で実行）      |
+ローカルで管理 API を動かす手順（Emulator のみを使い、本番・検証の Firebase プロジェクトには接続しません）:
+
+```bash
+cp .env.example .env.local        # PDF_TOKEN_SECRET と SEED_OWNER_PASSWORD を埋める
+pnpm emulators                    # 別の端末で起動したままにする（Emulator UI: http://127.0.0.1:4000）
+pnpm seed:local                   # 組織 1・オーナー 1・管理者 1・送信済み受検者 10・下書き 1 を投入
+pnpm dev                          # http://localhost:3000
+```
+
+| コマンド                    | 内容                                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------------------- |
+| `pnpm test`                 | 単体テスト（Vitest、`tests/unit/`。Firebase 不要）                                          |
+| `pnpm test:integration:emu` | 結合テスト（`tests/integration/`。Emulator の起動から停止まで行う）                         |
+| `pnpm test:integration`     | 結合テストのみ（`pnpm emulators` を別に起動しておく）                                       |
+| `pnpm typecheck`            | TypeScript の型検査                                                                         |
+| `pnpm lint` / `pnpm format` | ESLint / Prettier の検査（`pnpm format:write` で整形）                                      |
+| `pnpm build`                | Next.js のビルド                                                                            |
+| `pnpm masters:generate`     | 付録A・付録B から `lib/masters/data/*.json` を再生成する                                    |
+| `pnpm masters:check`        | 生成物が付録と一致しているかを検査する（CI で実行）                                         |
+| `pnpm check-env`            | `.env.local` と環境変数の検証（値は表示しない）                                             |
+| `pnpm emulators`            | Firebase Emulator（Auth 9099、Firestore 8080、UI 4000）を起動する                           |
+| `pnpm seed:local`           | Emulator にローカル用のデータを投入する（Emulator 以外には接続を拒否する）                  |
+| `pnpm owner:create`         | 組織と初期オーナーを作成する（02 §9.6。本番・検証プロジェクトでは依頼主・運用責任者が実行） |
+| `pnpm admin:set-role`       | 管理者の役割変更・利用停止・停止解除・削除・クレームとの同期（02 §9.9）                     |
+| `pnpm firebase:verify`      | 検証用プロジェクトに対する実装時確認（08 D08-33。`--confirm-project <ID>` が必要）          |
+| `pnpm firestore:deploy`     | ルール・インデックスのデプロイ（通常は GitHub Actions の `firebase-deploy` を使う）         |
 
 主なディレクトリ:
 
 - `lib/scoring/` — 採点エンジン（純関数。`scoreAnswers`、`compareWithPopulation`）。基本設計 03
 - `lib/masters/` — 設問・配点・指標定義などのマスタ。`data/` は生成物（手で編集しない）
 - `lib/presentation/` — 表示用の丸め・色・グラフ系列・受検ページの変換
-- `scripts/generate-masters.ts` — マスタ生成スクリプト
+- `lib/firebase/` — Firebase Admin SDK（サーバ専用）とクライアント SDK（Auth のみ）の初期化
+- `lib/db/` — Firestore のデータアクセス層（文書型・書き込み前スキーマ・マッパー・リポジトリ）。基本設計 02
+- `lib/auth/` — セッション Cookie、カスタムクレーム、受検者・招待・PDF のトークン、管理者アカウント操作
+- `lib/services/` — API 共通処理（`handle()`、エラー、監査ログ、レート制限）と Route Handler の業務処理。基本設計 04
+- `app/` — Next.js（App Router）。M2 時点は `/auth/session`、`/auth/invite`、`/api/v1/admin/me` のみ
+- `firebase/` — Firebase の設定（`firebase.json`、ルール（全拒否）、インデックス）
+- `scripts/` — マスタ生成と運用スクリプト（`create-owner`、`seed-local`、`set-admin-role`、`verify-firebase`）
