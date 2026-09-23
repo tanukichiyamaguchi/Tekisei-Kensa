@@ -693,6 +693,43 @@ body {
 .trait-list__row--lowest {
   background: rgba(142, 202, 230, 0.25);
 }
+.ai-analysis__actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.ai-analysis__progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ai-analysis__failed .notice {
+  margin-bottom: 4px;
+}
+.result-header__actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--admin-border);
+  border-top-color: var(--admin-primary);
+  border-radius: 50%;
+  animation: admin-spin 0.8s linear infinite;
+}
+@keyframes admin-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}
 .ai-analysis__verdict .badge {
   font-size: 13px;
   padding: 2px 10px;

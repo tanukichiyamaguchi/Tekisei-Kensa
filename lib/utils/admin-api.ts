@@ -10,7 +10,7 @@ import type {
   RespondentUpdatedDto,
   UsageLogItemDto,
 } from "@/lib/services/dto/admin";
-import type { ComparisonDto } from "@/lib/services/dto/result";
+import type { AiAnalysisDto, ComparisonDto } from "@/lib/services/dto/result";
 
 /** 04 §2.4 のエラー応答。未知のコードも落とさないよう code は string で受ける */
 export class AdminApiError extends Error {
@@ -149,6 +149,23 @@ export function fetchComparison(
   const query =
     scope.kind === "organization" ? "scope=organization" : `scope=team&teamCode=${scope.teamCode}`;
   return adminFetch(`${admin}/results/${encodeURIComponent(resultId)}/comparison?${query}`, {
+    method: "GET",
+    signal,
+  });
+}
+
+// ---- AI 解説（04 §5.9。06 §3.5.9）
+
+/** POST …/ai-analysis。同期方式のためブラウザ側のタイムアウトは設けない（04 の maxDuration に委ねる） */
+export function requestAiAnalysis(resultId: string): Promise<AiAnalysisDto> {
+  return adminFetch(`${admin}/results/${encodeURIComponent(resultId)}/ai-analysis`, {
+    method: "POST",
+  });
+}
+
+/** GET …/ai-analysis（ポーリング・通信断後の状態確認） */
+export function fetchAiAnalysis(resultId: string, signal?: AbortSignal): Promise<AiAnalysisDto> {
+  return adminFetch(`${admin}/results/${encodeURIComponent(resultId)}/ai-analysis`, {
     method: "GET",
     signal,
   });
