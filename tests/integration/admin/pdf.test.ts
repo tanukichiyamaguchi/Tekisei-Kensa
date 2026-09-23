@@ -128,7 +128,11 @@ describe("I-45 GET …/pdf の契約", () => {
         pageCount: 1,
         elapsedMs: 1,
       });
-      const before = (await pdfExportLogs(applicant.resultId)).length;
+      const ofMode = async () =>
+        (await pdfExportLogs(applicant.resultId)).filter(
+          (l) => (l.details as { mode: string }).mode === mode,
+        );
+      const before = (await ofMode()).length;
       const res = await getPdf(owner, applicant.resultId, query);
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toBe("application/pdf");
@@ -158,9 +162,10 @@ describe("I-45 GET …/pdf の契約", () => {
         scope,
       });
 
-      const logs = await pdfExportLogs(applicant.resultId);
+      // listDocs は文書 ID 順のため、mode で絞って件数と内容を確かめる
+      const logs = await ofMode();
       expect(logs).toHaveLength(before + 1);
-      expect(logs.at(-1)?.details).toEqual({
+      expect(logs[0]?.details).toEqual({
         mode,
         scope: scope?.kind ?? null,
         teamCode: null,
