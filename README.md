@@ -39,7 +39,7 @@
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm ci                    # lint・format・typecheck・マスタ再生成検査・単体テスト（CI と同じ）
+pnpm run ci                # lint・format・typecheck・マスタ再生成検査・単体テスト（CI と同じ）
 pnpm test:integration:emu  # Firebase Emulator を起動して結合テストを実行し、終了後に止める
 ```
 
