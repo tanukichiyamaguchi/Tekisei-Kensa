@@ -1,0 +1,70 @@
+# 01 §6.3 の e2e.yml（内容は 08 §3.4）。ビルド済みのアプリを Firebase Emulator の中で起動し、Playwright で E2E を実行する。
+# 実プロジェクト・実 API には接続しない（環境変数はすべてダミー。Firebase の Secrets は使わない。00 D-33）。
+# PDF 関連（fonts-noto-cjk、PDF_CHROMIUM_EXECUTABLE_PATH）の手順は PDF を実装する M5 で追加する。
+name: e2e
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled] # ラベル "run-e2e" が付いたときだけ実行
+  push:
+    branches: [main] # main でも実行して回帰を検知する（08 D08-06）
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    if: github.event_name != 'pull_request' || github.event.label.name == 'run-e2e'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_FIREBASE_API_KEY: demo-api-key
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: localhost
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: demo-tekisei
+      NEXT_PUBLIC_FIREBASE_APP_ID: demo-app-id
+      NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+      NEXT_PUBLIC_APP_BASE_URL: http://localhost:3000
+      AI_PROVIDER: stub
+      AI_MODEL: claude-opus-5
+      AI_PROMPT_VERSION: recruitment-v1
+      PLAYWRIGHT_BASE_URL: http://localhost:3000
+      METADATA_SERVER_DETECTION: none
+      SEED_OWNER_PASSWORD: e2e-seed-password-0000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: pnpm install --frozen-lockfile
+      - name: PDF 印刷トークンの鍵をジョブ内で生成（GitHub Secrets に置かない）
+        run: echo "PDF_TOKEN_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm build
+      - name: Firebase Emulator のキャッシュ
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Emulator を起動し、シードを投入して E2E を実行（Emulator は終了時に停止）
+        run: pnpm firebase emulators:exec --only auth,firestore --project demo-tekisei "pnpm seed:local && pnpm test:e2e"
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
+          retention-days: 7

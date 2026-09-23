@@ -203,6 +203,7 @@ export default tseslint.config(
       "proxy.ts",
       "next.config.ts",
       "vitest.config.ts",
+      "playwright.config.ts",
       "tests/**",
     ],
     rules: { "no-restricted-syntax": "off" },
