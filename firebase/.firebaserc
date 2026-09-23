@@ -1,0 +1,6 @@
+{
+  "projects": {
+    "production": "tekisei-kensa-697c4",
+    "staging": "REPLACE_WITH_STAGING_PROJECT_ID"
+  }
+}

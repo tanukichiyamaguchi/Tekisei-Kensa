@@ -1,0 +1,12 @@
+rules_version = '2';
+
+// 適性検査システム: Firestore へのアクセスはサーバ（Admin SDK）のみ。
+// クライアント SDK からの読み書きはすべて拒否する（00 §2.5、D-28）。
+// 認可は Next.js のサーバコードで行うため、このファイルに条件を追加しない。
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

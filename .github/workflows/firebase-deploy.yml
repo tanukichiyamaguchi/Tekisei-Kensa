@@ -1,0 +1,42 @@
+# 01 §6.4 Firestore のルール（全拒否）と複合インデックスのデプロイ。手動実行のみ。
+# GitHub Environments `staging` / `production` に Secret `FIREBASE_CI_SERVICE_ACCOUNT_KEY`（CI 用サービスアカウント鍵 JSON の Base64）を置く。
+# `production` には必須レビュアー（依頼主または運用責任者）を設定する。アプリ用の鍵（FIREBASE_SERVICE_ACCOUNT_KEY）は置かない。
+name: firebase-deploy
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 適用先（Firebase プロジェクトの別名。firebase/.firebaserc）
+        type: choice
+        options: [staging, production]
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target }} # production には必須レビュアーを設定
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: CI 用サービスアカウント鍵をファイルに書き出す（ジョブ終了時に破棄される一時領域）
+        env:
+          FIREBASE_CI_SERVICE_ACCOUNT_KEY: ${{ secrets.FIREBASE_CI_SERVICE_ACCOUNT_KEY }}
+        run: |
+          if [ -z "$FIREBASE_CI_SERVICE_ACCOUNT_KEY" ]; then
+            echo "Environment「${{ inputs.target }}」に Secret FIREBASE_CI_SERVICE_ACCOUNT_KEY がありません"; exit 1; fi
+          printf '%s' "$FIREBASE_CI_SERVICE_ACCOUNT_KEY" | base64 -d > "$RUNNER_TEMP/firebase-ci.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-ci.json" >> "$GITHUB_ENV"
+      - name: ルールとインデックスをデプロイ
+        run: pnpm firebase deploy --only firestore --project "${{ inputs.target }}" --non-interactive
+      - name: 鍵ファイルを削除
+        if: always()
+        run: rm -f "$RUNNER_TEMP/firebase-ci.json"

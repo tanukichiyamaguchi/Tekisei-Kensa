@@ -10,3 +10,6 @@ ui-debug.log
 firebase/emulator-data/
 *.tsbuildinfo
 __pycache__/
+
+# Next.js が生成する型参照（.next/types を参照するため、ビルド前の型検査を壊さないようコミットしない）
+next-env.d.ts
