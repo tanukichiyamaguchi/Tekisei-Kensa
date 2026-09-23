@@ -702,3 +702,136 @@ body {
 .radar-chart .apexcharts-svg {
   overflow: visible;
 }
+
+/* ---- 組織内分類（06 §3.6） */
+.classification__axis--top {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-left: 120px;
+  margin-bottom: 8px;
+  text-align: center;
+  font-weight: 700;
+}
+.classification__body {
+  display: flex;
+  gap: 8px;
+}
+.classification__axis--side {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  width: 112px;
+  align-items: center;
+  font-weight: 700;
+}
+.classification__grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.classification-card {
+  --style-color: var(--admin-border);
+  padding: 16px;
+  background: var(--admin-surface);
+  border: 2px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+.classification-card--driving {
+  --style-color: var(--style-driving);
+}
+.classification-card--expressive {
+  --style-color: var(--style-expressive);
+}
+.classification-card--analytical {
+  --style-color: var(--style-analytical);
+}
+.classification-card--amiable {
+  --style-color: var(--style-amiable);
+}
+.classification-card:hover {
+  border-color: var(--style-color);
+  background: color-mix(in srgb, var(--style-color) 15%, var(--admin-surface));
+}
+.classification-card__title {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 0 8px;
+  border: none;
+  border-bottom: 4px solid var(--style-color);
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  color: var(--admin-text);
+}
+.classification-card__name {
+  font-size: 16px;
+  font-weight: 700;
+}
+.classification-card__count {
+  font-size: 16px;
+}
+.classification-card__types {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.character {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: var(--admin-radius);
+  background: none;
+  font: inherit;
+  color: var(--admin-text);
+  cursor: pointer;
+}
+.character:hover {
+  border-color: var(--style-color);
+}
+.character__name {
+  font-weight: 700;
+}
+.character__count {
+  font-size: 13px;
+}
+
+/* ---- アカウント（06 §3.7） */
+.account-section {
+  margin-bottom: 16px;
+}
+.account-list {
+  margin: 0;
+}
+.account-list > div {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--admin-border);
+}
+.account-list dt {
+  font-weight: 700;
+}
+.account-list dd {
+  margin: 0;
+}
+.invite-block {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--admin-border);
+}
+.invite-block > .btn {
+  margin-bottom: 12px;
+}

@@ -32,6 +32,13 @@ export const ADMIN_TEXTS = {
   unassignedTeam: "未設定", // 06 §3.4.2（チームのプルダウン）
   resetMailSent: "入力したメールアドレス宛に案内を送信しました", // 06 §3.3
   signupInviteRequired: "管理者追加用リンクから登録してください", // 06 §3.1 D06-05
+  changed: "変更しました", // 06 §3.7
+  copied: "コピーしました", // 06 §3.7
+  copyFailed: "コピーできませんでした。選択した文字列を手動でコピーしてください", // 06 §3.7
+  issued: "発行しました", // 06 §3.7
+  rotateConfirm: "新しいリンクを発行すると、これまでの管理者追加用リンクは使えなくなります。", // P-07
+  notIssued: "未発行", // 06 §3.7
+  sessionsRevokedNote: "変更すると、他の端末でのログインもすべて解除されます。", // P-08（06 §3.7）
   resultTitle: (name: string) => `${name} 様の診断結果`, // T-01
   selectComparison: "比較組織を選択", // T-02
   organizationScope: "組織全体", // T-03
