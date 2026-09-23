@@ -1,4 +1,12 @@
 // 管理画面の文言（06 §10.5）。要件定義書・付録に文言があるものはそのまま、それ以外は 06 の設計判断
+import type { RespondentKind } from "@/lib/db/types";
+
+/** 受検者区分の表示名（00 §1.8、06 §3.4.2） */
+export const RESPONDENT_KIND_LABELS: Readonly<Record<RespondentKind, string>> = {
+  applicant: "求職者",
+  executive: "既存スタッフ",
+};
+
 export const ADMIN_TEXTS = {
   appTitle: "適性検査", // H-01（05 §9.1 と同じ仮置き）
   nav: { results: "回答一覧", classification: "組織内分類", account: "アカウント" }, // N-01〜N-03
@@ -17,6 +25,13 @@ export const ADMIN_TEXTS = {
   delete: "削除する", // B-13
   cancel: "キャンセル", // B-14
   rotateInvite: "招待リンクを再発行する", // B-15
+  logout: "ログアウト", // 06 §2.3（ヘッダー右）
+  deleted: "削除しました", // 06 §3.4.5
+  noMatchingResults: "条件に一致する回答データがありません。", // 06 §3.4.6
+  reload: "再読み込み", // 06 §3.4.6
+  unassignedTeam: "未設定", // 06 §3.4.2（チームのプルダウン）
+  resetMailSent: "入力したメールアドレス宛に案内を送信しました", // 06 §3.3
+  signupInviteRequired: "管理者追加用リンクから登録してください", // 06 §3.1 D06-05
   resultTitle: (name: string) => `${name} 様の診断結果`, // T-01
   selectComparison: "比較組織を選択", // T-02
   organizationScope: "組織全体", // T-03

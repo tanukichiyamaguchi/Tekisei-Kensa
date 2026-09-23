@@ -63,7 +63,7 @@ const CLIENT_SDK_ALWAYS_FORBIDDEN = {
 // パターンは gitignore 形式のため、スラッシュを含まない "firebase" は "@/lib/firebase/admin" にも一致してしまう。
 // 素の "firebase" は paths で、サブパスは patterns で禁止する
 const CLIENT_SDK_AUTH_MESSAGE =
-  "クライアント SDK は lib/firebase/client.ts と components/admin/auth/** だけで使う（01 §3.5 第 3 群）";
+  "クライアント SDK は lib/firebase/client.ts・lib/utils/admin-auth.ts（06 §10.4）と components/admin/auth/** だけで使う（01 §3.5 第 3 群）";
 const CLIENT_SDK_AUTH = {
   group: ["firebase/app", "firebase/auth", "firebase/auth/*"],
   message: CLIENT_SDK_AUTH_MESSAGE,
@@ -161,7 +161,8 @@ export default tseslint.config(
     },
   },
   {
-    files: ["lib/firebase/client.ts"],
+    // 06 §10.4: firebase/auth を import してよいのは lib/firebase/client.ts と lib/utils/admin-auth.ts だけ
+    files: ["lib/firebase/client.ts", "lib/utils/admin-auth.ts"],
     rules: { "no-restricted-imports": ["error", { patterns: [CLIENT_SDK_ALWAYS_FORBIDDEN] }] },
   },
   {

@@ -8,7 +8,13 @@ const firebaseAuthOrigins = [
   "https://identitytoolkit.googleapis.com",
   "https://securetoken.googleapis.com",
 ];
-const emulatorOrigins = isDev ? ["http://127.0.0.1:9099", "http://localhost:9099"] : [];
+// Auth Emulator。開発サーバのほか、Emulator 向けにビルドした本番モード（E2E の next start）でも許可する。
+// NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST は Vercel 上では設定できない（lib/utils/env.ts が拒否する）
+const authEmulatorHost = process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST;
+const emulatorOrigins = [
+  ...(authEmulatorHost ? [`http://${authEmulatorHost}`] : []),
+  ...(isDev ? ["http://127.0.0.1:9099", "http://localhost:9099"] : []),
+].filter((origin, i, all) => all.indexOf(origin) === i);
 
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
