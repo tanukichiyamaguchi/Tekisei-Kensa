@@ -9,10 +9,10 @@ export const runtime = "nodejs";
 
 export async function GET(request: Request): Promise<Response> {
   return handle(request, "/api/v1/admin/usage-logs", async (meta) => {
+    const ctx = await requireAdmin(request, meta);
     const query = listUsageLogsQuerySchema.parse(
       Object.fromEntries(new URL(request.url).searchParams),
     );
-    const ctx = await requireAdmin(request, meta);
     return json<PagedDto<UsageLogItemDto>>(meta, await listUsageLogs(ctx, query));
   });
 }

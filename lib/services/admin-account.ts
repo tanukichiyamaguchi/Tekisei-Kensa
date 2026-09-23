@@ -85,6 +85,13 @@ export async function updateMe(ctx: AdminContext, input: UpdateMeInput): Promise
   const credentialsChanged = input.email !== undefined || input.password !== undefined;
   if (credentialsChanged) await assertReauthenticated(ctx, input.reauthIdToken);
 
+  // 失敗し得る Firebase Auth の更新（重複メールの 409 など）を先に行い、氏名だけが変わる途中状態を作らない。
+  // Firebase Auth の表示名はコンソールでの識別用に同期する（一覧の表示には使わない）
+  await updateAdminAuthUser(ctx.uid, {
+    displayName: input.name,
+    email: input.email,
+    password: input.password,
+  });
   const fields: string[] = [];
   if (input.name !== undefined) {
     await updateAdminUserDisplayName({
@@ -96,12 +103,6 @@ export async function updateMe(ctx: AdminContext, input: UpdateMeInput): Promise
   }
   if (input.email !== undefined) fields.push("email");
   if (input.password !== undefined) fields.push("password");
-  // Firebase Auth の表示名はコンソールでの識別用に同期する（一覧の表示には使わない）
-  await updateAdminAuthUser(ctx.uid, {
-    displayName: input.name,
-    email: input.email,
-    password: input.password,
-  });
 
   // 値は入れず、変更した項目名だけを残す。セッションの失効より前に書く
   await appendAuditLogStrict({

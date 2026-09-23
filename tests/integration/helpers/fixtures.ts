@@ -2,13 +2,13 @@
 import { POST as postSession } from "@/app/auth/session/route";
 import { createAdminAccount } from "@/lib/auth/admin-accounts";
 import { createOrganization } from "@/lib/db/repositories/organizations-repository";
-import type { AdminRole, RespondentKind } from "@/lib/db/types";
+import type { AdminRole } from "@/lib/db/types";
 import { adminAuth } from "@/lib/firebase/admin";
 import type { AnswerMap, ChoiceCode, QuestionNo } from "@/lib/scoring/types";
 
 import { signInWithPassword } from "./emulator";
 import { getDocForTest } from "./firestore";
-import { completeViaApi } from "./respondent-api";
+import { completeViaApi, type SubmitOptions } from "./respondent-api";
 import { callRoute, cookieHeaderFrom } from "./routes";
 
 export const TEST_PASSWORD = "test-password-1234";
@@ -86,7 +86,7 @@ export const meta = { ipAddress: "203.0.113.10", userAgent: "vitest" } as const;
 export async function submitAnswerSet(
   org: TestOrganization,
   answers: AnswerMap,
-  options: { readonly kind?: RespondentKind; readonly name?: string } = {},
+  options: SubmitOptions = {},
 ): Promise<{
   readonly respondentId: string;
   readonly sessionId: string;

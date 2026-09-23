@@ -115,17 +115,15 @@ export async function saveAllPagesViaApi(
   }
 }
 
+export type SubmitOptions = Pick<RegistrationBody, "kind" | "name" | "phoneNumber">;
+
 /** 登録 → 開始 → 20 ページ保存 → 送信（API 経由）。sessionId と Cookie を返す */
 export async function completeViaApi(
   organizationId: string,
   answers: AnswerMap,
-  options: { readonly kind?: RespondentKind; readonly name?: string } = {},
+  options: SubmitOptions = {},
 ): Promise<RegisteredViaApi> {
-  const registered = await registerViaApi({
-    organizationId,
-    ...(options.kind ? { kind: options.kind } : {}),
-    ...(options.name ? { name: options.name } : {}),
-  });
+  const registered = await registerViaApi({ organizationId, ...options });
   const started = await respondentApi.start(registered.sessionId, registered.cookieHeader);
   if (started.status !== 200) throw new Error(`POST start が ${started.status} を返しました`);
   await saveAllPagesViaApi(registered.sessionId, registered.cookieHeader, answers);

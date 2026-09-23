@@ -9,10 +9,10 @@ export const runtime = "nodejs";
 
 export async function GET(request: Request): Promise<Response> {
   return handle(request, "/api/v1/admin/results", async (meta) => {
+    const ctx = await requireAdmin(request, meta);
     const query = listResultsQuerySchema.parse(
       Object.fromEntries(new URL(request.url).searchParams),
     );
-    const ctx = await requireAdmin(request, meta);
     return json<PagedDto<ResultListItemDto>>(meta, await listResults(ctx, query));
   });
 }

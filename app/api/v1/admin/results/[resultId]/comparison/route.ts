@@ -13,12 +13,12 @@ export async function GET(
   { params }: { params: Promise<{ resultId: string }> },
 ): Promise<Response> {
   return handle(request, "/api/v1/admin/results/[resultId]/comparison", async (meta) => {
+    const ctx = await requireAdmin(request, meta);
     const { resultId } = await params;
     if (!docIdSchema.safeParse(resultId).success) throw API_ERRORS.notFound();
     const scope = comparisonScopeQuerySchema.parse(
       Object.fromEntries(new URL(request.url).searchParams),
     );
-    const ctx = await requireAdmin(request, meta);
     return json<ComparisonDto>(meta, await getComparison(ctx, { resultId, scope }));
   });
 }
