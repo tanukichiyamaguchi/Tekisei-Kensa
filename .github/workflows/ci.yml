@@ -81,6 +81,11 @@ jobs:
           AI_MODEL: claude-opus-5
           AI_PROMPT_VERSION: recruitment-v2
           PDF_TOKEN_SECRET: dummy-pdf-token-secret-do-not-ship-0123456789
+      # Vercel の PDF 関数には @sparticuz/chromium の bin/（圧縮済み Chromium）が必要。Turbopack のビルドでは
+      # outputFileTracingIncludes が適用されず同梱されなかった（2026-09-23 の本番で browser_launch_failed）ため、
+      # build は webpack で行い（package.json）、同梱されていることをここで確かめる
+      - name: PDF の関数に Chromium（bin/chromium.br）が同梱されていることを確認
+        run: grep -q 'chromium/bin/chromium.br' '.next/server/app/api/v1/admin/results/[resultId]/pdf/route.js.nft.json'
       - name: サーバ専用の値がブラウザ用バンドルに含まれていないことを確認
         run: |
           for needle in dummy-pdf-token-secret-do-not-ship dummy-service-account-do-not-ship; do

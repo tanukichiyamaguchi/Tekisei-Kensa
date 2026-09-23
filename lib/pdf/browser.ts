@@ -34,7 +34,12 @@ export async function launchBrowser(): Promise<Browser> {
     });
   } catch (error) {
     if (error instanceof PdfGenerationError) throw error;
+    // 起動時の例外に印刷用 URL（トークン）は含まれない。原因調査のため例外の message も残す（300 文字まで）
     const name = error instanceof Error ? error.constructor.name : typeof error;
-    throw new PdfGenerationError("browser_launch_failed", `browser launch failed: ${name}`);
+    const message = error instanceof Error ? error.message.slice(0, 300) : "";
+    throw new PdfGenerationError(
+      "browser_launch_failed",
+      `browser launch failed: ${name}${message ? ` ${message}` : ""}`,
+    );
   }
 }

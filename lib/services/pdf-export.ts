@@ -94,6 +94,13 @@ export async function exportPdf(
       mode: input.mode,
       status: "failed",
       reason,
+      // PdfGenerationError の message は印刷用 URL（トークン）や氏名を含まない（lib/pdf/errors.ts）
+      detail:
+        error instanceof PdfGenerationError
+          ? error.message
+          : error instanceof Error
+            ? error.constructor.name
+            : typeof error,
       elapsedMs: Date.now() - startedAt,
     });
     throw new ApiError(

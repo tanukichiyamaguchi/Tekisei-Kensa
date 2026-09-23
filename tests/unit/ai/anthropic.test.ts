@@ -231,6 +231,16 @@ describe("U-16 Anthropic provider: SDK 例外の分類（07 §4.6 の表）", ()
     expect(calls).toHaveLength(1);
   });
 
+  it("API のエラー本文の message を例外の message に残す（原因調査用。300 文字まで）", async () => {
+    const body = { type: "error", error: { type: "not_found_error", message: "model: claude-x" } };
+    const { fetch } = mockFetch(() => jsonResponse(404, body));
+    const error = await failure(
+      createAnthropicProvider({ apiKey: "k", fetch }).generate(t06Input(), options()),
+    );
+    expect(error.message).toContain("status=404");
+    expect(error.message).toContain("message=model: claude-x");
+  });
+
   it("接続エラー → provider_error（SDK が 1 回だけ再試行する: maxRetries 1）", async () => {
     const { fetch, calls } = mockFetch(() => {
       throw new TypeError("fetch failed");

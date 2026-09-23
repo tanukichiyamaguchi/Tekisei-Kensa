@@ -32,15 +32,24 @@ function isAbortError(error: unknown): boolean {
   );
 }
 
+/** API が返したエラー本文の message（例: 「model: …」）。入力の本文は含まれないため、原因調査用にログへ出す（300 文字まで） */
+function apiErrorMessage(error: InstanceType<typeof Anthropic.APIError>): string | null {
+  const body = error.error as { error?: { message?: unknown } } | undefined;
+  const message = body?.error?.message;
+  return typeof message === "string" ? message.slice(0, 300) : null;
+}
+
 /**
  * SDK の例外を AiProviderError に変換する（07 §4.6 の表。具体的なものから順に instanceof で判定）。
- * メッセージには例外クラス名・HTTP ステータス・error.type だけを載せる（個人情報を連結しない。07 §4.8）
+ * メッセージには例外クラス名・HTTP ステータス・error.type と、API のエラー本文の message だけを載せる
+ * （個人情報を連結しない。07 §4.8）
  */
 export function toAiProviderError(error: unknown): AiProviderError {
   if (error instanceof AiProviderError) return error;
   if (error instanceof Anthropic.APIError) {
     const requestId = error.requestID ?? null;
-    const detail = `${error.constructor.name} status=${String(error.status)} type=${String(error.type)}`;
+    const apiMessage = apiErrorMessage(error);
+    const detail = `${error.constructor.name} status=${String(error.status)} type=${String(error.type)}${apiMessage ? ` message=${apiMessage}` : ""}`;
     const make = (reason: AiProviderError["reason"], retryable: boolean) =>
       new AiProviderError(reason, `anthropic: ${detail}`, requestId, retryable);
 

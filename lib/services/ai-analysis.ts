@@ -110,6 +110,8 @@ function logGeneration(
         readonly reason: string;
         readonly retryable: boolean;
         readonly requestId: string | null;
+        /** 失敗の詳細（AiProviderError.message。例外クラス・HTTP ステータス・API のエラー本文。氏名は含まない） */
+        readonly detail?: string | null;
       },
 ): void {
   const base = {
@@ -140,6 +142,7 @@ function logGeneration(
       reason: outcome.reason,
       retryable: outcome.retryable,
       aiRequestId: outcome.requestId,
+      detail: outcome.detail ?? null,
     });
   }
 }
@@ -203,7 +206,13 @@ export async function generateAiAnalysis(
       error instanceof AiProviderError
         ? { reason: error.reason, retryable: error.retryable, requestId: error.requestId }
         : { reason: AI_INTERNAL_ERROR, retryable: false, requestId: null };
-    logGeneration(log, { status: "failed", ...failure });
+    const detail =
+      error instanceof AiProviderError
+        ? error.message
+        : error instanceof Error
+          ? error.constructor.name
+          : typeof error;
+    logGeneration(log, { status: "failed", ...failure, detail });
     // 7. 失敗
     await recordFailure(ctx, resultId, failure.reason);
     throw generationFailed(failure.reason);
