@@ -1,16 +1,14 @@
 // 結合テスト用のデータ作成（08 §3.3.2）。本番と同じリポジトリ関数・Route Handler を通して作る
 import { POST as postSession } from "@/app/auth/session/route";
 import { createAdminAccount } from "@/lib/auth/admin-accounts";
-import { issueRespondentToken } from "@/lib/auth/respondent-token";
 import { createOrganization } from "@/lib/db/repositories/organizations-repository";
-import { saveAnswers, submitSession } from "@/lib/db/repositories/assessment-sessions-repository";
-import { registerRespondent } from "@/lib/db/repositories/respondents-repository";
 import type { AdminRole, RespondentKind } from "@/lib/db/types";
 import { adminAuth } from "@/lib/firebase/admin";
-import { getExamPage } from "@/lib/presentation/exam-pages";
 import type { AnswerMap, ChoiceCode, QuestionNo } from "@/lib/scoring/types";
 
 import { signInWithPassword } from "./emulator";
+import { getDocForTest } from "./firestore";
+import { completeViaApi } from "./respondent-api";
 import { callRoute, cookieHeaderFrom } from "./routes";
 
 export const TEST_PASSWORD = "test-password-1234";
@@ -84,7 +82,7 @@ export function cyclicAnswers(): AnswerMap {
 
 export const meta = { ipAddress: "203.0.113.10", userAgent: "vitest" } as const;
 
-/** リポジトリ関数で登録 → 20 ページ保存 → 送信する（受検者 API は M3 で追加する） */
+/** 受検者 API で登録 → 開始 → 20 ページ保存 → 送信する（08 §3.3.2: results に直接書かない） */
 export async function submitAnswerSet(
   org: TestOrganization,
   answers: AnswerMap,
@@ -95,32 +93,20 @@ export async function submitAnswerSet(
   readonly resultId: string;
   readonly usageLogId: string;
 }> {
-  const token = issueRespondentToken(new Date());
-  const registered = await registerRespondent({
-    organizationId: org.organizationId,
-    kind: options.kind ?? "applicant",
-    name: options.name ?? "テスト 太郎",
-    phoneNumber: "090-0000-0000",
-    occupationCode: 2,
-    diagnosisExperience: "first_time",
-    sessionTokenHash: token.tokenHash,
-    tokenExpiresAt: token.expiresAt,
-    meta,
-  });
-  for (let pageNo = 1; pageNo <= 20; pageNo += 1) {
-    const page: Record<number, ChoiceCode> = {};
-    for (const q of getExamPage(pageNo).questions) {
-      const v = answers[q.questionNo];
-      if (v !== undefined) page[q.questionNo] = v;
-    }
-    if (Object.keys(page).length === 0) continue;
-    await saveAnswers({
-      sessionId: registered.sessionId,
-      answers: page,
-      lastSavedPageNo: pageNo,
-      tokenExpiresAt: token.expiresAt,
-    });
-  }
-  const submitted = await submitSession({ sessionId: registered.sessionId, meta });
-  return { ...registered, resultId: submitted.resultId };
+  const { sessionId } = await completeViaApi(org.organizationId, answers, options);
+  // 受検者 API は respondentId・resultId を返さない（04 §4.5）ため、テストの観察用に文書から引く
+  const session = await getDocForTest<{ respondentId: string; resultId: string }>(
+    "assessmentSessions",
+    sessionId,
+  );
+  const respondent = await getDocForTest<{ usageLogId: string }>(
+    "respondents",
+    session!.respondentId,
+  );
+  return {
+    respondentId: session!.respondentId,
+    sessionId,
+    resultId: session!.resultId,
+    usageLogId: respondent!.usageLogId,
+  };
 }

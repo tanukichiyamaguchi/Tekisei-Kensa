@@ -8,7 +8,7 @@ import { RepositoryError } from "@/lib/db/errors";
 import { validateForWrite } from "@/lib/db/schemas/validate";
 import { API_ERRORS, ApiError } from "@/lib/services/errors";
 import { firebaseErrorCode, translateFirebaseError } from "@/lib/services/firebase-errors";
-import { handle, json, readJson } from "@/lib/services/http";
+import { formatIssuePath, handle, json, readJson } from "@/lib/services/http";
 import { startOfTokyoDay } from "@/lib/services/rate-limit";
 import { acceptInviteInputSchema, createSessionInputSchema } from "@/lib/services/schemas/auth";
 import {
@@ -73,6 +73,12 @@ describe("U-07 handle()", () => {
     const body = await bodyOf(res);
     expect(body.error.code).toBe("VALIDATION_ERROR");
     expect((body.error.details.issues as Array<{ path: string }>)[0]?.path).toBe("a");
+  });
+
+  it("issues の path は配列の添字を [n] で表す（04 §2.3 の例 answers[3].choiceCode）", () => {
+    expect(formatIssuePath(["answers", 3, "choiceCode"])).toBe("answers[3].choiceCode");
+    expect(formatIssuePath([0, "a"])).toBe("[0].a");
+    expect(formatIssuePath([])).toBe("");
   });
 
   it("成功時はハンドラの応答をそのまま返す", async () => {
@@ -155,6 +161,11 @@ describe("Firebase・リポジトリ例外の変換（04 §2.4、§8.4）", () =
       translateFirebaseError(new RepositoryError("ANSWERS_INCOMPLETE", "x", { missing: [2, 3] }))
         .details,
     ).toEqual({ missing: [2, 3] });
+    expect(
+      translateFirebaseError(
+        new RepositoryError("ANSWERS_INCOMPLETE", "x", { missing: [], invalid: [7] }),
+      ).details,
+    ).toEqual({ missing: [], invalid: [7] });
     const err = (() => {
       try {
         validateForWrite(z.strictObject({ a: z.number() }), { a: "secret-value" }, "x");

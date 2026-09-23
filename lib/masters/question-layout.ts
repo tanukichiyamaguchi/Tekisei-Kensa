@@ -31,3 +31,12 @@ export function stepAndPageOf(questionNo: number): { step: QuestionStep; page: Q
   }
   return { step: step as QuestionStep, page: page as QuestionPage };
 }
+
+/**
+ * 出題対象の設問番号 → 通しページ番号 1〜20（05 §5.3.1）。
+ * 設問文を読み込まずに求められるため、ブラウザ側（E-03 の遷移先）でも使う
+ */
+export function examPageNoOf(questionNo: number): number {
+  const { step, page } = stepAndPageOf(questionNo);
+  return (step - 1) * QUESTION_PAGE_LAYOUT.pageSizes.length + page;
+}

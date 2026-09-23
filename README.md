@@ -33,17 +33,25 @@
 
 ## 開発
 
-実装計画は [08 実装計画とテスト計画](docs/基本設計/08_実装計画とテスト計画.md) のマイルストーン（M0〜M6）に沿って進めます。現在は M2（Firestore のデータモデル・認証・アクセス層・運用スクリプト）まで実装済みです。受検者画面は M3、管理画面は M4 で追加します。
+実装計画は [08 実装計画とテスト計画](docs/基本設計/08_実装計画とテスト計画.md) のマイルストーン（M0〜M6）に沿って進めます。現在は M3（受検者 API・受検者画面・E2E）まで実装済みです。管理画面は M4 で追加します。
 
 必要なもの: Node.js 22 系（`.nvmrc`）、pnpm（`package.json` の `packageManager` の版。Corepack で有効化）、Java 21（Firebase Emulator の実行に必要）。
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm ci                    # lint・format・typecheck・マスタ再生成検査・単体テスト（CI と同じ）
+pnpm run ci                # lint・format・typecheck・マスタ再生成検査・単体テスト（CI と同じ）
 pnpm test:integration:emu  # Firebase Emulator を起動して結合テストを実行し、終了後に止める
 ```
 
-ローカルで管理 API を動かす手順（Emulator のみを使い、本番・検証の Firebase プロジェクトには接続しません）:
+E2E（Playwright。ビルド済みのアプリを Emulator の中で起動する。CI では PR に `run-e2e` ラベルを付けると `e2e` ワークフローが実行される）:
+
+```bash
+pnpm exec playwright install chromium   # 初回のみ
+pnpm build
+pnpm firebase emulators:exec --only auth,firestore --project demo-tekisei "pnpm seed:local && pnpm test:e2e"
+```
+
+ローカルで受検者画面・管理 API を動かす手順（Emulator のみを使い、本番・検証の Firebase プロジェクトには接続しません）:
 
 ```bash
 cp .env.example .env.local        # PDF_TOKEN_SECRET と SEED_OWNER_PASSWORD を埋める
@@ -52,11 +60,14 @@ pnpm seed:local                   # 組織 1・オーナー 1・管理者 1・�
 pnpm dev                          # http://localhost:3000
 ```
 
+受検者画面は `http://localhost:3000/exam?q={組織ID}&p=user`（既存スタッフ用は `p=executives`）から開きます。組織 ID は `pnpm seed:local` の出力に表示されます。
+
 | コマンド                    | 内容                                                                                    |
 | --------------------------- | --------------------------------------------------------------------------------------- |
 | `pnpm test`                 | 単体テスト（Vitest、`tests/unit/`。Firebase 不要）                                      |
 | `pnpm test:integration:emu` | 結合テスト（`tests/integration/`。Emulator の起動から停止まで行う）                     |
 | `pnpm test:integration`     | 結合テストのみ（`pnpm emulators` を別に起動しておく）                                   |
+| `pnpm test:e2e`             | E2E（`tests/e2e/`。Emulator の中で、`pnpm build` 済みのアプリに対して実行する）         |
 | `pnpm typecheck`            | TypeScript の型検査                                                                     |
 | `pnpm lint` / `pnpm format` | ESLint / Prettier の検査（`pnpm format:write` で整形）                                  |
 | `pnpm build`                | Next.js のビルド                                                                        |
@@ -81,6 +92,8 @@ Firebase プロジェクトは `tekisei-kensa-697c4` の 1 つだけで運用し
 - `lib/db/` — Firestore のデータアクセス層（文書型・書き込み前スキーマ・マッパー・リポジトリ）。基本設計 02
 - `lib/auth/` — セッション Cookie、カスタムクレーム、受検者・招待・PDF のトークン、管理者アカウント操作
 - `lib/services/` — API 共通処理（`handle()`、エラー、監査ログ、レート制限）と Route Handler の業務処理。基本設計 04
-- `app/` — Next.js（App Router）。M2 時点は `/auth/session`、`/auth/invite`、`/api/v1/admin/me` のみ
+- `app/` — Next.js（App Router）。受検者画面 `app/(respondent)/exam/**`、受検者 API `app/api/v1/respondent/**`、認証 `/auth/*`、管理者 API（M3 時点は `/api/v1/admin/me` のみ）
+- `components/respondent/` — 受検者画面の部品（基本設計 05 §3）
 - `firebase/` — Firebase の設定（`firebase.json`、ルール（全拒否）、インデックス）
+- `tests/` — 単体（`unit/`）、Emulator 上の結合（`integration/`）、Playwright の E2E（`e2e/`）
 - `scripts/` — マスタ生成と運用スクリプト（`create-owner`、`seed-local`、`set-admin-role`、`verify-firebase`）

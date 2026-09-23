@@ -218,8 +218,10 @@ export async function submitSession(
       answers = deps.assertAnswerMap(toAnswerMap(s.answers));
     } catch (error) {
       if (error instanceof InvalidAnswerMapError) {
+        // 値は入れず設問番号だけを渡す（04 §4.5 手順 3）
         throw new RepositoryError("ANSWERS_INCOMPLETE", "未回答の設問があります", {
           missing: [...error.missing],
+          invalid: error.invalid.map((i) => i.questionNo),
         });
       }
       throw error;

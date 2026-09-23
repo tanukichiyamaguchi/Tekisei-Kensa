@@ -8,6 +8,7 @@ import {
   getSessionByTokenHash,
 } from "@/lib/db/repositories/assessment-sessions-repository";
 import { getRespondentById } from "@/lib/db/repositories/respondents-repository";
+import type { AssessmentSession } from "@/lib/db/domain";
 import { docIdSchema } from "@/lib/db/schemas/values";
 import type { RespondentKind, SessionStatus } from "@/lib/db/types";
 import { API_ERRORS } from "@/lib/services/errors";
@@ -20,6 +21,8 @@ export interface RespondentSessionContext {
   readonly status: SessionStatus; // draft | submitted（draft 必須の判定は service が行う）
   readonly tokenExpiresAt: Date;
   readonly request: RequestMeta;
+  /** 手順 3 で取得した文書。進行状態の取得（04 §4.3）が追加の読み取りをせずに使う */
+  readonly session: AssessmentSession;
 }
 
 async function resolve(
@@ -53,6 +56,7 @@ async function resolve(
     status: session.status,
     tokenExpiresAt: session.tokenExpiresAt,
     request,
+    session,
   };
 }
 

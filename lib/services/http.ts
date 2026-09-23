@@ -49,10 +49,19 @@ export function empty(meta: RequestMeta, status = 204): NextResponse {
   });
 }
 
+/** zod の path を 04 §2.3 の表記（例 "answers[3].choiceCode"）にする */
+export function formatIssuePath(path: ReadonlyArray<PropertyKey>): string {
+  return path.reduce<string>((out, key) => {
+    if (typeof key === "number") return `${out}[${key}]`;
+    const name = String(key);
+    return out.length === 0 ? name : `${out}.${name}`;
+  }, "");
+}
+
 export function toApiError(e: unknown): ApiError {
   if (e instanceof ApiError) return e;
   if (e instanceof ZodError) {
-    const issues = e.issues.map((i) => ({ path: i.path.join("."), message: i.message }));
+    const issues = e.issues.map((i) => ({ path: formatIssuePath(i.path), message: i.message }));
     return new ApiError(422, "VALIDATION_ERROR", "入力内容に誤りがあります", { issues });
   }
   return translateFirebaseError(e);

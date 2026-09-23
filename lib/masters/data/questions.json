@@ -2,7 +2,7 @@
   "generatedFrom": ["docs/付録A_設問一覧.md", "lib/masters/question-layout.ts"],
   "sourceHash": {
     "docs/付録A_設問一覧.md": "sha256:6434bcdde60e50dbae51cb1dc4b476ab24960b115c0553c84b82fa2c4030cc54",
-    "lib/masters/question-layout.ts": "sha256:0496dfe3e38874592ef54194908ecfc9430e4e57dd9fa1e68b97bdbaa1a0464e"
+    "lib/masters/question-layout.ts": "sha256:a2cf8c6529f61f332fc3b8a97f50a4cc23c8a2761071b2b8430495cc753c9575"
   },
   "generatorVersion": "1",
   "scoringVersion": "1.0.0",
