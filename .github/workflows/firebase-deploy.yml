@@ -1,0 +1,42 @@
+# 01 §6.4 Firestore のルール（全拒否）と複合インデックスのデプロイ。手動実行のみ。
+# Firebase プロジェクトは 1 つ（tekisei-kensa-697c4）だけで運用する（10 K-13）。
+# GitHub Environment `production` に Secret `FIREBASE_CI_SERVICE_ACCOUNT_KEY`（CI 用サービスアカウント鍵 JSON。中身をそのまま、または Base64 化して登録）を置き、
+# 必須レビュアー（依頼主または運用責任者）を設定する。
+name: firebase-deploy
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production # 必須レビュアーの承認後に実行される
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: CI 用サービスアカウント鍵をファイルに書き出す（ジョブ終了時に破棄される一時領域）
+        env:
+          FIREBASE_CI_SERVICE_ACCOUNT_KEY: ${{ secrets.FIREBASE_CI_SERVICE_ACCOUNT_KEY }}
+        run: |
+          if [ -z "$FIREBASE_CI_SERVICE_ACCOUNT_KEY" ]; then
+            echo "Environment「production」に Secret FIREBASE_CI_SERVICE_ACCOUNT_KEY がありません"; exit 1; fi
+          # 鍵ファイルの JSON をそのまま登録した値と、Base64 化した値の両方を受け付ける（10 K-12）
+          key="${FIREBASE_CI_SERVICE_ACCOUNT_KEY#"${FIREBASE_CI_SERVICE_ACCOUNT_KEY%%[![:space:]]*}"}"
+          case "$key" in
+            "{"*) printf '%s' "$key" > "$RUNNER_TEMP/firebase-ci.json" ;;
+            *) printf '%s' "$key" | base64 -d > "$RUNNER_TEMP/firebase-ci.json" ;;
+          esac
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-ci.json" >> "$GITHUB_ENV"
+      - name: ルールとインデックスをデプロイ
+        run: pnpm firebase deploy --only firestore --project production --non-interactive
+      - name: 鍵ファイルを削除
+        if: always()
+        run: rm -f "$RUNNER_TEMP/firebase-ci.json"

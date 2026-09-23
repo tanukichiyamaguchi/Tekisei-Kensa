@@ -1,0 +1,11 @@
+rules_version = '2';
+
+// 適性検査システム: Cloud Storage は本フェーズでは使用しない（07 D07-21）。
+// 将来 PDF を保存する場合もサーバ（Admin SDK）からのみアクセスし、クライアントからは拒否する。
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

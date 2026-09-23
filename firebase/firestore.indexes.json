@@ -1,0 +1,314 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "results",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "isExcluded",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "scoringVersion",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "deletedAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "results",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "isExcluded",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "scoringVersion",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "deletedAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "teamCode",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "results",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "deletedAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "submittedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "results",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "respondentKind",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "deletedAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "submittedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "usageLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "registeredAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "usageLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "registeredAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "usageLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "respondentKind",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "registeredAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "usageLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "respondentKind",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "registeredAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "aiAnalyses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "resultId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "adminUsers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "deletedAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "organizations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "inviteTokenHash",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "deletedAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "auditLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "action",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "ipAddress",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "auditLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "aiAnalyses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "assessmentSessions",
+      "fieldPath": "answers",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "results",
+      "fieldPath": "traits",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "results",
+      "fieldPath": "compatibility",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "results",
+      "fieldPath": "aptitudes",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "results",
+      "fieldPath": "risks",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "results",
+      "fieldPath": "aptitudeTypeScores",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "results",
+      "fieldPath": "socialStyles",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "aiAnalyses",
+      "fieldPath": "output",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "aiAnalyses",
+      "fieldPath": "rawText",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "aiAnalyses",
+      "fieldPath": "usage",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "auditLogs",
+      "fieldPath": "details",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "auditLogs",
+      "fieldPath": "userAgent",
+      "indexes": []
+    }
+  ]
+}

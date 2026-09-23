@@ -7,21 +7,39 @@
     "node": ">=22.13 <23"
   },
   "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
     "lint": "eslint .",
     "format": "prettier --check .",
     "format:write": "prettier --write .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --project unit",
     "test:watch": "vitest --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:integration:emu": "pnpm firebase emulators:exec --only auth,firestore --project demo-tekisei \"pnpm test:integration\"",
+    "check-env": "tsx scripts/check-env.ts",
     "masters:generate": "tsx scripts/generate-masters.ts",
     "masters:check": "tsx scripts/generate-masters.ts --check",
+    "owner:create": "tsx scripts/create-owner.ts",
+    "admin:set-role": "tsx scripts/set-admin-role.ts",
+    "seed:local": "tsx scripts/seed-local.ts",
+    "firebase:verify": "tsx scripts/verify-firebase.ts",
+    "firebase": "firebase --config firebase/firebase.json",
+    "emulators": "pnpm firebase emulators:start --only auth,firestore --project demo-tekisei",
+    "emulators:persist": "pnpm firebase emulators:start --only auth,firestore --project demo-tekisei --import firebase/emulator-data --export-on-exit",
+    "firestore:deploy": "pnpm firebase deploy --only firestore",
     "ci": "pnpm lint && pnpm format && pnpm typecheck && pnpm masters:check && pnpm test"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@types/node": "^22.20.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@vitest/coverage-v8": "^5.0.1",
     "eslint": "^10.11.0",
+    "firebase-tools": "^15.30.2",
     "globals": "^17.12.0",
     "prettier": "^3.9.8",
     "tsx": "^4.23.15",
@@ -33,5 +51,13 @@
     "onlyBuiltDependencies": [
       "esbuild"
     ]
+  },
+  "dependencies": {
+    "firebase": "^12.19.0",
+    "firebase-admin": "^14.4.0",
+    "next": "^16.3.6",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "zod": "^4.6.5"
   }
 }

@@ -1,5 +1,5 @@
-# 01 §6.2 の ci.yml のうち M1 で実行できる部分（lint・format・typecheck・マスタ再生成検査・単体テスト）。
-# Firebase Emulator 上の結合テスト、build、バンドル検査は M2 で Next.js・Firebase の導入時に追加する。
+# 01 §6.2 の ci.yml。lint・format・型検査・マスタ再生成検査・単体テスト・Emulator 上の結合テスト・build・バンドル検査。
+# 実プロジェクト・実 API には接続しない（環境変数はすべてダミー。00 D-33）。
 name: ci
 on:
   pull_request:
@@ -24,6 +24,15 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
+      - uses: actions/setup-java@v4 # Firebase Emulator の実行に Java が必要（01 §6.2 の指定どおり 21。ローカルでも 21 で動作を確認済み）
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Emulator の JAR をキャッシュ（任意。初回はダウンロードされる）
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ hashFiles('pnpm-lock.yaml') }}
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm format
@@ -31,3 +40,43 @@ jobs:
       - name: マスタ生成物が付録と一致していることを確認（08 §7.6）
         run: pnpm masters:check
       - run: pnpm test
+      - name: Emulator 上の結合テスト（00 D-33）
+        run: pnpm test:integration:emu
+        env:
+          NEXT_PUBLIC_FIREBASE_API_KEY: demo-api-key
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: localhost
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: demo-tekisei
+          NEXT_PUBLIC_FIREBASE_APP_ID: demo-app-id
+          FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+          FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+          NEXT_PUBLIC_APP_BASE_URL: http://localhost:3000
+          AI_PROVIDER: stub
+          AI_MODEL: claude-opus-5
+          AI_PROMPT_VERSION: recruitment-v1
+          PDF_TOKEN_SECRET: dummy-pdf-token-secret-do-not-ship-0123456789
+      - name: ダミーのサービスアカウント鍵を作る（ブラウザ用バンドルへの混入検査用。実在の鍵ではない）
+        id: dummy_sa
+        run: |
+          json='{"project_id":"demo-tekisei","client_email":"dummy-service-account-do-not-ship@example.com","private_key":"dummy-service-account-do-not-ship"}'
+          echo "value=$(printf '%s' "$json" | base64 -w 0)" >> "$GITHUB_OUTPUT"
+      - name: build（環境変数はダミー。実 API・実プロジェクトには接続しない）
+        run: pnpm build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+          NEXT_PUBLIC_FIREBASE_API_KEY: demo-api-key
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: localhost
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: demo-tekisei
+          NEXT_PUBLIC_FIREBASE_APP_ID: demo-app-id
+          FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+          FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+          FIREBASE_SERVICE_ACCOUNT_KEY: ${{ steps.dummy_sa.outputs.value }}
+          AI_PROVIDER: stub
+          AI_MODEL: claude-opus-5
+          AI_PROMPT_VERSION: recruitment-v1
+          PDF_TOKEN_SECRET: dummy-pdf-token-secret-do-not-ship-0123456789
+      - name: サーバ専用の値がブラウザ用バンドルに含まれていないことを確認
+        run: |
+          for needle in dummy-pdf-token-secret-do-not-ship dummy-service-account-do-not-ship; do
+            if grep -R "$needle" .next/static >/dev/null 2>&1; then
+              echo "サーバ専用の値（$needle）がクライアントバンドルに混入しています"; exit 1; fi
+          done
