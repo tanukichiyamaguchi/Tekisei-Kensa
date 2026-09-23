@@ -10,7 +10,7 @@ import type {
   RespondentUpdatedDto,
   UsageLogItemDto,
 } from "@/lib/services/dto/admin";
-import type { ComparisonDto } from "@/lib/services/dto/result";
+import type { AiAnalysisDto, ComparisonDto } from "@/lib/services/dto/result";
 
 /** 04 §2.4 のエラー応答。未知のコードも落とさないよう code は string で受ける */
 export class AdminApiError extends Error {
@@ -74,7 +74,8 @@ async function errorFrom(res: Response): Promise<AdminApiError> {
   );
 }
 
-export async function adminFetch<T>(path: string, options: AdminFetchOptions): Promise<T> {
+/** 管理者 API への要求。通信断は NETWORK_ERROR、2xx 以外は AdminApiError（401・403 の画面遷移を含む） */
+async function adminRequest(path: string, options: AdminFetchOptions): Promise<Response> {
   let res: Response;
   try {
     res = await (options.fetchImpl ?? fetch)(path, {
@@ -107,6 +108,11 @@ export async function adminFetch<T>(path: string, options: AdminFetchOptions): P
     }
     throw error;
   }
+  return res;
+}
+
+export async function adminFetch<T>(path: string, options: AdminFetchOptions): Promise<T> {
+  const res = await adminRequest(path, options);
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
@@ -152,6 +158,60 @@ export function fetchComparison(
     method: "GET",
     signal,
   });
+}
+
+// ---- AI 解説（04 §5.9。06 §3.5.9）
+
+/** POST …/ai-analysis。同期方式のためブラウザ側のタイムアウトは設けない（04 の maxDuration に委ねる） */
+export function requestAiAnalysis(resultId: string): Promise<AiAnalysisDto> {
+  return adminFetch(`${admin}/results/${encodeURIComponent(resultId)}/ai-analysis`, {
+    method: "POST",
+  });
+}
+
+/** GET …/ai-analysis（ポーリング・通信断後の状態確認） */
+export function fetchAiAnalysis(resultId: string, signal?: AbortSignal): Promise<AiAnalysisDto> {
+  return adminFetch(`${admin}/results/${encodeURIComponent(resultId)}/ai-analysis`, {
+    method: "GET",
+    signal,
+  });
+}
+
+// ---- PDF（04 §5.10。06 §3.5.11）
+
+/** Content-Disposition の filename（04 §5.10 の result-{8 文字}-{mode}.pdf）。取れなければ既定名 */
+export function filenameFromDisposition(header: string | null, fallback: string): string {
+  const match = header ? /filename="([^"]+)"/.exec(header) : null;
+  return match?.[1] ?? fallback;
+}
+
+export interface PdfDownload {
+  readonly blob: Blob;
+  readonly filename: string;
+}
+
+/** GET …/pdf。応答（application/pdf）を Blob で返す。ブラウザ側のタイムアウトは設けない（maxDuration 120 秒） */
+export async function downloadPdf(
+  resultId: string,
+  params: { readonly mode: "full" | "restricted"; readonly scope: ComparisonScope | null },
+  testHooks: Pick<AdminFetchOptions, "fetchImpl" | "navigate"> = {},
+): Promise<PdfDownload> {
+  const query = new URLSearchParams({ mode: params.mode });
+  if (params.scope) {
+    query.set("scope", params.scope.kind);
+    if (params.scope.kind === "team") query.set("teamCode", params.scope.teamCode);
+  }
+  const res = await adminRequest(
+    `${admin}/results/${encodeURIComponent(resultId)}/pdf?${query.toString()}`,
+    { method: "GET", ...testHooks },
+  );
+  return {
+    blob: await res.blob(),
+    filename: filenameFromDisposition(
+      res.headers.get("Content-Disposition"),
+      `result-${resultId.slice(0, 8)}-${params.mode}.pdf`,
+    ),
+  };
 }
 
 // ---- 回答一覧

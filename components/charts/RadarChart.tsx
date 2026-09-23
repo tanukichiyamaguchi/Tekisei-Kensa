@@ -3,7 +3,9 @@
 // 読み込み中は同じ大きさの空枠を出してレイアウトのずれを防ぐ
 import type { ApexOptions } from "apexcharts";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useContext, useEffect, useId, useMemo, useRef } from "react";
+
+import { PrintReadyContext } from "./print-ready-context";
 
 import type { RadarSeries } from "@/lib/presentation/radar-options";
 
@@ -29,8 +31,14 @@ export function RadarChart(props: RadarChartProps) {
   useEffect(() => {
     mountedRef.current = onMounted;
   }, [onMounted]);
-  const hasMounted = onMounted !== undefined;
-  const fireMounted = useCallback(() => mountedRef.current?.(), []);
+  // 印刷用ページ（07 §9.6）では PrintReadyProvider に描画完了を知らせる
+  const printReady = useContext(PrintReadyContext);
+  const chartId = useId();
+  const hasMounted = onMounted !== undefined || printReady !== null;
+  const fireMounted = useCallback(() => {
+    mountedRef.current?.();
+    printReady?.notifyMounted(chartId);
+  }, [printReady, chartId]);
   const options = useMemo(
     () => buildOptions(hasMounted ? fireMounted : undefined),
     // optionsKey が変わったときだけ作り直す（buildOptions は呼び出し側で毎回作られるため依存に含めない）

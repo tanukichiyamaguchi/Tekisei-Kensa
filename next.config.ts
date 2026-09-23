@@ -50,6 +50,11 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   // Admin SDK と Chromium はサーバ専用の外部パッケージとしてバンドルしない（01 §5.2）
   serverExternalPackages: ["firebase-admin", "puppeteer-core", "@sparticuz/chromium"],
+  // @sparticuz/chromium は実行時に bin/ の圧縮済み Chromium を展開する。import で到達しないため PDF の関数に明示的に含める
+  // （07 §9.2、08 H-13。関数サイズは Vercel のビルドログで確認する）
+  outputFileTracingIncludes: {
+    "/api/v1/admin/results/[resultId]/pdf": ["./node_modules/@sparticuz/chromium/bin/**"],
+  },
   headers: async () => [
     { source: "/(.*)", headers: securityHeaders },
     { source: "/admin/results/:resultId/print", headers: printPageHeaders },
