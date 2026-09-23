@@ -87,7 +87,7 @@ describe("U-08 validateServerEnv", () => {
     fails({ ...LOCAL, FIREBASE_AUTH_EMULATOR_HOST: undefined }, /両方/);
   });
   it("サービスアカウントが Base64 の JSON でない・項目不足・project_id 不一致で失敗", () => {
-    fails({ ...PRODUCTION, FIREBASE_SERVICE_ACCOUNT_KEY: "not-base64-json" }, /Base64/);
+    fails({ ...PRODUCTION, FIREBASE_SERVICE_ACCOUNT_KEY: "not-base64-json" }, /JSON/);
     fails(
       {
         ...PRODUCTION,
@@ -160,6 +160,11 @@ describe("validateFirebaseAdminEnv（スクリプト・Admin SDK 用の狭い検
         FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1:9099",
       }),
     ).not.toThrow();
+  });
+  it("parseServiceAccount は JSON をそのまま貼り付けた値（前後の空白・改行を含む）も受け付ける", () => {
+    const raw = `\n  ${Buffer.from(serviceAccount("p"), "base64").toString("utf8")}\n`;
+    expect(parseServiceAccount(raw).project_id).toBe("p");
+    expect(() => parseServiceAccount("{ not json")).toThrow(EnvError);
   });
   it("parseServiceAccount は 3 項目を返す", () => {
     expect(parseServiceAccount(serviceAccount("p"))).toEqual({

@@ -3,7 +3,7 @@
 #   task = create-owner … pnpm owner:create（組織と初期オーナーの作成。招待リンクはログに出さない）
 # Firebase プロジェクトは 1 つ（tekisei-kensa-697c4）だけで運用する（10 K-13）。
 # GitHub Environment `production` に次を置き、必須レビュアーを設定する:
-#   Secret   FIREBASE_SERVICE_ACCOUNT_KEY … アプリ用サービスアカウント鍵 JSON の Base64（01 §4.6。Vercel と同じ値）
+#   Secret   FIREBASE_SERVICE_ACCOUNT_KEY … アプリ用サービスアカウント鍵 JSON（中身をそのまま、または Base64 化して登録。Vercel と同じ鍵）
 #   Variable NEXT_PUBLIC_FIREBASE_PROJECT_ID、NEXT_PUBLIC_FIREBASE_API_KEY、NEXT_PUBLIC_APP_BASE_URL
 name: firebase-ops
 on:

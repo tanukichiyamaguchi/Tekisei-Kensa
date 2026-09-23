@@ -73,13 +73,21 @@ function issuesOf(error: z.ZodError): string {
   return error.issues.map((i) => i.path.join(".")).join(", ");
 }
 
-/** Base64 の JSON をサービスアカウントとして復号・検証する。値そのものはログ・例外に出さない */
-export function parseServiceAccount(base64: string): ServiceAccount {
+/**
+ * サービスアカウント鍵を復号・検証する。Base64 化した JSON（01 §4.6）と、ダウンロードした JSON をそのまま貼り付けた値の
+ * 両方を受け付ける（10 K-12: 依頼主はローカルで Base64 化できないため）。値そのものはログ・例外に出さない
+ */
+export function parseServiceAccount(value: string): ServiceAccount {
+  const trimmed = value.trim();
   let json: unknown;
   try {
-    json = JSON.parse(Buffer.from(base64, "base64").toString("utf8"));
+    json = JSON.parse(
+      trimmed.startsWith("{") ? trimmed : Buffer.from(trimmed, "base64").toString("utf8"),
+    );
   } catch {
-    throw new EnvError("FIREBASE_SERVICE_ACCOUNT_KEY を Base64 の JSON として読めません");
+    throw new EnvError(
+      "FIREBASE_SERVICE_ACCOUNT_KEY を JSON（そのまま、または Base64 化したもの）として読めません",
+    );
   }
   const parsed = serviceAccountSchema.safeParse(json);
   if (!parsed.success) {
