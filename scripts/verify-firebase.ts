@@ -1,10 +1,11 @@
-// 検証用 Firebase プロジェクトに対する実装時確認（08 D08-33、R-22、09 §6.4）。pnpm firebase:verify
+// 実 Firebase プロジェクトに対する実装時確認（08 D08-33、R-22、09 §6.4）。pnpm firebase:verify
 //
-//   pnpm firebase:verify --confirm-project <検証用プロジェクト ID>
+//   pnpm firebase:verify --confirm-project <プロジェクト ID>
 //
 // Emulator と本番の挙動差（09 §6.4 の 1・2・3・4・6・7・23・24）を、実プロジェクトで 1 回確認する。
 // 一時的な Auth ユーザー 1 件と一時コレクション `_verifyFirebase` の文書を作り、終了時に削除する。
-// 本番プロジェクトには実行しない（依頼主または運用責任者が検証用プロジェクトに対して実行する）。
+// プロジェクトは 1 つだけで運用するため（10 K-13）本番プロジェクトに対して実行する。既存のデータには触れない。
+// 通常は GitHub Actions の firebase-ops（task = verify）から実行する（10 K-12）。
 import { randomBytes } from "node:crypto";
 import { parseArgs } from "node:util";
 
@@ -434,7 +435,7 @@ async function main(): Promise<void> {
   const emulator = Boolean(env.FIRESTORE_EMULATOR_HOST);
   if (!emulator && values["confirm-project"] !== env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) {
     throw new UsageError(
-      `接続先のプロジェクト ID を --confirm-project で指定してください（現在の接続先: ${env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}）。本番プロジェクトには実行しないでください`,
+      `接続先のプロジェクト ID を --confirm-project で指定してください（現在の接続先: ${env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}）`,
     );
   }
   const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;

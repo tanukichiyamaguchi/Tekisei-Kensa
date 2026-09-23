@@ -1,18 +1,14 @@
 # 運用スクリプトを GitHub Actions で実行する（10 K-12。依頼主はローカル環境を使わないため）。手動実行のみ。
-#   task = verify       … pnpm firebase:verify（実装時確認。検証用プロジェクトのみ）
+#   task = verify       … pnpm firebase:verify（実装時確認。一時ユーザー・一時文書を作り、終了時に削除する）
 #   task = create-owner … pnpm owner:create（組織と初期オーナーの作成。招待リンクはログに出さない）
-# GitHub Environments `staging` / `production` に次を置く（production には必須レビュアーを設定する）:
+# Firebase プロジェクトは 1 つ（tekisei-kensa-697c4）だけで運用する（10 K-13）。
+# GitHub Environment `production` に次を置き、必須レビュアーを設定する:
 #   Secret   FIREBASE_SERVICE_ACCOUNT_KEY … アプリ用サービスアカウント鍵 JSON の Base64（01 §4.6。Vercel と同じ値）
 #   Variable NEXT_PUBLIC_FIREBASE_PROJECT_ID、NEXT_PUBLIC_FIREBASE_API_KEY、NEXT_PUBLIC_APP_BASE_URL
 name: firebase-ops
 on:
   workflow_dispatch:
     inputs:
-      target:
-        description: 適用先
-        type: choice
-        options: [staging, production]
-        required: true
       task:
         description: 実行する処理
         type: choice
@@ -47,13 +43,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: firebase-ops-${{ inputs.target }}
+  group: firebase-ops
   cancel-in-progress: false
 
 jobs:
   run:
     runs-on: ubuntu-latest
-    environment: ${{ inputs.target }} # production には必須レビュアーを設定
+    environment: production # 必須レビュアーの承認後に実行される
     timeout-minutes: 15
     env:
       NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ vars.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
@@ -68,7 +64,7 @@ jobs:
             if [ -z "${!name}" ]; then missing="$missing $name"; fi
           done
           if [ -n "$missing" ]; then
-            echo "Environment「${{ inputs.target }}」に次の設定がありません:$missing"; exit 1; fi
+            echo "Environment「production」に次の設定がありません:$missing"; exit 1; fi
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
@@ -79,8 +75,6 @@ jobs:
       - name: 実装時確認（pnpm firebase:verify）
         if: inputs.task == 'verify'
         run: |
-          if [ "${{ inputs.target }}" != "staging" ]; then
-            echo "firebase:verify は検証用プロジェクト（staging）でのみ実行します"; exit 1; fi
           args=(--confirm-project "$NEXT_PUBLIC_FIREBASE_PROJECT_ID")
           if [ -n "$NEXT_PUBLIC_APP_BASE_URL" ]; then args+=(--referer "${NEXT_PUBLIC_APP_BASE_URL%/}/"); fi
           pnpm -s firebase:verify "${args[@]}"
