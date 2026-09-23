@@ -4,6 +4,9 @@ import { teamLabel } from "./comparison-scope-params";
 import { POSITION_DEFINITIONS } from "@/lib/masters/texts";
 import type { ComparisonResult, ComparisonScope, PositionKey } from "@/lib/scoring/types";
 
+/** 偏差値を立ち位置の近くに小さく表示する（06 D06-10。依頼主が不要と判断したら false にする） */
+export const SHOW_DEVIATION_SCORE = true;
+
 export interface PositionView {
   readonly key: PositionKey;
   readonly label: string;
