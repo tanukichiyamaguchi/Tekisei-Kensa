@@ -1,0 +1,123 @@
+{
+  "generatedFrom": ["docs/付録C_表示文言マスタ.md", "scripts/lib/labels.ts"],
+  "sourceHash": {
+    "docs/付録C_表示文言マスタ.md": "sha256:dbb79f98455ad0ff47ff56ff1154cd1d505f75dcf3c97c29b51ad9f408ef5a89",
+    "scripts/lib/labels.ts": "sha256:f1ca930f176821e4491f5bfa922b4404d70ea5b7c25af689bdc7ca0016c4eae9"
+  },
+  "generatorVersion": "1",
+  "kind": "trait_highlights",
+  "items": [
+    {
+      "key": "cooperativeness",
+      "highPositive": "好印象、性善説、リベラリスト",
+      "highNegative": "八方美人、NOが言えない、警戒心の欠如",
+      "lowPositive": "意思が明確、ストレスをためない",
+      "lowNegative": "打算的、警戒心が強い"
+    },
+    {
+      "key": "adaptability",
+      "highPositive": "組織に順応、合理的、客観的",
+      "highNegative": "個性が弱い、主体性がない",
+      "lowPositive": "個性が強い、変化を恐れない",
+      "lowNegative": "自己主張が激しい、自己中心的"
+    },
+    {
+      "key": "deliberateness",
+      "highPositive": "冷静、思慮深い、態度がぶれない",
+      "highNegative": "優柔不断、決定に時間がかかる",
+      "lowPositive": "判断が早い、歯切れが良い",
+      "lowNegative": "即断即決、早とちり、朝令暮改、安請け合い"
+    },
+    {
+      "key": "humility",
+      "highPositive": "控えめな態度",
+      "highNegative": "劣等感が強い、卑屈な行動や態度",
+      "lowPositive": "自信家、積極的",
+      "lowNegative": "発言が強気、態度が大きい"
+    },
+    {
+      "key": "reflectiveness",
+      "highPositive": "反省意識が高い、失敗を糧にする、手堅い",
+      "highNegative": "疑い深い、人を信じない",
+      "lowPositive": "楽観的で明るい",
+      "lowNegative": "詰めが甘い、ボカミスを繰り返す"
+    },
+    {
+      "key": "rule_compliance",
+      "highPositive": "決まりを守る、集団行動を好む",
+      "highNegative": "細かいマニュアルが必要、自分で判断出来ない",
+      "lowPositive": "枠にとらわれない発想、自己裁量ができる",
+      "lowNegative": "周りを無視する、ルールを守らない"
+    },
+    {
+      "key": "persistence",
+      "highPositive": "生真面目、粘り強い",
+      "highNegative": "ストレスが強い",
+      "lowPositive": "割り切った考え方、思いつめない",
+      "lowNegative": "最後の詰めが甘い、粘りがない"
+    },
+    {
+      "key": "emotionality",
+      "highPositive": "喜怒哀楽がはっきりしていて気持ちに素直",
+      "highNegative": "情緒のブレが大きい",
+      "lowPositive": "冷静沈着で慌てない",
+      "lowNegative": "クールで考えていることがわからない"
+    },
+    {
+      "key": "sensitivity",
+      "highPositive": "繊細で感性が高い、気配りが出来る",
+      "highNegative": "デリケートで神経過敏",
+      "lowPositive": "大胆で大らか",
+      "lowNegative": "図々しく気配りが出来ない"
+    },
+    {
+      "key": "self_esteem",
+      "highPositive": "努力家で愛想が高く芯が強い",
+      "highNegative": "現状に満足できず不満を持つ、視野が狭い",
+      "lowPositive": "客観的で視野が広く合理主義",
+      "lowNegative": "妥協的、物事の捉え方が浅い"
+    },
+    {
+      "key": "innovativeness",
+      "highPositive": "気さく、対応が早い",
+      "highNegative": "勘違いや早とちりが多い、心変わりしやすい",
+      "lowPositive": "周りに流されない、確実で計画的",
+      "lowNegative": "保守的、決断が遅い"
+    },
+    {
+      "key": "activeness",
+      "highPositive": "骨惜しみしない、効率よく処理する、自信家",
+      "highNegative": "せっかち、卑屈",
+      "lowPositive": "おっとりした雰囲気",
+      "lowNegative": "要領が悪い、動きが鈍い"
+    },
+    {
+      "key": "positiveness",
+      "highPositive": "責任感とプロ意識が高い、自立心が強い",
+      "highNegative": "自己主張が強く攻撃的",
+      "lowPositive": "優しい、敵を作らない",
+      "lowNegative": "責任感や意欲が低い、自他ともに甘い、依存的"
+    },
+    {
+      "key": "leadership",
+      "highPositive": "グループリーダータイプ、コミュニケーション上手",
+      "highNegative": "支配的、プライドが高い、饒舌",
+      "lowPositive": "従順",
+      "lowNegative": "受け身が強い者につく、口数が少ない"
+    },
+    {
+      "key": "creativity",
+      "highPositive": "オリジナリティを出す、任されることを好む",
+      "highNegative": "我が強い、上から目線を嫌い反発する",
+      "lowPositive": "上司の指示に対して素直",
+      "lowNegative": "受け身で責任を回避したがる"
+    },
+    {
+      "key": "communication",
+      "highPositive": "華やかで明るく積極的、対人接触を好む",
+      "highNegative": "自己顕示欲が強い、裏方仕事を嫌う",
+      "lowPositive": "与えられたものを受け入れ、不平不満を言わない、出しゃばらない",
+      "lowNegative": "地味、人嫌い"
+    }
+  ]
+}

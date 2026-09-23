@@ -1,0 +1,288 @@
+{
+  "generatedFrom": ["docs/付録C_表示文言マスタ.md", "scripts/lib/labels.ts"],
+  "sourceHash": {
+    "docs/付録C_表示文言マスタ.md": "sha256:dbb79f98455ad0ff47ff56ff1154cd1d505f75dcf3c97c29b51ad9f408ef5a89",
+    "scripts/lib/labels.ts": "sha256:f1ca930f176821e4491f5bfa922b4404d70ea5b7c25af689bdc7ca0016c4eae9"
+  },
+  "generatorVersion": "1",
+  "kind": "trait_details",
+  "categories": [
+    { "key": "interpersonal", "label": "対人関係", "sortOrder": 1 },
+    { "key": "behavior", "label": "行動特性", "sortOrder": 2 },
+    { "key": "emotion", "label": "情緒及び精神面", "sortOrder": 3 },
+    { "key": "work", "label": "業務対応", "sortOrder": 4 },
+    { "key": "environment", "label": "環境適応", "sortOrder": 5 }
+  ],
+  "items": [
+    {
+      "category": "interpersonal",
+      "sortOrder": 1,
+      "text": "対人接触を好み、人には愛想良く接することができる外向的な性質である。",
+      "appliesTo": ["attendant", "generalist", "receptionist", "promoter", "actor", "freelancer"]
+    },
+    {
+      "category": "interpersonal",
+      "sortOrder": 2,
+      "text": "指導者意識と自負心が強く、指示を受けるより自分で判断したい。",
+      "appliesTo": ["pioneer", "controller", "actor", "professional", "creator", "generalist"]
+    },
+    {
+      "category": "interpersonal",
+      "sortOrder": 3,
+      "text": "人の面倒をよく見ることができ、自主的に行動することができる。",
+      "appliesTo": ["attendant", "generalist", "conductor", "receptionist", "actor", "freelancer"]
+    },
+    {
+      "category": "interpersonal",
+      "sortOrder": 4,
+      "text": "地味でおとなしい性質。対人接触は受身になりやすく緊張することが多い。",
+      "appliesTo": ["specialist", "scientist", "creator", "artist", "reviewer", "follower"]
+    },
+    {
+      "category": "interpersonal",
+      "sortOrder": 5,
+      "text": "指導者的立場をとるよりも人の意見を素直に聞こうとする意識が強い。",
+      "appliesTo": ["follower", "generalist", "scientist", "reviewer", "receptionist", "conductor"]
+    },
+    {
+      "category": "interpersonal",
+      "sortOrder": 6,
+      "text": "話すよりも聞き手になりやすく依存的ではにかみ屋。自己主張が苦手。",
+      "appliesTo": ["follower", "specialist", "reviewer", "scientist", "artist", "creator"]
+    },
+    {
+      "category": "interpersonal",
+      "sortOrder": 7,
+      "text": "引っ込み思案で主張することを嫌い、能動的に動くことをしない。",
+      "appliesTo": ["specialist", "follower", "scientist", "artist", "reviewer", "creator"]
+    },
+    {
+      "category": "interpersonal",
+      "sortOrder": 8,
+      "text": "外向的であるが目立つことを好まず、初対面では大人しく見られがちである。",
+      "appliesTo": ["generalist", "scientist", "reviewer", "conductor", "actor", "artist"]
+    },
+    {
+      "category": "behavior",
+      "sortOrder": 1,
+      "text": "計画性があり、失敗に対しての反省意識も高く、同じミスを繰り返しにくい。",
+      "appliesTo": ["professional", "generalist", "specialist", "follower", "controller", "scientist"]
+    },
+    {
+      "category": "behavior",
+      "sortOrder": 2,
+      "text": "几帳面で用心深く熟慮的。物事を深読みしようとして考えすぎることが多い。",
+      "appliesTo": ["scientist", "specialist", "follower", "generalist", "professional", "reviewer"]
+    },
+    {
+      "category": "behavior",
+      "sortOrder": 3,
+      "text": "気さくな性質で人と打ち解けるのが早い。即断即決するため後悔も多い。",
+      "appliesTo": ["attendant", "promoter", "actor", "receptionist", "freelancer", "generalist"]
+    },
+    {
+      "category": "behavior",
+      "sortOrder": 4,
+      "text": "思考力があり物事をいろいろな角度から深く考え、落ち着いて行動する。",
+      "appliesTo": ["scientist", "specialist", "follower", "controller", "professional", "generalist"]
+    },
+    {
+      "category": "behavior",
+      "sortOrder": 5,
+      "text": "決断力がありじっくり考えるより行動を優先する。臨機応変で好奇心が強い。",
+      "appliesTo": ["attendant", "promoter", "pioneer", "actor", "conductor", "freelancer"]
+    },
+    {
+      "category": "behavior",
+      "sortOrder": 6,
+      "text": "慎重すぎて自分で決断しない。気難しい面があり優柔不断な要素が強い。",
+      "appliesTo": ["specialist", "scientist", "follower", "reviewer", "creator", "artist"]
+    },
+    {
+      "category": "behavior",
+      "sortOrder": 7,
+      "text": "慎重で考えすぎることが多く、長い時間をかけてから結論を出す事が多い。",
+      "appliesTo": ["specialist", "scientist", "professional", "reviewer", "creator", "generalist"]
+    },
+    {
+      "category": "emotion",
+      "sortOrder": 1,
+      "text": "楽観的で開放的。些細な事を気にせず明るいほうに考えることが多い。",
+      "appliesTo": ["attendant", "generalist", "freelancer", "receptionist", "promoter", "actor"]
+    },
+    {
+      "category": "emotion",
+      "sortOrder": 2,
+      "text": "繊細な一面があり、周りの人の行動が気になることが多い。気配りができる。",
+      "appliesTo": ["attendant", "generalist", "follower", "controller", "reviewer"]
+    },
+    {
+      "category": "emotion",
+      "sortOrder": 3,
+      "text": "開放的で明るい方に考え、頭の切り替えが早いため悩みが継続しにくい。",
+      "appliesTo": ["attendant", "promoter", "receptionist", "actor", "freelancer"]
+    },
+    {
+      "category": "emotion",
+      "sortOrder": 4,
+      "text": "明るく素直な性質で細かいことにこだわらず穏やかな印象を人に与える。",
+      "appliesTo": ["attendant", "generalist", "receptionist", "promoter", "freelancer", "conductor"]
+    },
+    {
+      "category": "emotion",
+      "sortOrder": 5,
+      "text": "感受性が高く頭の回転も速い。気を回しすぎることがありやや神経質で心配性。",
+      "appliesTo": ["specialist", "scientist", "reviewer", "creator", "artist", "pioneer"]
+    },
+    {
+      "category": "emotion",
+      "sortOrder": 6,
+      "text": "問題提起する感覚を持ち、物事にまじめに取り組むためストレスを感じやすい。",
+      "appliesTo": ["scientist", "specialist", "professional", "actor", "controller"]
+    },
+    {
+      "category": "emotion",
+      "sortOrder": 7,
+      "text": "繊細で神経質な傾向が強く、考えすぎて素直になれないことがある。",
+      "appliesTo": ["controller", "specialist", "reviewer", "scientist", "creator"]
+    },
+    {
+      "category": "emotion",
+      "sortOrder": 8,
+      "text": "物事を真剣に受け止める性質であり悩みを持つとストレスをためやすい。",
+      "appliesTo": ["professional", "actor", "specialist", "scientist", "generalist"]
+    },
+    {
+      "category": "emotion",
+      "sortOrder": 9,
+      "text": "悲観的に考えがちで悩みを持ちやすく、圧迫感を感じ憂鬱な心理状態にある。",
+      "appliesTo": ["artist", "specialist", "reviewer", "scientist", "creator"]
+    },
+    {
+      "category": "emotion",
+      "sortOrder": 10,
+      "text": "楽天的に考えることが多くストレスがたまりにくい。開放的な心理状態である。",
+      "appliesTo": ["attendant", "receptionist", "promoter", "actor", "generalist", "conductor"]
+    },
+    {
+      "category": "work",
+      "sortOrder": 1,
+      "text": "非常に活動的で自信が強いため、人に任せず自分だけで動くことがある。",
+      "appliesTo": ["attendant", "pioneer", "professional", "actor"]
+    },
+    {
+      "category": "work",
+      "sortOrder": 2,
+      "text": "目標達成に対する意識が高い。責任感が強く負けず嫌い。積極的で根性あり。",
+      "appliesTo": ["professional", "controller", "pioneer", "generalist", "conductor"]
+    },
+    {
+      "category": "work",
+      "sortOrder": 3,
+      "text": "人より先んじて行動することを好まず自分のペースを守って動くことが多い。",
+      "appliesTo": ["specialist", "scientist", "follower", "creator"]
+    },
+    {
+      "category": "work",
+      "sortOrder": 4,
+      "text": "厳しさを表に出さないことが多いが仕事に対する意欲があり前向きに行動する。",
+      "appliesTo": ["generalist", "attendant", "actor", "promoter"]
+    },
+    {
+      "category": "work",
+      "sortOrder": 5,
+      "text": "自信を持っており仕事の処理も早い。体を動かすことが好きである。",
+      "appliesTo": ["attendant", "professional", "actor", "conductor"]
+    },
+    {
+      "category": "work",
+      "sortOrder": 6,
+      "text": "厳しい仕事よりも安定した職場環境を好む。",
+      "appliesTo": ["specialist", "follower", "generalist", "scientist"]
+    },
+    {
+      "category": "work",
+      "sortOrder": 7,
+      "text": "頭で納得してから行動しようとするため動く前に理屈っぽくなることがある。",
+      "appliesTo": ["scientist", "specialist", "follower", "reviewer", "artist"]
+    },
+    {
+      "category": "work",
+      "sortOrder": 8,
+      "text": "温順で優しく、人を叱るのが苦手。自他に対し甘く、事なかれ主義になりがち。",
+      "appliesTo": ["generalist", "attendant", "follower", "freelancer", "artist"]
+    },
+    {
+      "category": "work",
+      "sortOrder": 9,
+      "text": "主張せず他に依存する意識が強い。",
+      "appliesTo": ["follower", "specialist", "receptionist", "attendant"]
+    },
+    {
+      "category": "work",
+      "sortOrder": 10,
+      "text": "プロ意識が強く、独断専行的な要素がある。",
+      "appliesTo": ["controller", "pioneer", "actor", "creator"]
+    },
+    {
+      "category": "work",
+      "sortOrder": 11,
+      "text": "自分に厳しく他人には攻撃的。",
+      "appliesTo": ["controller", "actor", "pioneer", "professional"]
+    },
+    {
+      "category": "environment",
+      "sortOrder": 1,
+      "text": "集団内でのバランス感覚に優れ、周りを考えながら自己の主張ができる。",
+      "appliesTo": ["generalist", "attendant", "conductor", "promoter", "actor"]
+    },
+    {
+      "category": "environment",
+      "sortOrder": 2,
+      "text": "自己実現への達成意欲が高く粘り強い。集団依存せず個としての行動ができる。",
+      "appliesTo": ["generalist", "attendant", "conductor", "promoter", "actor"]
+    },
+    {
+      "category": "environment",
+      "sortOrder": 3,
+      "text": "義理堅く忠誠心があり従順。周りの意思を尊重しながら行動できる。",
+      "appliesTo": ["follower", "generalist", "attendant", "scientist", "receptionist"]
+    },
+    {
+      "category": "environment",
+      "sortOrder": 4,
+      "text": "環境に順応しやすく、組織を重視し現実主義。客観的かつ冷静な判断ができる。",
+      "appliesTo": ["generalist", "scientist", "controller", "specialist", "conductor"]
+    },
+    {
+      "category": "environment",
+      "sortOrder": 5,
+      "text": "敏感な性質を持ち不満が多く現状否定的。人に合わせることを嫌う。芯が強い。",
+      "appliesTo": ["artist", "specialist", "pioneer", "freelancer", "reviewer"]
+    },
+    {
+      "category": "environment",
+      "sortOrder": 6,
+      "text": "自己主張がはっきりしており、自他の区別が明確。集団より単独が得意。",
+      "appliesTo": ["creator", "actor", "professional", "pioneer", "freelancer"]
+    },
+    {
+      "category": "environment",
+      "sortOrder": 7,
+      "text": "現状肯定的・妥協的に物事を考え、周りを意識して意思決定することが多い。",
+      "appliesTo": ["generalist", "attendant", "conductor", "follower", "receptionist"]
+    },
+    {
+      "category": "environment",
+      "sortOrder": 8,
+      "text": "環境に適応することができ、自分の目標に取り組む意欲・粘り強さがある。",
+      "appliesTo": ["professional", "generalist", "pioneer", "actor", "scientist"]
+    },
+    {
+      "category": "environment",
+      "sortOrder": 9,
+      "text": "個人主義的意識が強く、不満が多い。厳しさと警戒心をもって人と接する。",
+      "appliesTo": ["pioneer", "artist", "freelancer", "specialist", "reviewer"]
+    }
+  ]
+}

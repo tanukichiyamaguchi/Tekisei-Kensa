@@ -1,0 +1,51 @@
+{
+  "generatedFrom": ["docs/付録C_表示文言マスタ.md", "scripts/lib/labels.ts"],
+  "sourceHash": {
+    "docs/付録C_表示文言マスタ.md": "sha256:dbb79f98455ad0ff47ff56ff1154cd1d505f75dcf3c97c29b51ad9f408ef5a89",
+    "scripts/lib/labels.ts": "sha256:f1ca930f176821e4491f5bfa922b4404d70ea5b7c25af689bdc7ca0016c4eae9"
+  },
+  "generatorVersion": "1",
+  "kind": "classifications",
+  "axes": {
+    "emotion": { "suppress": "感情表現を抑える", "express": "感情を表す" },
+    "assertion": { "listen": "意見を聞く", "assert": "意見を主張する" }
+  },
+  "items": [
+    {
+      "socialStyleKey": "driving",
+      "labelJa": "実行型",
+      "axisPosition": { "emotion": "suppress", "assertion": "assert" },
+      "characterOrder": ["pioneer", "controller", "actor", "reviewer"],
+      "characterNamesHiragana": ["ひなた", "なつき", "まい", "えりか"],
+      "description": "Drivingタイプは、目標を掲げて突き進み、周りを引っ張っていく力があります。新しい取り組みや変化を恐れず、リーダーシップを発揮して成果を出すことに喜びを感じます。\n組織にとっては成長を加速させる存在ですが、一方で強引に見られたり、協調性に欠ける印象を与えてしまうこともあります。周囲の意見を取り入れながら進めると、リーダーとしてより信頼されるタイプです。",
+      "emptyMessage": "本タイプの回答者はいません。"
+    },
+    {
+      "socialStyleKey": "expressive",
+      "labelJa": "直感型",
+      "axisPosition": { "emotion": "express", "assertion": "assert" },
+      "characterOrder": ["attendant", "receptionist", "freelancer", "promoter"],
+      "characterNamesHiragana": ["はるか", "りさ", "のぞみ", "さら"],
+      "description": "Expressiveタイプは、人とのつながりを大切にし、場を明るくする存在です。人と話すことが好きで、感情表現も豊か。チームの雰囲気を盛り上げたり、コミュニケーションの橋渡しをするのが得意です。\nその反面、感情に左右されやすかったり、計画を継続するのが苦手なこともあります。周囲のサポートを受けながら、持ち前の明るさを活かすと、組織に欠かせないムードメーカーになります。",
+      "emptyMessage": "本タイプの回答者はいません。"
+    },
+    {
+      "socialStyleKey": "analytical",
+      "labelJa": "分析型",
+      "axisPosition": { "emotion": "suppress", "assertion": "listen" },
+      "characterOrder": ["scientist", "professional", "creator", "artist"],
+      "characterNamesHiragana": ["あいり", "まどか", "れい", "みゆ"],
+      "description": "Analyticalタイプの人は、落ち着いた環境でコツコツと専門性を高めていくのが得意です。物事を深く掘り下げ、知識や技術を磨き続ける姿勢が強みです。研究者や職人のように、一つの分野で信頼できる存在になることができます。\nただし、慎重になりすぎて新しい挑戦に踏み出すのが遅れることもあります。そのため、周囲から背中を押してもらうことでより力を発揮できるタイプです。",
+      "emptyMessage": "本タイプの回答者はいません。"
+    },
+    {
+      "socialStyleKey": "amiable",
+      "labelJa": "温和型",
+      "axisPosition": { "emotion": "express", "assertion": "listen" },
+      "characterOrder": ["follower", "generalist", "specialist", "conductor"],
+      "characterNamesHiragana": ["なお", "かな", "りつか", "あかり"],
+      "description": "Amiableタイプの人は「縁の下の力持ち」。周囲をサポートし、チームが安心して働ける環境をつくります。協調性が高く、人の気持ちに寄り添えるため、信頼されやすい存在です。\nただし、自分から新しいことを始めるのは苦手で、受け身になりやすい傾向があります。周囲のサポートをするだけでなく、自分の意見を少しずつ出していけるようになると、さらに活躍の幅が広がります。",
+      "emptyMessage": "本タイプの回答者はいません。"
+    }
+  ]
+}
