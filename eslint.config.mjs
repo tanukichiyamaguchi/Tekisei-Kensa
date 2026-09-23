@@ -127,6 +127,26 @@ export default tseslint.config(
     },
   },
   {
+    // 受検者画面の部品は lib/services・lib/auth の実行時コードを import しない（型だけは可。05 §3、D05-36）。
+    // API はブラウザ用の lib/utils/respondent-api.ts から呼ぶ
+    files: ["components/respondent/**"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/lib/services", "@/lib/services/*", "@/lib/auth", "@/lib/auth/*"],
+              allowTypeImports: true,
+              message:
+                "受検者画面の部品からサーバ側の実行時コードを import しない。型は import type で参照する（05 §3、D05-36）",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ["components/admin/auth/**"],
     rules: {
       "no-restricted-imports": [
