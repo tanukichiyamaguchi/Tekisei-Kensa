@@ -39,6 +39,8 @@ jobs:
       - run: pnpm typecheck
       - name: マスタ生成物が付録と一致していることを確認（08 §7.6）
         run: pnpm masters:check
+      - name: 文言マスタの生成物が付録C と一致していることを確認（08 §7.6）
+        run: pnpm texts:check
       - run: pnpm test
       - name: Emulator 上の結合テスト（00 D-33）
         run: pnpm test:integration:emu

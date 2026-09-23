@@ -3,3 +3,4 @@ coverage
 docs
 tests/fixtures
 lib/masters/data/*.json
+lib/masters/data/texts/*.json

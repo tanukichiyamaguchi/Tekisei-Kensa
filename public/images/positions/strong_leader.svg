@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" width="600" height="400">
+  <rect width="600" height="400" rx="32" fill="#f3f5f8"/><path d="M0 330 H600" stroke="#cbd2d9" stroke-width="4"/>
+  <path d="M260 330 V210 H340 V330 Z" fill="#cbd2d9"/>
+  <g transform="translate(300 200) scale(1.2)"><circle cx="0" cy="-60" r="22" fill="#f9dfc9"/><path d="M-30 20 C-30 -30 30 -30 30 20 Z" fill="#d32f2f"/></g>
+  <path d="M330 100 V40 l40 14 -40 14" stroke="#1f2933" stroke-width="4" fill="#f2c94c"/>
+  <g transform="translate(150 320) scale(0.9)"><circle cx="0" cy="-60" r="22" fill="#f9dfc9"/><path d="M-30 20 C-30 -30 30 -30 30 20 Z" fill="#8ecae6"/></g><g transform="translate(450 320) scale(0.9)"><circle cx="0" cy="-60" r="22" fill="#f9dfc9"/><path d="M-30 20 C-30 -30 30 -30 30 20 Z" fill="#8ecae6"/></g><g transform="translate(220 320) scale(0.8)"><circle cx="0" cy="-60" r="22" fill="#f9dfc9"/><path d="M-30 20 C-30 -30 30 -30 30 20 Z" fill="#8ecae6"/></g><g transform="translate(380 320) scale(0.8)"><circle cx="0" cy="-60" r="22" fill="#f9dfc9"/><path d="M-30 20 C-30 -30 30 -30 30 20 Z" fill="#8ecae6"/></g>
+</svg>

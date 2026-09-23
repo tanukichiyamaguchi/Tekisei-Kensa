@@ -1,0 +1,837 @@
+/* 管理画面（06 §2）。トークンは §2.2。受検者画面（exam.css）と干渉させないため :root ではなく .admin-root に置く */
+body {
+  margin: 0;
+}
+
+.admin-root {
+  /* 画面の基調 */
+  --admin-bg: #f3f5f8;
+  --admin-surface: #ffffff;
+  --admin-text: #1f2933;
+  --admin-text-muted: #52606d;
+  --admin-border: #cbd2d9;
+  --admin-primary: #0b5cad; /* 主ボタン、リンク、サイドメニューの選択状態 */
+  --admin-primary-soft: #e6f0fa;
+  --admin-danger: #c62828; /* 削除、エラー */
+  --admin-danger-soft: #fdecea;
+  --admin-sidebar-bg: #1f2933;
+  --admin-sidebar-text: #f3f5f8;
+  --admin-radius: 8px;
+  --admin-sidebar-width: 224px;
+  --admin-content-max-width: 1200px;
+  --admin-gutter: 32px;
+
+  /* グラフ系列（付録E §1、§2 の取得値） */
+  --chart-subject: #00a2ff;
+  --chart-comparison: #14f584;
+
+  /* 5 段階の値域色（付録C §7。橙のみ取得値、他は設計判断 D06-03） */
+  --band-very-low: #8ecae6;
+  --band-low: #2e9e5b;
+  --band-middle: #d4a600;
+  --band-high: #ff8000;
+  --band-very-high: #d32f2f;
+
+  /* 信頼係数専用（高いほど緑系。§5.2、D06-04） */
+  --reliability-very-high: #1b7f4b;
+  --reliability-high: #7cb342;
+
+  /* ソーシャルスタイル（付録E §6 の取得値） */
+  --style-driving: rgb(149, 112, 161);
+  --style-expressive: rgb(229, 179, 83);
+  --style-analytical: rgb(65, 166, 123);
+  --style-amiable: rgb(65, 148, 175);
+
+  /* 相性スライダー（付録E §4。具体値は設計判断） */
+  --slider-track: #e5e7eb;
+  --slider-marker: #1fa463;
+
+  /* ゲージ */
+  --gauge-track: #e5e7eb;
+
+  min-height: 100vh;
+  min-width: 1280px; /* 1280px 未満は横スクロール（06 D06-02） */
+  background: var(--admin-bg);
+  color: var(--admin-text);
+  font-family:
+    system-ui,
+    -apple-system,
+    "Hiragino Sans",
+    "Noto Sans JP",
+    sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color-scheme: light;
+}
+
+.admin-root *,
+.admin-root *::before,
+.admin-root *::after {
+  box-sizing: border-box;
+}
+
+.admin-root h1 {
+  font-size: 20px;
+  margin: 0 0 16px;
+}
+.admin-root h2 {
+  font-size: 16px;
+  margin: 0 0 12px;
+}
+.admin-root a {
+  color: var(--admin-primary);
+}
+
+/* ---- 共通レイアウト（06 §2.3） */
+.admin-shell {
+  display: grid;
+  grid-template-columns: var(--admin-sidebar-width) 1fr;
+  min-height: 100vh;
+}
+.admin-sidebar {
+  display: flex;
+  flex-direction: column;
+  background: var(--admin-sidebar-bg);
+  color: var(--admin-sidebar-text);
+  padding: 24px 0;
+}
+.admin-sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.admin-sidebar .admin-sidebar__link {
+  display: block;
+  padding: 10px 24px;
+  color: var(--admin-sidebar-text);
+  text-decoration: none;
+  border-left: 4px solid transparent;
+}
+.admin-sidebar__link:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.admin-sidebar__link[aria-current="page"] {
+  border-left-color: var(--admin-primary-soft);
+  background: rgba(255, 255, 255, 0.12);
+  font-weight: 700;
+}
+.admin-sidebar__site {
+  margin-top: auto;
+  padding: 0 24px;
+  font-size: 13px;
+  opacity: 0.8;
+}
+.admin-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px var(--admin-gutter);
+  background: var(--admin-surface);
+  border-bottom: 1px solid var(--admin-border);
+}
+.admin-header__org {
+  font-weight: 700;
+}
+.admin-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.admin-header__user {
+  color: var(--admin-text-muted);
+}
+.admin-content {
+  width: 100%;
+  max-width: calc(var(--admin-content-max-width) + var(--admin-gutter) * 2);
+  padding: 24px var(--admin-gutter) 48px;
+}
+
+/* ---- 認証画面（M-01〜M-03。中央に幅 420px のカード） */
+.auth-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 32px 16px;
+}
+.auth-card {
+  width: 420px;
+  padding: 32px;
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+}
+.auth-card__site {
+  margin: 0 0 4px;
+  text-align: center;
+  color: var(--admin-text-muted);
+}
+.auth-card__links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* ---- フォーム部品 */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+.field__label {
+  font-weight: 700;
+}
+.field__input,
+.field select {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid #6b7785;
+  border-radius: 6px;
+  background: var(--admin-surface);
+  font: inherit;
+}
+.field__input[aria-invalid="true"] {
+  border-color: var(--admin-danger);
+}
+.field__error {
+  margin: 0;
+  color: var(--admin-danger);
+  font-size: 13px;
+}
+.field__row {
+  display: flex;
+  gap: 8px;
+}
+.btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 1px solid var(--admin-border);
+  border-radius: 6px;
+  background: var(--admin-surface);
+  color: var(--admin-text);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: none;
+}
+.btn--primary {
+  border-color: var(--admin-primary);
+  background: var(--admin-primary);
+  color: #ffffff;
+}
+.btn--danger {
+  border-color: var(--admin-danger);
+  background: var(--admin-danger);
+  color: #ffffff;
+}
+.btn--link {
+  border: none;
+  background: none;
+  color: var(--admin-primary);
+  padding: 0;
+  min-height: 0;
+  text-decoration: underline;
+}
+.btn--block {
+  width: 100%;
+}
+.btn[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--admin-border);
+  border-radius: 6px;
+  background: var(--admin-surface);
+  cursor: pointer;
+  color: var(--admin-text);
+  text-decoration: none;
+}
+.icon-btn--danger {
+  color: var(--admin-danger);
+}
+
+/* ---- 通知 */
+.notice {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border-radius: var(--admin-radius);
+  background: var(--admin-primary-soft);
+}
+.notice--error {
+  background: var(--admin-danger-soft);
+  color: var(--admin-danger);
+}
+.toast-region {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.toast {
+  min-width: 280px;
+  max-width: 480px;
+  padding: 12px 16px;
+  border-radius: var(--admin-radius);
+  background: var(--admin-text);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+.toast--error {
+  background: var(--admin-danger);
+}
+
+/* ---- ダイアログ（dialog 要素。06 §2.4） */
+.dialog {
+  width: 560px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 64px);
+  padding: 0;
+  border: none;
+  border-radius: var(--admin-radius);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  color: var(--admin-text);
+}
+.dialog--wide {
+  width: 960px;
+}
+.dialog::backdrop {
+  background: rgba(31, 41, 51, 0.5);
+}
+.dialog__inner {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 64px);
+}
+.dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--admin-border);
+}
+.dialog__title {
+  margin: 0;
+  font-size: 16px;
+}
+.dialog__body {
+  padding: 16px 24px;
+  overflow: auto;
+}
+.dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 24px;
+  border-top: 1px solid var(--admin-border);
+}
+
+/* ---- 表 */
+.panel {
+  padding: 16px;
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+}
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.data-table th,
+.data-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--admin-border);
+  text-align: left;
+  vertical-align: middle;
+}
+.data-table th {
+  background: #f8fafc;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.data-table td select {
+  min-height: 32px;
+  padding: 4px 6px;
+  border: 1px solid #6b7785;
+  border-radius: 6px;
+  font: inherit;
+}
+.data-table__nowrap {
+  white-space: nowrap;
+}
+.result-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+  margin-bottom: 16px;
+}
+.result-filters .field {
+  margin-bottom: 0;
+}
+.result-filters__search {
+  width: 280px;
+}
+.result-filters__total {
+  margin-left: auto;
+  color: var(--admin-text-muted);
+}
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+.pager a[aria-current="page"] {
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--admin-text);
+}
+.empty-state {
+  padding: 32px;
+  text-align: center;
+  color: var(--admin-text-muted);
+}
+.badge {
+  display: inline-block;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--admin-primary-soft);
+  font-size: 12px;
+}
+
+/* ---- グラフ部品（06 §6） */
+.radar-chart {
+  display: inline-block;
+}
+.donut-gauge {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0;
+}
+.donut-gauge figcaption {
+  margin-top: 4px;
+  font-size: 13px;
+  text-align: center;
+}
+.compat-slider {
+  margin-bottom: 16px;
+}
+.compat-slider__label {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.compat-slider__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.compat-slider__track {
+  position: relative;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--slider-track);
+  flex: 1;
+}
+.compat-slider__marker {
+  position: absolute;
+  top: -4px;
+  width: 14px;
+  height: 18px;
+  border-radius: 2px;
+  background: var(--slider-marker);
+}
+.compat-slider__end {
+  width: 160px;
+  font-size: 13px;
+  color: var(--admin-text-muted);
+}
+.compat-slider__end:last-child {
+  text-align: right;
+}
+.compat-slider__note {
+  font-size: 12px;
+  color: var(--admin-text-muted);
+  margin: 4px 0 0;
+}
+.grade-letter {
+  font-size: 64px;
+  font-weight: 800;
+  line-height: 1;
+}
+.grade-letter__placeholder {
+  margin: 0;
+  color: var(--admin-text-muted);
+}
+
+/* ---- E-01（利用不可） */
+.admin-unavailable {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 64px 16px;
+  text-align: center;
+}
+
+/* ---- 結果詳細（06 §3.5） */
+.muted {
+  color: var(--admin-text-muted);
+}
+.small {
+  font-size: 12px;
+}
+.pre-line {
+  white-space: pre-line;
+}
+.plain-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.back-link {
+  display: inline-block;
+  margin-bottom: 12px;
+}
+.result-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+.result-header h1 {
+  margin: 0;
+}
+.field--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.field--inline select {
+  width: 200px;
+}
+.result-subline {
+  margin: 8px 0 24px;
+  color: var(--admin-text-muted);
+}
+.notice-inline {
+  color: var(--admin-danger);
+}
+.result-section {
+  margin-bottom: 32px;
+}
+.result-section > h2 {
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--admin-primary);
+}
+.result-section .panel {
+  margin-bottom: 16px;
+}
+.result-section h3 {
+  font-size: 15px;
+  margin: 0 0 12px;
+}
+.result-section h4 {
+  font-size: 14px;
+  margin: 12px 0 4px;
+}
+.result-grid {
+  display: grid;
+  gap: 16px;
+}
+.result-grid > .panel {
+  margin-bottom: 0;
+}
+.result-grid--7-5 {
+  grid-template-columns: 7fr 5fr;
+}
+.result-grid--5-7 {
+  grid-template-columns: 5fr 7fr;
+}
+.result-grid + .panel {
+  margin-top: 16px;
+}
+.panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.panel__header h3 {
+  margin: 0;
+}
+.gauge-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 12px;
+}
+.gauge-row--wrap {
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+.grade-cell,
+.gauge-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 140px;
+  min-height: 120px;
+  text-align: center;
+}
+.gauge-placeholder__label {
+  margin: 0 0 8px;
+  font-weight: 700;
+}
+.grade-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.comparison-placeholder {
+  margin: 0;
+  color: var(--admin-text-muted);
+}
+.type-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.type-card__name {
+  margin: 8px 0 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+.type-card__heading {
+  font-weight: 700;
+}
+.illustration {
+  display: block;
+  object-fit: contain;
+}
+.illustration--fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border-radius: var(--admin-radius);
+  background: var(--admin-primary-soft);
+  text-align: center;
+}
+.position-view {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+.position-view__label {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 700;
+}
+.style-card {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.guide-list {
+  margin: 12px 0 0;
+}
+.guide-list__item {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--admin-border);
+}
+.guide-list__item dt {
+  font-weight: 700;
+}
+.guide-list__item dd {
+  margin: 4px 0 0;
+}
+.slider-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+}
+.slider-legend__mark {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--slider-marker);
+}
+.trait-list__row--highest {
+  background: rgba(0, 162, 255, 0.12);
+}
+.trait-list__row--lowest {
+  background: rgba(142, 202, 230, 0.25);
+}
+.ai-analysis__verdict .badge {
+  font-size: 13px;
+  padding: 2px 10px;
+}
+/* 軸ラベルがグラフ領域の外にはみ出しても切れないようにする（資質レーダーの「専門追求型」など） */
+.radar-chart .apexcharts-canvas,
+.radar-chart .apexcharts-svg {
+  overflow: visible;
+}
+
+/* ---- 組織内分類（06 §3.6） */
+.classification__axis--top {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-left: 120px;
+  margin-bottom: 8px;
+  text-align: center;
+  font-weight: 700;
+}
+.classification__body {
+  display: flex;
+  gap: 8px;
+}
+.classification__axis--side {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  width: 112px;
+  align-items: center;
+  font-weight: 700;
+}
+.classification__grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.classification-card {
+  --style-color: var(--admin-border);
+  padding: 16px;
+  background: var(--admin-surface);
+  border: 2px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+.classification-card--driving {
+  --style-color: var(--style-driving);
+}
+.classification-card--expressive {
+  --style-color: var(--style-expressive);
+}
+.classification-card--analytical {
+  --style-color: var(--style-analytical);
+}
+.classification-card--amiable {
+  --style-color: var(--style-amiable);
+}
+.classification-card:hover {
+  border-color: var(--style-color);
+  background: color-mix(in srgb, var(--style-color) 15%, var(--admin-surface));
+}
+.classification-card__title {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 0 8px;
+  border: none;
+  border-bottom: 4px solid var(--style-color);
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  color: var(--admin-text);
+}
+.classification-card__name {
+  font-size: 16px;
+  font-weight: 700;
+}
+.classification-card__count {
+  font-size: 16px;
+}
+.classification-card__types {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.character {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: var(--admin-radius);
+  background: none;
+  font: inherit;
+  color: var(--admin-text);
+  cursor: pointer;
+}
+.character:hover {
+  border-color: var(--style-color);
+}
+.character__name {
+  font-weight: 700;
+}
+.character__count {
+  font-size: 13px;
+}
+
+/* ---- アカウント（06 §3.7） */
+.account-section {
+  margin-bottom: 16px;
+}
+.account-list {
+  margin: 0;
+}
+.account-list > div {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--admin-border);
+}
+.account-list dt {
+  font-weight: 700;
+}
+.account-list dd {
+  margin: 0;
+}
+.invite-block {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--admin-border);
+}
+.invite-block > .btn {
+  margin-bottom: 12px;
+}

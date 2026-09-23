@@ -80,7 +80,8 @@ export function assertEmulator(): void {
   }
 }
 
-async function registerAndSave(
+/** 登録して lastPage まで回答を保存する（E2E の tests/e2e/support/emulator-task.ts も使う） */
+export async function registerAndSave(
   organizationId: string,
   index: number,
   kind: RespondentKind,

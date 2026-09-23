@@ -5,6 +5,7 @@ import type {
   AptitudeTypeKey,
   ChoiceCode,
   CompatibilityKey,
+  PositionKey,
   RiskKey,
   ScoreAttributeKey,
   SocialStyleKey,
@@ -93,6 +94,14 @@ export const APTITUDE_LABELS: ReadonlyArray<{
   { key: "self_actualizing", internalName: "自己実現型", label: "目標達成型" },
   { key: "inquiry_logical", internalName: "探求論理型", label: "専門追求型" },
 ];
+
+/**
+ * 資質の内部名の表記ゆれ（00 §1.11 の 8 番）。付録C §4 は「感性開放型」を別の字で書いているため、写像にだけ使う。
+ * 生成物・lib/ には出さない（M-07 がこの文字列の出現を検査するため、字を分けて組み立てる）
+ */
+export const APTITUDE_INTERNAL_NAME_ALIASES: Readonly<Record<string, AptitudeKey>> = {
+  ["感性" + "解放型"]: "sensory_open",
+};
 
 /** リスク 7 項目（00 §1.5） */
 export const RISK_LABELS: ReadonlyArray<{
@@ -318,4 +327,61 @@ export const SOCIAL_STYLE_LABELS: ReadonlyArray<{
     color: "rgba(65,148,175)",
     chartOrder: 3,
   },
+];
+
+/** 立ち位置 5 段階（00 §1.8。表示名は付録C §6） */
+export const POSITION_LABELS: ReadonlyArray<{ readonly key: PositionKey; readonly label: string }> =
+  [
+    { key: "strong_leader", label: "個が強いリーダータイプ" },
+    { key: "cooperative_leader", label: "協調性を重視するリーダータイプ" },
+    { key: "follower", label: "フォロワータイプ" },
+    { key: "passive_follower", label: "フォロワータイプ（消極的）" },
+    { key: "unfit", label: "アンフィットネス" },
+  ];
+
+/** 特性詳細のカテゴリ（06 §4.2 TRAIT_DETAIL_CATEGORY_KEYS。配列順 = 付録C §2 の記載順 = 表示順。06 D06-13） */
+export const TRAIT_DETAIL_CATEGORY_LABELS: ReadonlyArray<{
+  readonly key: "interpersonal" | "behavior" | "emotion" | "work" | "environment";
+  readonly label: string;
+}> = [
+  { key: "interpersonal", label: "対人関係" },
+  { key: "behavior", label: "行動特性" },
+  { key: "emotion", label: "情緒及び精神面" },
+  { key: "work", label: "業務対応" },
+  { key: "environment", label: "環境適応" },
+];
+
+/** 育成方法 14 項目（06 §4.2 DEVELOPMENT_GUIDE_ITEM_KEYS。配列順 = 付録C §4 の記載順） */
+export const DEVELOPMENT_GUIDE_ITEM_LABELS: ReadonlyArray<{
+  readonly key:
+    | "characteristics"
+    | "approach"
+    | "thinking"
+    | "dominant_sense"
+    | "impression"
+    | "emotion"
+    | "personality"
+    | "top_priority"
+    | "listening"
+    | "behavior"
+    | "speaking"
+    | "learning_style"
+    | "compatibility"
+    | "interpersonal";
+  readonly label: string;
+}> = [
+  { key: "characteristics", label: "特徴" },
+  { key: "approach", label: "本タイプへのアプローチ" },
+  { key: "thinking", label: "思考" },
+  { key: "dominant_sense", label: "優位感覚" },
+  { key: "impression", label: "周りからの印象" },
+  { key: "emotion", label: "感情" },
+  { key: "personality", label: "性格" },
+  { key: "top_priority", label: "最優先対象" },
+  { key: "listening", label: "聞き方" },
+  { key: "behavior", label: "行動" },
+  { key: "speaking", label: "話し方" },
+  { key: "learning_style", label: "学習スタイル" },
+  { key: "compatibility", label: "他タイプとの相性" },
+  { key: "interpersonal", label: "対人関係" },
 ];

@@ -22,6 +22,8 @@
     "check-env": "tsx scripts/check-env.ts",
     "masters:generate": "tsx scripts/generate-masters.ts",
     "masters:check": "tsx scripts/generate-masters.ts --check",
+    "texts:generate": "tsx scripts/generate-texts.ts",
+    "texts:check": "tsx scripts/generate-texts.ts --check",
     "owner:create": "tsx scripts/create-owner.ts",
     "admin:set-role": "tsx scripts/set-admin-role.ts",
     "seed:local": "tsx scripts/seed-local.ts",
@@ -30,7 +32,7 @@
     "emulators": "pnpm firebase emulators:start --only auth,firestore --project demo-tekisei",
     "emulators:persist": "pnpm firebase emulators:start --only auth,firestore --project demo-tekisei --import firebase/emulator-data --export-on-exit",
     "firestore:deploy": "pnpm firebase deploy --only firestore",
-    "ci": "pnpm lint && pnpm format && pnpm typecheck && pnpm masters:check && pnpm test"
+    "ci": "pnpm lint && pnpm format && pnpm typecheck && pnpm masters:check && pnpm texts:check && pnpm test"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
@@ -56,10 +58,12 @@
     ]
   },
   "dependencies": {
+    "apexcharts": "7.5.1",
     "firebase": "^12.19.0",
     "firebase-admin": "^14.4.0",
     "next": "^16.3.6",
     "react": "^19.3.0",
+    "react-apexcharts": "2.1.1",
     "react-dom": "^19.3.0",
     "zod": "^4.6.5"
   }

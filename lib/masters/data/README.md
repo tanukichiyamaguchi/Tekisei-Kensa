@@ -18,3 +18,18 @@
 | `social-styles.json`  | `scripts/lib/labels.ts`（00 §1.7）                          | ソーシャルスタイル 4 分類の表示名・色・並び順                 |
 
 日本語名から識別子への写像は `scripts/lib/labels.ts` にだけ置いています（08 §7.4）。
+
+## texts/（文言マスタ。付録C から生成）
+
+`scripts/generate-texts.ts` が付録C（表示文言マスタ）から生成します（08 §7.4、06 §4.1）。付録C を改版したら `pnpm texts:generate` で再生成し、`pnpm texts:check`（CI で実行）で一致を検査します。読み込みは `lib/masters/texts/*.ts` が行います。
+
+| ファイル                        | 生成元（付録C） | 内容                                                                    |
+| ------------------------------- | --------------- | ----------------------------------------------------------------------- |
+| `texts/type-texts.json`         | §1              | 16 タイプの適性（見出し）・特徴・適性職種・アドバイス                   |
+| `texts/trait-details.json`      | §2              | 特性詳細 5 カテゴリと定型文 45 件（表示するタイプの集合）               |
+| `texts/trait-highlights.json`   | §3              | 16 尺度の高い／低い場合のポジティブ・ネガティブ                         |
+| `texts/development-guides.json` | §4              | 資質 4 型 × 育成方法 14 項目                                            |
+| `texts/style-texts.json`        | §5              | ソーシャルスタイル 4 分類の文言                                         |
+| `texts/style-interactions.json` | §5 末尾の表     | タイプ別の対処法 4 × 4                                                  |
+| `texts/positions.json`          | §6              | 立ち位置 5 段階の表示名・説明文（閾値は 03 の `POSITION_RULES` が正）   |
+| `texts/classifications.json`    | §8              | 組織内分類 4 分類の位置・キャラクター順・説明文、軸の表示名、0 名の文言 |

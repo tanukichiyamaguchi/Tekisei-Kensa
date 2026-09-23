@@ -11,7 +11,7 @@ import {
   SESSION_COOKIE_MAX_AGE_MS,
 } from "@/lib/auth/session-cookie";
 
-import { signInWithPassword } from "../helpers/emulator";
+import { signInWithPassword, waitForNextSecond } from "../helpers/emulator";
 import {
   createOrganizationWithOwner,
   loginAs,
@@ -29,15 +29,6 @@ import {
 } from "../helpers/routes";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-/**
- * revokeRefreshTokens の判定は「auth_time（秒）× 1000 < tokensValidAfterTime（秒精度）」のため、
- * ログインと失効が同じ秒だと失効しない（firebase-admin の base-auth.js）。失効を検証する前に次の秒まで待つ
- */
-async function waitForNextSecond(): Promise<void> {
-  const ms = 1000 - (Date.now() % 1000) + 50;
-  await new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 const callMe = (cookieHeader?: string) =>
   callRoute(getMe, {

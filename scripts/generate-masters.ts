@@ -4,10 +4,7 @@
 //   pnpm masters:check      生成せずに、コミット済みの生成物と一致するかを検査する（08 §7.6。不一致は終了コード 1）
 //
 // 付録の書式や不変条件（03 §4.2）から外れた箇所が 1 つでもあれば、何も書き込まずに失敗する。
-import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 
 import {
   QUESTION_PAGE_LAYOUT,
@@ -25,6 +22,18 @@ import {
 } from "../lib/scoring/types";
 import type { ChoiceCode, ScoreAttributeKey } from "../lib/scoring/types";
 import { SCORING_VERSION } from "../lib/scoring/version";
+import {
+  codeBlock,
+  fail,
+  GenerationError,
+  parseNumber,
+  readSource,
+  sectionByPrefix,
+  sourceHashes,
+  splitSections,
+  tableRows,
+  writeOrCheck,
+} from "./lib/generator";
 import { formatJson } from "./lib/json-format";
 import {
   APTITUDE_LABELS,
@@ -40,7 +49,6 @@ import {
 /** 解析規則の版（08 §7.2）。規則を変えたら上げ、全生成物を再生成する */
 const GENERATOR_VERSION = "1";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SRC_A = "docs/付録A_設問一覧.md";
 const SRC_B = "docs/付録B_採点ロジック仕様.md";
 const SRC_LABELS = "scripts/lib/labels.ts";
@@ -48,79 +56,6 @@ const SRC_LAYOUT = "lib/masters/question-layout.ts";
 const OUT_DIR = "lib/masters/data";
 
 const TOTAL_QUESTION_COUNT = 204;
-
-// ---------------------------------------------------------------------------
-// 共通
-
-class GenerationError extends Error {}
-
-function fail(message: string): never {
-  throw new GenerationError(message);
-}
-
-function readSource(relPath: string): string {
-  return readFileSync(path.join(ROOT, relPath), "utf8");
-}
-
-function sha256(relPath: string): string {
-  return `sha256:${createHash("sha256")
-    .update(readFileSync(path.join(ROOT, relPath)))
-    .digest("hex")}`;
-}
-
-/** `## 見出し` 単位に分割する（見出し行 → 本文行の配列） */
-function splitSections(markdown: string, level: "##" | "###"): Map<string, string[]> {
-  const sections = new Map<string, string[]>();
-  let current: string[] | null = null;
-  const prefix = `${level} `;
-  for (const line of markdown.split("\n")) {
-    if (line.startsWith(prefix)) {
-      const title = line.slice(prefix.length).trim();
-      if (sections.has(title)) fail(`見出しが重複しています: ${line}`);
-      current = [];
-      sections.set(title, current);
-    } else if (level === "###" && line.startsWith("## ")) {
-      current = null;
-    } else if (current) {
-      current.push(line);
-    }
-  }
-  return sections;
-}
-
-function sectionByPrefix(sections: Map<string, string[]>, titlePrefix: string): string[] {
-  const hits = [...sections.entries()].filter(([title]) => title.startsWith(titlePrefix));
-  if (hits.length !== 1)
-    fail(`見出し「${titlePrefix}…」が 1 つではありません（${hits.length} 件）`);
-  return hits[0]![1];
-}
-
-/** Markdown の表の行（区切り行を除く）をセル配列にする */
-function tableRows(lines: readonly string[]): string[][] {
-  return lines
-    .filter((l) => l.startsWith("|"))
-    .map((l) => {
-      if (!l.endsWith("|")) fail(`表の行が | で終わっていません: ${l}`);
-      return l
-        .slice(1, -1)
-        .split("|")
-        .map((c) => c.trim());
-    })
-    .filter((cells) => !cells.every((c) => /^:?-+:?$/.test(c)));
-}
-
-/** 最初のコードブロックの中身 */
-function codeBlock(lines: readonly string[], where: string): string {
-  const start = lines.findIndex((l) => l.startsWith("```"));
-  const end = lines.findIndex((l, i) => i > start && l.startsWith("```"));
-  if (start < 0 || end < 0) fail(`${where} にコードブロックがありません`);
-  return lines.slice(start + 1, end).join("\n");
-}
-
-function parseNumber(cell: string, where: string): number {
-  if (!/^-?\d+(\.\d+)?$/.test(cell)) fail(`${where}: 数値ではありません: ${cell}`);
-  return Number(cell);
-}
 
 // ---------------------------------------------------------------------------
 // 手順 1: 設問（付録A「## 設問（Q1〜Q204）」）
@@ -748,7 +683,7 @@ function outputs(g: Generated): OutputFile[] {
 function render(file: OutputFile): string {
   return formatJson({
     generatedFrom: file.sources,
-    sourceHash: Object.fromEntries(file.sources.map((s) => [s, sha256(s)])),
+    sourceHash: sourceHashes(file.sources),
     generatorVersion: GENERATOR_VERSION,
     scoringVersion: SCORING_VERSION,
     kind: file.kind,
@@ -756,50 +691,15 @@ function render(file: OutputFile): string {
   });
 }
 
-function readCommittedHash(filePath: string): unknown {
-  try {
-    return (JSON.parse(readFileSync(filePath, "utf8")) as { sourceHash?: unknown }).sourceHash;
-  } catch {
-    return undefined;
-  }
-}
-
 function main(): void {
   const check = process.argv.includes("--check");
   const generated = build(readSource(SRC_A), readSource(SRC_B));
   const files = outputs(generated).map((f) => ({ ...f, content: render(f) }));
-  const outDir = path.join(ROOT, OUT_DIR);
-
-  if (check) {
-    const problems: string[] = [];
-    for (const f of files) {
-      const target = path.join(outDir, f.fileName);
-      if (!existsSync(target)) {
-        problems.push(`${OUT_DIR}/${f.fileName} がありません`);
-        continue;
-      }
-      const expectedHash = JSON.stringify(Object.fromEntries(f.sources.map((s) => [s, sha256(s)])));
-      if (JSON.stringify(readCommittedHash(target)) !== expectedHash) {
-        problems.push(
-          `${OUT_DIR}/${f.fileName}: 生成元（${f.sources.join("、")}）が変わっています。再生成が必要です`,
-        );
-      } else if (readFileSync(target, "utf8") !== f.content) {
-        problems.push(`${OUT_DIR}/${f.fileName}: 再生成結果とコミット済みの内容が一致しません`);
-      }
-    }
-    if (problems.length > 0) {
-      console.error(problems.join("\n"));
-      console.error("pnpm masters:generate を実行して生成物をコミットしてください。");
-      process.exit(1);
-    }
-    console.log(`マスタ生成物は付録と一致しています（${files.length} ファイル）。`);
-    return;
-  }
-
-  mkdirSync(outDir, { recursive: true });
-  for (const f of files) writeFileSync(path.join(outDir, f.fileName), f.content);
+  const count = writeOrCheck(files, OUT_DIR, { check, generateCommand: "pnpm masters:generate" });
   console.log(
-    `${files.length} ファイルを ${OUT_DIR}/ に生成しました（ページ構成: ${QUESTION_PAGE_LAYOUT.pageSizes.join("・")}）。`,
+    check
+      ? `マスタ生成物は付録と一致しています（${count} ファイル）。`
+      : `${count} ファイルを ${OUT_DIR}/ に生成しました（ページ構成: ${QUESTION_PAGE_LAYOUT.pageSizes.join("・")}）。`,
   );
 }
 

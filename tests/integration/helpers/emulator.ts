@@ -35,3 +35,12 @@ export async function signInWithPassword(email: string, password: string): Promi
     throw new Error(`ログインに失敗しました: ${body.error?.message ?? res.status}`);
   return body.idToken;
 }
+
+/**
+ * revokeRefreshTokens の判定は「auth_time（秒）× 1000 < tokensValidAfterTime（秒精度）」のため、
+ * ログインと失効が同じ秒だと失効しない（firebase-admin の base-auth.js）。失効を検証する前に次の秒まで待つ
+ */
+export async function waitForNextSecond(): Promise<void> {
+  const ms = 1000 - (Date.now() % 1000) + 50;
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
