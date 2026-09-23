@@ -58,6 +58,7 @@
     ]
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.128.0",
     "apexcharts": "7.5.1",
     "firebase": "^12.19.0",
     "firebase-admin": "^14.4.0",
