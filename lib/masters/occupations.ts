@@ -24,13 +24,19 @@ const LABEL_BY_CODE: ReadonlyMap<number, string> = new Map(
   OCCUPATIONS.map((o) => [o.code, o.label]),
 );
 
+/**
+ * K-19 より前（歯科向け 9 項目）に保存されたコードのうち、今の一覧に無いもの。表示のためだけに残す
+ * （旧 9「その他」。新規の登録では受け付けない。旧 1〜8 は今の一覧の同じコードとして表示される）
+ */
+const LEGACY_LABEL_BY_CODE: ReadonlyMap<number, string> = new Map([[9, "その他"]]);
+
 export function isOccupationCode(value: unknown): value is OccupationCode {
   return typeof value === "number" && LABEL_BY_CODE.has(value);
 }
 
-/** 職業コード → 表示名（07 §2.3 の AI 入力、06 の回答一覧で使う）。未知のコードは RangeError */
+/** 職業コード → 表示名（07 §2.3 の AI 入力、06 の回答一覧で使う）。旧コード 9 も引ける。未知のコードは RangeError */
 export function getOccupationLabel(code: number): string {
-  const label = LABEL_BY_CODE.get(code);
+  const label = LABEL_BY_CODE.get(code) ?? LEGACY_LABEL_BY_CODE.get(code);
   if (label === undefined) throw new RangeError(`未知の職業コードです: ${code}`);
   return label;
 }
