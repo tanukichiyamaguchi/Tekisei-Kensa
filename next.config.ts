@@ -52,8 +52,13 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["firebase-admin", "puppeteer-core", "@sparticuz/chromium"],
   // @sparticuz/chromium は実行時に bin/ の圧縮済み Chromium を展開する。import で到達しないため PDF の関数に明示的に含める
   // （07 §9.2、08 H-13。関数サイズは Vercel のビルドログで確認する）
+  // この指定は webpack のビルドでだけ適用される（Next.js 16 の Turbopack ビルドでは適用されず、2026-09-23 の本番で
+  // browser_launch_failed になった）。そのため package.json の build は `next build --webpack`。ci.yml が同梱を確かめる。
+  // pnpm では node_modules/@sparticuz/chromium が .pnpm/ へのシンボリックリンクのため、実体のある .pnpm/ 側を指定する
   outputFileTracingIncludes: {
-    "/api/v1/admin/results/[resultId]/pdf": ["./node_modules/@sparticuz/chromium/bin/**"],
+    "/api/v1/admin/results/[resultId]/pdf": [
+      "./node_modules/.pnpm/@sparticuz+chromium@*/node_modules/@sparticuz/chromium/bin/**",
+    ],
   },
   headers: async () => [
     { source: "/(.*)", headers: securityHeaders },
