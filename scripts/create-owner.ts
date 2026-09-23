@@ -1,7 +1,7 @@
 // 組織と初期オーナーの作成（02 §9.6、01 §7.6）。pnpm owner:create
 //
-//   pnpm owner:create --org-name "〇〇歯科医院" [--org-code "..."] [--customer-number "..."] \
-//     --email owner@example.com --display-name "院長"
+//   pnpm owner:create --org-name "〇〇サロン" [--org-code "..."] [--customer-number "..."] \
+//     --email owner@example.com --display-name "責任者"
 //   既存組織にオーナーを追加する / 途中で失敗した作成をやり直す: --organization-id <ID> を付ける
 //   GitHub Actions（.github/workflows/firebase-ops.yml）から実行する場合は --hide-invite-link を付ける（招待リンクをログに残さない）
 //

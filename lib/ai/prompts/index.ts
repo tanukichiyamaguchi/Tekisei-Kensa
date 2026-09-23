@@ -2,16 +2,18 @@
 import { AiProviderError } from "@/lib/ai/errors";
 
 import { RECRUITMENT_V1 } from "./recruitment-v1";
+import { RECRUITMENT_V2 } from "./recruitment-v2";
 import type { PromptDefinition } from "./types";
 
 export type { PromptDefinition } from "./types";
 
-export const PROMPT_VERSIONS = ["recruitment-v1"] as const;
+export const PROMPT_VERSIONS = ["recruitment-v1", "recruitment-v2"] as const;
 export type PromptVersion = (typeof PROMPT_VERSIONS)[number];
 
 /** 版 → 定義。キー集合は PROMPT_VERSIONS と型で一致させる */
 export const PROMPT_REGISTRY: Readonly<Record<PromptVersion, PromptDefinition>> = {
   "recruitment-v1": RECRUITMENT_V1,
+  "recruitment-v2": RECRUITMENT_V2,
 };
 
 export function isKnownPromptVersion(value: string): value is PromptVersion {

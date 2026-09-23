@@ -144,14 +144,13 @@ describe("U-03 registration-rules", () => {
   it("職業の選択肢はマスタ（00 §1.10）の順・表示名そのまま", () => {
     expect(OCCUPATION_OPTIONS).toEqual(OCCUPATIONS.map((o) => ({ code: o.code, label: o.label })));
     expect(OCCUPATION_OPTIONS.map((o) => o.label)).toEqual([
-      "歯科医師",
-      "歯科衛生士",
-      "歯科助手(アシスタント・受付)",
-      "アシスタント",
+      "アイリスト",
+      "アイリスト（アシスタント・見習い）",
+      "ネイリスト",
+      "美容師",
+      "エステティシャン",
       "受付",
-      "TC",
       "事務スタッフ",
-      "技工士",
       "その他",
     ]);
   });

@@ -1,7 +1,7 @@
 {
   "generatedFrom": ["docs/付録C_表示文言マスタ.md", "scripts/lib/labels.ts"],
   "sourceHash": {
-    "docs/付録C_表示文言マスタ.md": "sha256:dbb79f98455ad0ff47ff56ff1154cd1d505f75dcf3c97c29b51ad9f408ef5a89",
+    "docs/付録C_表示文言マスタ.md": "sha256:b4041cf335c0440fe523193c4ea3acf5cf9025bbc1bdb419e70d08e610d65cc1",
     "scripts/lib/labels.ts": "sha256:f1ca930f176821e4491f5bfa922b4404d70ea5b7c25af689bdc7ca0016c4eae9"
   },
   "generatorVersion": "1",
@@ -10,12 +10,12 @@
     {
       "positionKey": "strong_leader",
       "label": "個が強いリーダータイプ",
-      "descriptionLines": ["・周りに流されずに自分の力を発揮出来るタイプ", "・取組みなども率先して行動することが出来る", "・院長先生の良き理解者となってくれれば幹部の役割を担える人材"]
+      "descriptionLines": ["・周りに流されずに自分の力を発揮出来るタイプ", "・取組みなども率先して行動することが出来る", "・責任者の良き理解者となってくれれば幹部の役割を担える人材"]
     },
     {
       "positionKey": "cooperative_leader",
       "label": "協調性を重視するリーダータイプ",
-      "descriptionLines": ["・院長先生とスタッフの橋渡し役として活躍出来る方が多い", "・周りと協調性を保ちながらバランスを取って集団をリードするタイプ", "・幹部候補として活躍が期待出来る"]
+      "descriptionLines": ["・責任者とスタッフの橋渡し役として活躍出来る方が多い", "・周りと協調性を保ちながらバランスを取って集団をリードするタイプ", "・幹部候補として活躍が期待出来る"]
     },
     {
       "positionKey": "follower",

@@ -9,6 +9,7 @@ import {
   PROMPT_VERSIONS,
 } from "@/lib/ai/prompts";
 import { RECRUITMENT_V1 } from "@/lib/ai/prompts/recruitment-v1";
+import { RECRUITMENT_V2, RECRUITMENT_V2_REPLACEMENTS } from "@/lib/ai/prompts/recruitment-v2";
 import { APTITUDE_DEFINITIONS } from "@/lib/masters/indicators/aptitudes";
 import { COMPATIBILITY_DEFINITIONS } from "@/lib/masters/indicators/compatibility";
 import { SOCIAL_STYLE_DEFINITIONS } from "@/lib/masters/indicators/social-styles";
@@ -85,7 +86,30 @@ describe("プロンプトのレジストリ（07 §2.2）", () => {
 
   it("getPromptDefinition: 既知の版は定義、未知の版は config_error", () => {
     expect(getPromptDefinition("recruitment-v1")).toBe(RECRUITMENT_V1);
-    expect(isKnownPromptVersion("recruitment-v2")).toBe(false);
-    expect(() => getPromptDefinition("recruitment-v2")).toThrow(AiProviderError);
+    expect(getPromptDefinition("recruitment-v2")).toBe(RECRUITMENT_V2);
+    expect(isKnownPromptVersion("recruitment-v3")).toBe(false);
+    expect(() => getPromptDefinition("recruitment-v3")).toThrow(AiProviderError);
+  });
+});
+
+describe("recruitment-v2（アイリストのサロン向け。10 K-19）", () => {
+  it("v1 の本文に置き換え表を当てたものと一致し、歯科・医療の文脈が残っていない", () => {
+    let expected = RECRUITMENT_V1.system;
+    for (const [from, to] of RECRUITMENT_V2_REPLACEMENTS) {
+      expect(expected.split(from).length - 1).toBe(1);
+      expected = expected.replace(from, to);
+    }
+    expect(RECRUITMENT_V2.system).toBe(expected);
+    expect(RECRUITMENT_V2.system).not.toMatch(/院長|歯科|クリニック|医院|滅菌/);
+    expect(RECRUITMENT_V2.system).toContain(
+      "アイリスト（まつげエクステ・まつげパーマなどの施術者）",
+    );
+    expect(RECRUITMENT_V2.system).toContain("多忙なサロンの責任者が");
+  });
+
+  it("入力テンプレートは v1 と同じ（判定基準・出力形式は上の置き換え以外 v1 と同じ）", () => {
+    expect(RECRUITMENT_V2.userTemplate).toBe(RECRUITMENT_V1.userTemplate);
+    expect(RECRUITMENT_V2.version).toBe("recruitment-v2");
+    expect(RECRUITMENT_V2.analysisKind).toBe("recruitment");
   });
 });

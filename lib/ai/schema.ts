@@ -24,7 +24,7 @@ export const AiAnalysisOutputSchema = z
         sougou: z.enum(["推奨", "条件付きで推奨", "要検討", "非推奨"]),
       })
       .strict(),
-    strengths: z.array(z.string()).describe("このクリニックで活きる強み。2〜4個"),
+    strengths: z.array(z.string()).describe("このサロンで活きる強み。2〜4個"),
     cautions: z.array(z.string()).describe("採用前に見極めたい注意点。2〜4個（根拠スコア付き）"),
     questions: z
       .array(

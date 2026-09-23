@@ -1,7 +1,7 @@
 {
   "generatedFrom": ["docs/付録C_表示文言マスタ.md", "scripts/lib/labels.ts"],
   "sourceHash": {
-    "docs/付録C_表示文言マスタ.md": "sha256:dbb79f98455ad0ff47ff56ff1154cd1d505f75dcf3c97c29b51ad9f408ef5a89",
+    "docs/付録C_表示文言マスタ.md": "sha256:b4041cf335c0440fe523193c4ea3acf5cf9025bbc1bdb419e70d08e610d65cc1",
     "scripts/lib/labels.ts": "sha256:f1ca930f176821e4491f5bfa922b4404d70ea5b7c25af689bdc7ca0016c4eae9"
   },
   "generatorVersion": "1",

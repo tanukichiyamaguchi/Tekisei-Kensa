@@ -20,7 +20,7 @@ export function AiAnalysisBody(props: {
         <span className="badge">即戦力性: {output.verdict.sokusenryoku}</span>{" "}
         <span className="badge">離職リスク: {output.verdict.teichaku_risk}</span>
       </p>
-      <h3>このクリニックで活きる強み</h3>
+      <h3>このサロンで活きる強み</h3>
       <ul>
         {output.strengths.map((s, i) => (
           <li key={i}>{s}</li>

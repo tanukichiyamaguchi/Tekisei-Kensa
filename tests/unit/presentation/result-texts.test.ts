@@ -141,7 +141,7 @@ describe("comparison-view", () => {
     const view = toPositionView({ position: "cooperative_leader" });
     expect(view.label).toBe("協調性を重視するリーダータイプ");
     expect(view.descriptionLines).toEqual([
-      "・院長先生とスタッフの橋渡し役として活躍出来る方が多い",
+      "・責任者とスタッフの橋渡し役として活躍出来る方が多い",
       "・周りと協調性を保ちながらバランスを取って集団をリードするタイプ",
       "・幹部候補として活躍が期待出来る",
     ]);
