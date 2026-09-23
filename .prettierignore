@@ -1,0 +1,5 @@
+pnpm-lock.yaml
+coverage
+docs
+tests/fixtures
+lib/masters/data/*.json

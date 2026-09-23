@@ -30,3 +30,29 @@
 - [tests/fixtures/README.md](tests/fixtures/README.md) — 既存システムの回答データ 73 件を匿名化した検証用データの説明
 - `tests/fixtures/existing_results.json` — データ本体
 - `tests/verify_fixtures.py` — 整合性確認スクリプト（`python3 tests/verify_fixtures.py`）
+
+## 開発
+
+実装計画は [08 実装計画とテスト計画](docs/基本設計/08_実装計画とテスト計画.md) のマイルストーン（M0〜M6）に沿って進めます。現在は M1（採点エンジンと単体テスト）まで実装済みです。Next.js の画面、Firebase（Firestore・Auth）と Emulator 上の結合テストは M2 以降で追加します。
+
+必要なもの: Node.js 22 系（`.nvmrc`）、pnpm（`package.json` の `packageManager` の版。Corepack で有効化）。
+
+```bash
+pnpm install --frozen-lockfile
+pnpm ci                 # lint・format・typecheck・マスタ再生成検査・単体テスト（CI と同じ）
+```
+
+| コマンド                    | 内容                                                     |
+| --------------------------- | -------------------------------------------------------- |
+| `pnpm test`                 | 単体テスト（Vitest、`tests/unit/`）                      |
+| `pnpm typecheck`            | TypeScript の型検査                                      |
+| `pnpm lint` / `pnpm format` | ESLint / Prettier の検査（`pnpm format:write` で整形）   |
+| `pnpm masters:generate`     | 付録A・付録B から `lib/masters/data/*.json` を再生成する |
+| `pnpm masters:check`        | 生成物が付録と一致しているかを検査する（CI で実行）      |
+
+主なディレクトリ:
+
+- `lib/scoring/` — 採点エンジン（純関数。`scoreAnswers`、`compareWithPopulation`）。基本設計 03
+- `lib/masters/` — 設問・配点・指標定義などのマスタ。`data/` は生成物（手で編集しない）
+- `lib/presentation/` — 表示用の丸め・色・グラフ系列・受検ページの変換
+- `scripts/generate-masters.ts` — マスタ生成スクリプト

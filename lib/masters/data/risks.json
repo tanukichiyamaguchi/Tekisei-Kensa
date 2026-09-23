@@ -1,0 +1,166 @@
+{
+  "generatedFrom": ["docs/付録B_採点ロジック仕様.md", "scripts/lib/labels.ts"],
+  "sourceHash": {
+    "docs/付録B_採点ロジック仕様.md": "sha256:67993b14b31b64a858095786c39315abea7dd514534e8f3392daf012b433b3b8",
+    "scripts/lib/labels.ts": "sha256:c66f2b3734a8bdebd3cf11f707033a713e4c0ab16517393c7206b7a4d2dd7174"
+  },
+  "generatorVersion": "1",
+  "scoringVersion": "1.0.0",
+  "kind": "risk",
+  "items": [
+    {
+      "key": "misconduct",
+      "label": "不祥事が発生するリスク",
+      "shortLabel": "不祥事",
+      "aiLabel": "不祥事",
+      "sortOrder": 1,
+      "constant": 0,
+      "multiplier": 5,
+      "clampMin": null,
+      "terms": [
+        { "questionNo": 15, "attribute": "score", "sign": 1 },
+        { "questionNo": 69, "attribute": "score", "sign": 1 },
+        { "questionNo": 41, "attribute": "score", "sign": 1 },
+        { "questionNo": 98, "attribute": "score", "sign": 1 },
+        { "questionNo": 85, "attribute": "score", "sign": 1 },
+        { "questionNo": 123, "attribute": "score", "sign": 1 },
+        { "questionNo": 3, "attribute": "score_type", "sign": 1 },
+        { "questionNo": 113, "attribute": "score_type", "sign": 1 },
+        { "questionNo": 76, "attribute": "score_type", "sign": 1 },
+        { "questionNo": 24, "attribute": "score_type", "sign": 1 }
+      ]
+    },
+    {
+      "key": "complaint",
+      "label": "苦情を強く主張するリスク",
+      "shortLabel": "苦情",
+      "aiLabel": "苦情",
+      "sortOrder": 2,
+      "constant": 0,
+      "multiplier": 5,
+      "clampMin": null,
+      "terms": [
+        { "questionNo": 8, "attribute": "score", "sign": 1 },
+        { "questionNo": 69, "attribute": "score", "sign": 1 },
+        { "questionNo": 21, "attribute": "score", "sign": 1 },
+        { "questionNo": 13, "attribute": "score", "sign": 1 },
+        { "questionNo": 85, "attribute": "score", "sign": 1 },
+        { "questionNo": 98, "attribute": "score", "sign": 1 },
+        { "questionNo": 35, "attribute": "score", "sign": 1 },
+        { "questionNo": 124, "attribute": "score", "sign": 1 },
+        { "questionNo": 112, "attribute": "score", "sign": 1 },
+        { "questionNo": 91, "attribute": "score", "sign": 1 }
+      ]
+    },
+    {
+      "key": "mental_distress",
+      "label": "メンタル面の不服が起こるリスク",
+      "shortLabel": "メンタル面の不服",
+      "aiLabel": "メンタル不服",
+      "sortOrder": 3,
+      "constant": 0,
+      "multiplier": 5,
+      "clampMin": null,
+      "terms": [
+        { "questionNo": 14, "attribute": "score", "sign": 1 },
+        { "questionNo": 17, "attribute": "score", "sign": 1 },
+        { "questionNo": 30, "attribute": "score", "sign": 1 },
+        { "questionNo": 50, "attribute": "score", "sign": 1 },
+        { "questionNo": 72, "attribute": "score", "sign": 1 },
+        { "questionNo": 85, "attribute": "score", "sign": 1 },
+        { "questionNo": 86, "attribute": "score", "sign": 1 },
+        { "questionNo": 127, "attribute": "score", "sign": 1 },
+        { "questionNo": 143, "attribute": "score", "sign": 1 },
+        { "questionNo": 5, "attribute": "score_type", "sign": 1 }
+      ]
+    },
+    {
+      "key": "careless_mistake",
+      "label": "不注意からミスが発生するリスク",
+      "shortLabel": "不注意ミス",
+      "aiLabel": "不注意ミス",
+      "sortOrder": 4,
+      "constant": 0,
+      "multiplier": 5,
+      "clampMin": null,
+      "terms": [
+        { "questionNo": 32, "attribute": "score", "sign": 1 },
+        { "questionNo": 53, "attribute": "score", "sign": 1 },
+        { "questionNo": 57, "attribute": "score", "sign": 1 },
+        { "questionNo": 111, "attribute": "score", "sign": 1 },
+        { "questionNo": 71, "attribute": "score", "sign": 1 },
+        { "questionNo": 44, "attribute": "score", "sign": 1 },
+        { "questionNo": 6, "attribute": "score_type", "sign": 1 },
+        { "questionNo": 76, "attribute": "score_type", "sign": 1 },
+        { "questionNo": 105, "attribute": "score_type", "sign": 1 },
+        { "questionNo": 117, "attribute": "score_type", "sign": 1 }
+      ]
+    },
+    {
+      "key": "resignation_trouble",
+      "label": "退職時におけるトラブル発生のリスク",
+      "shortLabel": "退職時トラブル",
+      "aiLabel": "退職トラブル",
+      "sortOrder": 5,
+      "constant": 0,
+      "multiplier": 5,
+      "clampMin": null,
+      "terms": [
+        { "questionNo": 7, "attribute": "score", "sign": 1 },
+        { "questionNo": 8, "attribute": "score", "sign": 1 },
+        { "questionNo": 72, "attribute": "score", "sign": 1 },
+        { "questionNo": 85, "attribute": "score", "sign": 1 },
+        { "questionNo": 69, "attribute": "score", "sign": 1 },
+        { "questionNo": 98, "attribute": "score", "sign": 1 },
+        { "questionNo": 13, "attribute": "score", "sign": 1 },
+        { "questionNo": 3, "attribute": "score_type", "sign": 1 },
+        { "questionNo": 76, "attribute": "score_type", "sign": 1 },
+        { "questionNo": 113, "attribute": "score_type", "sign": 1 }
+      ]
+    },
+    {
+      "key": "communication_issue",
+      "label": "コミュニケーションが課題となり業務に支障が出るリスク",
+      "shortLabel": "コミュニケーション起因の業務支障",
+      "aiLabel": "コミュ起因の支障",
+      "sortOrder": 6,
+      "constant": 0,
+      "multiplier": 5,
+      "clampMin": null,
+      "terms": [
+        { "questionNo": 1, "attribute": "score", "sign": 1 },
+        { "questionNo": 8, "attribute": "score", "sign": 1 },
+        { "questionNo": 22, "attribute": "score", "sign": 1 },
+        { "questionNo": 36, "attribute": "score", "sign": 1 },
+        { "questionNo": 50, "attribute": "score", "sign": 1 },
+        { "questionNo": 72, "attribute": "score", "sign": 1 },
+        { "questionNo": 88, "attribute": "score", "sign": 1 },
+        { "questionNo": 126, "attribute": "score", "sign": 1 },
+        { "questionNo": 134, "attribute": "score", "sign": 1 },
+        { "questionNo": 24, "attribute": "score_type", "sign": 1 }
+      ]
+    },
+    {
+      "key": "low_motivation",
+      "label": "モチベーションの不足により就業自体に繋がるリスク",
+      "shortLabel": "モチベーション不足による就業辞退",
+      "aiLabel": "就業辞退",
+      "sortOrder": 7,
+      "constant": 0,
+      "multiplier": 5,
+      "clampMin": null,
+      "terms": [
+        { "questionNo": 7, "attribute": "score", "sign": 1 },
+        { "questionNo": 30, "attribute": "score", "sign": 1 },
+        { "questionNo": 39, "attribute": "score", "sign": 1 },
+        { "questionNo": 45, "attribute": "score", "sign": 1 },
+        { "questionNo": 50, "attribute": "score", "sign": 1 },
+        { "questionNo": 56, "attribute": "score", "sign": 1 },
+        { "questionNo": 72, "attribute": "score", "sign": 1 },
+        { "questionNo": 83, "attribute": "score", "sign": 1 },
+        { "questionNo": 119, "attribute": "score", "sign": 1 },
+        { "questionNo": 127, "attribute": "score", "sign": 1 }
+      ]
+    }
+  ]
+}
