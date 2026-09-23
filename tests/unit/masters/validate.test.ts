@@ -169,7 +169,10 @@ describe("職業マスタ（00 §1.10、10 K-19）", () => {
     expect(getOccupationLabel(1)).toBe("アイリスト");
     expect(getOccupationLabel(6)).toBe("受付");
     expect(getOccupationLabel(8)).toBe("その他");
-    expect(() => getOccupationLabel(9)).toThrow(RangeError);
+    // K-19 より前に保存された旧コード 9（その他）は表示できるが、新規の登録には使えない
+    expect(getOccupationLabel(9)).toBe("その他");
+    expect(isOccupationCode(9)).toBe(false);
+    expect(() => getOccupationLabel(10)).toThrow(RangeError);
     expect(isOccupationCode(1)).toBe(true);
     expect(isOccupationCode(0)).toBe(false);
     expect(isOccupationCode("1")).toBe(false);

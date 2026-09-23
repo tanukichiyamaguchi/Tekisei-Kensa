@@ -25,7 +25,7 @@ import {
   uniformAnswers,
   type TestAdmin,
 } from "../helpers/fixtures";
-import { getDocForTest, listDocs } from "../helpers/firestore";
+import { getDocForTest, listDocs, writeDocForTest } from "../helpers/firestore";
 import { callRoute, errorCode } from "../helpers/routes";
 
 // 読み取りの回数をリポジトリ関数のスパイで数える（08 I-35: getDocForTest の呼び出しではなく）
@@ -191,6 +191,14 @@ describe("I-35 GET /admin/results/{resultId}", () => {
     );
     expect(logs).toHaveLength(before + 1);
     expect(logs.at(-1)!.data.details).toEqual({});
+  });
+
+  it("K-19 より前に保存された旧職業コード 9（その他）の受検者も表示できる（例外的な直接書き込みで旧データを再現）", async () => {
+    await writeDocForTest(COLLECTIONS.respondents, withoutAi.respondentId, { occupationCode: 9 });
+    const res = await getDetail(owner, withoutAi.resultId);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as ResultDetailDto;
+    expect(body.respondent.occupationCode).toBe(9);
   });
 
   it("文書 ID の形式でなければ 404 NOT_FOUND、存在しなければ 404 RESULT_NOT_FOUND", async () => {

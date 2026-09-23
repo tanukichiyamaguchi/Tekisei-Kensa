@@ -20,8 +20,10 @@ export function storedText(min: number, max: number) {
 
 export const sha256HexSchema = z.string().regex(/^[0-9a-f]{64}$/);
 export const teamCodeSchema = z.string().regex(/^[A-Z]$/, { message: "チームは A〜Z です" });
-// 職業コード 1〜8（lib/masters/occupations.ts。10 K-19）
+// 職業コード 1〜8（lib/masters/occupations.ts。10 K-19）。新規の登録で受け付ける範囲
 export const occupationCodeSchema = z.number().int().min(1).max(8);
+// 保存済みの職業コード。K-19 より前に保存された旧コード 9（その他）も読めるようにする
+export const storedOccupationCodeSchema = z.number().int().min(1).max(9);
 export const choiceCodeSchema = z.union([
   z.literal(1),
   z.literal(2),
