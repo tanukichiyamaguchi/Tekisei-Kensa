@@ -23,7 +23,7 @@ import { t06Input } from "./helpers";
 
 /** 07 §2.4 のユーザー入力の例（T-06 を埋めたもの） */
 const EXPECTED_T06_USER = `【氏名】山田 太郎
-【評価する職種】歯科衛生士
+【評価する職種】アイリスト（アシスタント・見習い）
 【信頼係数】79%
 
 【性格特性｜0〜30, 15=平均】
@@ -128,7 +128,7 @@ describe("U-11 埋め込み規則とラベル", () => {
     const score = scoreAnswers(cyclicAnswers());
     const input = buildAiAnalysisInput({ respondentName: " 山田 太郎 ", occupationCode: 6, score });
     expect(input.respondentName).toBe("山田 太郎");
-    expect(input.occupationLabel).toBe("TC");
+    expect(input.occupationLabel).toBe("受付");
     expect(input.result).toBe(score);
     expect(() => buildAiAnalysisInput({ respondentName: "a", occupationCode: 99, score })).toThrow(
       RangeError,

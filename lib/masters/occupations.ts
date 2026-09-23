@@ -1,6 +1,6 @@
-// 職業マスタ（00 §1.10）。occupation_code は要件定義書 §6.1 U-02 の記載順
+// 職業マスタ（00 §1.10）。アイリストのサロン向けの選択肢（10 K-19。既存システムの歯科向け 9 項目から置き換え）
 
-export const OCCUPATION_CODES = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
+export const OCCUPATION_CODES = [1, 2, 3, 4, 5, 6, 7, 8] as const;
 export type OccupationCode = (typeof OCCUPATION_CODES)[number];
 
 export interface OccupationDefinition {
@@ -10,15 +10,14 @@ export interface OccupationDefinition {
 }
 
 export const OCCUPATIONS: readonly OccupationDefinition[] = Object.freeze([
-  { code: 1, key: "dentist", label: "歯科医師" },
-  { code: 2, key: "dental_hygienist", label: "歯科衛生士" },
-  { code: 3, key: "dental_assistant_reception", label: "歯科助手(アシスタント・受付)" },
-  { code: 4, key: "assistant", label: "アシスタント" },
-  { code: 5, key: "reception", label: "受付" },
-  { code: 6, key: "treatment_coordinator", label: "TC" },
+  { code: 1, key: "eyelist", label: "アイリスト" },
+  { code: 2, key: "eyelist_assistant", label: "アイリスト（アシスタント・見習い）" },
+  { code: 3, key: "nailist", label: "ネイリスト" },
+  { code: 4, key: "hairdresser", label: "美容師" },
+  { code: 5, key: "esthetician", label: "エステティシャン" },
+  { code: 6, key: "reception", label: "受付" },
   { code: 7, key: "office_staff", label: "事務スタッフ" },
-  { code: 8, key: "dental_technician", label: "技工士" },
-  { code: 9, key: "other", label: "その他" },
+  { code: 8, key: "other", label: "その他" },
 ] as const satisfies readonly OccupationDefinition[]);
 
 const LABEL_BY_CODE: ReadonlyMap<number, string> = new Map(

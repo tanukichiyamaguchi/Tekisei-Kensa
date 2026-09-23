@@ -18,6 +18,7 @@ import {
 } from "../lib/db/repositories/respondents-repository";
 import type { RespondentKind, TeamCode } from "../lib/db/types";
 import { adminAuth } from "../lib/firebase/admin";
+import { OCCUPATION_CODES } from "../lib/masters/occupations";
 import { getExamPage } from "../lib/presentation/exam-pages";
 import type { AnswerMap } from "../lib/scoring/types";
 import { appBaseUrl, firebaseAdminEnv } from "../lib/utils/env";
@@ -94,7 +95,7 @@ export async function registerAndSave(
     kind,
     name: `テストテスト ${String(index).padStart(2, "0")}`,
     phoneNumber: `090-0000-${String(index).padStart(4, "0")}`,
-    occupationCode: (index % 9) + 1,
+    occupationCode: (index % OCCUPATION_CODES.length) + 1,
     diagnosisExperience: index % 3 === 0 ? "experienced" : "first_time",
     sessionTokenHash: token.tokenHash,
     tokenExpiresAt: token.expiresAt,

@@ -34,7 +34,7 @@ jobs:
       NEXT_PUBLIC_APP_BASE_URL: http://localhost:3000
       AI_PROVIDER: stub
       AI_MODEL: claude-opus-5
-      AI_PROMPT_VERSION: recruitment-v1
+      AI_PROMPT_VERSION: recruitment-v2
       PLAYWRIGHT_BASE_URL: http://localhost:3000
       METADATA_SERVER_DETECTION: none
       SEED_OWNER_PASSWORD: e2e-seed-password-0000

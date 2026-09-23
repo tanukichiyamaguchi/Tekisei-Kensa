@@ -35,7 +35,7 @@ on:
         type: string
         required: false
       display_name:
-        description: "[create-owner] オーナーの表示名（例: 院長）"
+        description: "[create-owner] オーナーの表示名（例: 責任者）"
         type: string
         required: false
 

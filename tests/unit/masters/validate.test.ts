@@ -163,13 +163,13 @@ describe("設問のステップ・ページ割り当て", () => {
   });
 });
 
-describe("職業マスタ（00 §1.10）", () => {
-  it("9 件、コード順", () => {
-    expect(OCCUPATIONS.map((o) => o.code)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
-    expect(getOccupationLabel(3)).toBe("歯科助手(アシスタント・受付)");
-    expect(getOccupationLabel(6)).toBe("TC");
-    expect(getOccupationLabel(9)).toBe("その他");
-    expect(() => getOccupationLabel(10)).toThrow(RangeError);
+describe("職業マスタ（00 §1.10、10 K-19）", () => {
+  it("8 件、コード順（アイリストのサロン向け）", () => {
+    expect(OCCUPATIONS.map((o) => o.code)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(getOccupationLabel(1)).toBe("アイリスト");
+    expect(getOccupationLabel(6)).toBe("受付");
+    expect(getOccupationLabel(8)).toBe("その他");
+    expect(() => getOccupationLabel(9)).toThrow(RangeError);
     expect(isOccupationCode(1)).toBe(true);
     expect(isOccupationCode(0)).toBe(false);
     expect(isOccupationCode("1")).toBe(false);

@@ -54,7 +54,7 @@ export interface RespondentDoc extends SoftDeletableDoc {
   readonly kind: RespondentKind;
   readonly name: string;
   readonly phoneNumber: string;
-  readonly occupationCode: number; // 1〜9
+  readonly occupationCode: number; // 1〜8（10 K-19）
   readonly diagnosisExperience: DiagnosisExperience;
   readonly teamCode: TeamCode | null; // 正
   readonly isExcluded: boolean; // 正

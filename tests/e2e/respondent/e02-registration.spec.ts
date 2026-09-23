@@ -61,7 +61,7 @@ test.describe("E-02 受検者登録の入力チェック", () => {
     await page
       .getByRole("textbox", { name: "電話番号", exact: true })
       .fill("０９０－１２３４－５６７８");
-    await page.getByRole("combobox", { name: "職業", exact: true }).selectOption({ label: "TC" });
+    await page.getByRole("combobox", { name: "職業", exact: true }).selectOption({ label: "受付" });
     await page.getByRole("radio", { name: "過去に診断したことがある", exact: true }).check();
     await expect(page.getByTestId("register-submit")).not.toHaveAttribute("aria-disabled", "true");
     await page.getByTestId("register-submit").click();

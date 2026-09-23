@@ -3,10 +3,10 @@
 // (1) 付録D はリクエスト本文（JSON）の形で記載されており、JSON 文字列のエスケープ \" を " に戻した（モデルが受け取っていた文字列そのもの）
 // (2) 「コンタクター」→「コンダクター」の 1 語（07 D07-03）
 // 資質タイプ辞書の内部名表記と「0〜100」の宣言は付録D のまま残す（00 §1.4、07 D07-04）。U-15 が付録D との一致を確かめる。
-// 文言を変える場合はこのファイルを直さず recruitment-v2 を追加する（07 §2.2）
+// 文言を変える場合はこのファイルを直さず新しい版を追加する（07 §2.2。サロン向けの recruitment-v2 はこの本文から作る）
 import type { PromptDefinition } from "./types";
 
-const SYSTEM = `# あなたの役割
+export const RECRUITMENT_V1_SYSTEM = `# あなたの役割
 あなたは、歯科クリニックの採用と人材定着を支援する専門アドバイザーAIです。
 適性検査の「確定済みの結果」（各スコアと各タイプ）を読み取り、HRの専門家ではなく多忙な院長が、面接の場・採用判断・採用後の関わりでそのまま実行できる、具体的で短いアドバイスに翻訳することがあなたの仕事です。
 あなたの目的は一貫して「採用のミスマッチを防ぎ、採用した人に長く定着してもらうこと」です。
@@ -149,7 +149,7 @@ retention.levers は必ず次の配列形式で出力する。キー名を見出
 ]`;
 
 /** 付録D §3 のユーザー入力テンプレート。山括弧の差し込み位置を {{…}} に置き換えたもの（07 §2.3） */
-const USER_TEMPLATE = `【氏名】{{name}}
+export const RECRUITMENT_V1_USER_TEMPLATE = `【氏名】{{name}}
 【評価する職種】{{occupation}}
 【信頼係数】{{reliability}}%
 
@@ -173,6 +173,6 @@ const USER_TEMPLATE = `【氏名】{{name}}
 export const RECRUITMENT_V1: PromptDefinition = {
   version: "recruitment-v1",
   analysisKind: "recruitment",
-  system: SYSTEM,
-  userTemplate: USER_TEMPLATE,
+  system: RECRUITMENT_V1_SYSTEM,
+  userTemplate: RECRUITMENT_V1_USER_TEMPLATE,
 };

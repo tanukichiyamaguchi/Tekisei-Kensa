@@ -59,7 +59,7 @@ jobs:
           NEXT_PUBLIC_APP_BASE_URL: http://localhost:3000
           AI_PROVIDER: stub
           AI_MODEL: claude-opus-5
-          AI_PROMPT_VERSION: recruitment-v1
+          AI_PROMPT_VERSION: recruitment-v2
           PDF_TOKEN_SECRET: dummy-pdf-token-secret-do-not-ship-0123456789
       - name: ダミーのサービスアカウント鍵を作る（ブラウザ用バンドルへの混入検査用。実在の鍵ではない）
         id: dummy_sa
@@ -79,7 +79,7 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT_KEY: ${{ steps.dummy_sa.outputs.value }}
           AI_PROVIDER: stub
           AI_MODEL: claude-opus-5
-          AI_PROMPT_VERSION: recruitment-v1
+          AI_PROMPT_VERSION: recruitment-v2
           PDF_TOKEN_SECRET: dummy-pdf-token-secret-do-not-ship-0123456789
       - name: サーバ専用の値がブラウザ用バンドルに含まれていないことを確認
         run: |
