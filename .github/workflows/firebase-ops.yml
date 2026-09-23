@@ -57,6 +57,13 @@ jobs:
       NEXT_PUBLIC_APP_BASE_URL: ${{ vars.NEXT_PUBLIC_APP_BASE_URL }}
       FIREBASE_SERVICE_ACCOUNT_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
     steps:
+      # メールアドレスは最初のステップで伏せ字に登録する。ステップの env に入力値を渡すと、ログのステップ見出しに
+      # env の値が表示されるため、add-mask をそのステップの中で実行しても間に合わない（2026-09-23 の実行で判明）。
+      # 入力値はイベントのペイロードから読み、この行の表示（run の中身）に値そのものが現れないようにする
+      - name: 入力のメールアドレスをログで伏せる
+        run: |
+          email="$(jq -r '.inputs.email // ""' "$GITHUB_EVENT_PATH")"
+          if [ -n "$email" ]; then echo "::add-mask::$email"; fi
       - name: 設定の確認
         run: |
           missing=""
@@ -85,11 +92,11 @@ jobs:
           ORG_CODE: ${{ inputs.org_code }}
           CUSTOMER_NUMBER: ${{ inputs.customer_number }}
           ORGANIZATION_ID: ${{ inputs.organization_id }}
-          OWNER_EMAIL: ${{ inputs.email }}
           DISPLAY_NAME: ${{ inputs.display_name }}
+        # メールアドレスは env に置かない（ステップ見出しに表示されるため）。ペイロードから直接読む
         run: |
+          OWNER_EMAIL="$(jq -r '.inputs.email // ""' "$GITHUB_EVENT_PATH")"
           if [ -z "$OWNER_EMAIL" ]; then echo "email を入力してください"; exit 2; fi
-          echo "::add-mask::$OWNER_EMAIL"
           args=(--email "$OWNER_EMAIL" --display-name "$DISPLAY_NAME" --hide-invite-link)
           if [ -n "$ORGANIZATION_ID" ]; then args+=(--organization-id "$ORGANIZATION_ID"); fi
           if [ -n "$ORG_NAME" ]; then args+=(--org-name "$ORG_NAME"); fi
