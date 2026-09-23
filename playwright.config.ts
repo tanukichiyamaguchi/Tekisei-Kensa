@@ -38,6 +38,16 @@ export default defineConfig({
         launchOptions,
       },
     },
+    {
+      // 管理画面は PC 幅 1440×900 のみ（06 D06-02、08 §3.4.1）
+      name: "admin-desktop",
+      testMatch: /admin\/.*\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1440, height: 900 },
+        launchOptions,
+      },
+    },
   ],
   webServer: {
     command: "pnpm start",

@@ -33,7 +33,7 @@
 
 ## 開発
 
-実装計画は [08 実装計画とテスト計画](docs/基本設計/08_実装計画とテスト計画.md) のマイルストーン（M0〜M6）に沿って進めます。現在は M3（受検者 API・受検者画面・E2E）まで実装済みです。管理画面は M4 で追加します。
+実装計画は [08 実装計画とテスト計画](docs/基本設計/08_実装計画とテスト計画.md) のマイルストーン（M0〜M6）に沿って進めます。現在は M4（管理者 API・管理画面・E2E）まで実装済みです。AI 解説の生成と PDF 出力は M5 で追加します。
 
 必要なもの: Node.js 22 系（`.nvmrc`）、pnpm（`package.json` の `packageManager` の版。Corepack で有効化）、Java 21（Firebase Emulator の実行に必要）。
 
@@ -60,7 +60,7 @@ pnpm seed:local                   # 組織 1・オーナー 1・管理者 1・�
 pnpm dev                          # http://localhost:3000
 ```
 
-受検者画面は `http://localhost:3000/exam?q={組織ID}&p=user`（既存スタッフ用は `p=executives`）から開きます。組織 ID は `pnpm seed:local` の出力に表示されます。
+受検者画面は `http://localhost:3000/exam?q={組織ID}&p=user`（既存スタッフ用は `p=executives`）から開きます。組織 ID は `pnpm seed:local` の出力に表示されます。管理画面は `http://localhost:3000/admin/login` から、シードのオーナー（`owner@example.com`）・管理者（`admin@example.com`）と `SEED_OWNER_PASSWORD` でログインします（ブラウザは `NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST` で Auth Emulator に接続します）。
 
 | コマンド                    | 内容                                                                                    |
 | --------------------------- | --------------------------------------------------------------------------------------- |
@@ -73,6 +73,8 @@ pnpm dev                          # http://localhost:3000
 | `pnpm build`                | Next.js のビルド                                                                        |
 | `pnpm masters:generate`     | 付録A・付録B から `lib/masters/data/*.json` を再生成する                                |
 | `pnpm masters:check`        | 生成物が付録と一致しているかを検査する（CI で実行）                                     |
+| `pnpm texts:generate`       | 付録C から `lib/masters/data/texts/*.json`（表示文言マスタ）を再生成する                |
+| `pnpm texts:check`          | 文言マスタの生成物が付録C と一致しているかを検査する（CI で実行）                       |
 | `pnpm check-env`            | `.env.local` と環境変数の検証（値は表示しない）                                         |
 | `pnpm emulators`            | Firebase Emulator（Auth 9099、Firestore 8080、UI 4000）を起動する                       |
 | `pnpm seed:local`           | Emulator にローカル用のデータを投入する（Emulator 以外には接続を拒否する）              |
@@ -87,13 +89,16 @@ Firebase プロジェクトは `tekisei-kensa-697c4` の 1 つだけで運用し
 
 - `lib/scoring/` — 採点エンジン（純関数。`scoreAnswers`、`compareWithPopulation`）。基本設計 03
 - `lib/masters/` — 設問・配点・指標定義などのマスタ。`data/` は生成物（手で編集しない）
-- `lib/presentation/` — 表示用の丸め・色・グラフ系列・受検ページの変換
+- `lib/presentation/` — 表示用の丸め・色・グラフ系列・受検ページの変換、結果詳細の文言の出し分け、管理画面の文言
+- `lib/utils/` — ブラウザから API を呼ぶ口（`respondent-api.ts`、`admin-api.ts`）と Firebase Auth の操作（`admin-auth.ts`）
 - `lib/firebase/` — Firebase Admin SDK（サーバ専用）とクライアント SDK（Auth のみ）の初期化
 - `lib/db/` — Firestore のデータアクセス層（文書型・書き込み前スキーマ・マッパー・リポジトリ）。基本設計 02
 - `lib/auth/` — セッション Cookie、カスタムクレーム、受検者・招待・PDF のトークン、管理者アカウント操作
 - `lib/services/` — API 共通処理（`handle()`、エラー、監査ログ、レート制限）と Route Handler の業務処理。基本設計 04
-- `app/` — Next.js（App Router）。受検者画面 `app/(respondent)/exam/**`、受検者 API `app/api/v1/respondent/**`、認証 `/auth/*`、管理者 API（M3 時点は `/api/v1/admin/me` のみ）
+- `app/` — Next.js（App Router）。受検者画面 `app/(respondent)/exam/**`、受検者 API `app/api/v1/respondent/**`、認証 `/auth/*`、管理画面 `app/(admin)/admin/**`、管理者 API `app/api/v1/admin/**`
 - `components/respondent/` — 受検者画面の部品（基本設計 05 §3）
+- `components/admin/`・`components/charts/`・`components/ui/` — 管理画面の部品、グラフ（ApexCharts のレーダーと自前 SVG のゲージ等）、汎用部品（基本設計 06）
+- `public/images/` — 適性タイプ・資質・ソーシャルスタイル・立ち位置のイラスト（SVG。10 K-05 により実装者が作成。同名のファイルで差し替え可能）
 - `firebase/` — Firebase の設定（`firebase.json`、ルール（全拒否）、インデックス）
 - `tests/` — 単体（`unit/`）、Emulator 上の結合（`integration/`）、Playwright の E2E（`e2e/`）
 - `scripts/` — マスタ生成と運用スクリプト（`create-owner`、`seed-local`、`set-admin-role`、`verify-firebase`）
