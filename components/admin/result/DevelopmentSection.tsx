@@ -8,6 +8,21 @@ import { ADMIN_TEXTS } from "@/lib/presentation/admin-texts";
 import type { DevelopmentView } from "@/lib/presentation/result-texts";
 import type { AptitudeScores } from "@/lib/scoring/types";
 
+function GuideList(props: { readonly view: DevelopmentView }) {
+  return (
+    <dl className="guide-list">
+      {[...DEVELOPMENT_GUIDE_ITEMS]
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map((item) => (
+          <div key={item.key} className="guide-list__item">
+            <dt>{item.label}</dt>
+            <dd className="pre-line">{props.view.guide.items[item.key]}</dd>
+          </div>
+        ))}
+    </dl>
+  );
+}
+
 export function DevelopmentSection(props: {
   readonly subjectName: string;
   readonly aptitudes: AptitudeScores;
@@ -32,17 +47,39 @@ export function DevelopmentSection(props: {
               {showSecond ? ADMIN_TEXTS.showFirstCandidate : ADMIN_TEXTS.showSecondCandidate}
             </button>
           </div>
-          <dl className="guide-list">
-            {[...DEVELOPMENT_GUIDE_ITEMS]
-              .sort((a, b) => a.sortOrder - b.sortOrder)
-              .map((item) => (
-                <div key={item.key} className="guide-list__item">
-                  <dt>{item.label}</dt>
-                  <dd className="pre-line">{current.guide.items[item.key]}</dd>
-                </div>
-              ))}
-          </dl>
+          <GuideList view={current} />
         </div>
+      </div>
+    </section>
+  );
+}
+
+/** 印刷用（07 §9.5、D07-18）: 資質レーダーの下に第一候補、続けて第二候補の 14 項目を印字する */
+export function PrintDevelopmentSection(props: {
+  readonly subjectName: string;
+  readonly aptitudes: AptitudeScores;
+  readonly first: DevelopmentView;
+  readonly second: DevelopmentView;
+  readonly radarSize: { readonly width: number; readonly height: number };
+}) {
+  return (
+    <section className="result-section" aria-labelledby="section-development">
+      <h2 id="section-development">育成方法</h2>
+      <div className="panel">
+        <AptitudeRadar
+          subjectName={props.subjectName}
+          subject={props.aptitudes}
+          width={props.radarSize.width}
+          height={props.radarSize.height}
+        />
+      </div>
+      <div className="panel">
+        <h3>第一候補: {props.first.label}</h3>
+        <GuideList view={props.first} />
+      </div>
+      <div className="panel">
+        <h3>第二候補: {props.second.label}</h3>
+        <GuideList view={props.second} />
       </div>
     </section>
   );

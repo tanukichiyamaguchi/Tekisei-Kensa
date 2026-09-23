@@ -43,8 +43,15 @@ function baseRadarOptions(
   };
 }
 
-/** 16 尺度（V-01）。比較選択時は「比較対象」系列を重ねる */
-export function traitRadarOptions(hasComparison: boolean, onMounted?: () => void): ApexOptions {
+/**
+ * 16 尺度（V-01）。比較選択時は「比較対象」系列を重ねる。
+ * plotRadius は PDF の印刷用ページだけが指定する（小さい枠でも軸ラベルに押されて図が縮まないよう半径を固定する。07 §9.5）
+ */
+export function traitRadarOptions(
+  hasComparison: boolean,
+  onMounted?: () => void,
+  plotRadius?: number,
+): ApexOptions {
   return {
     ...baseRadarOptions(
       TRAIT_RADAR_AXES.map((a) => a.label),
@@ -52,6 +59,7 @@ export function traitRadarOptions(hasComparison: boolean, onMounted?: () => void
       onMounted,
     ),
     yaxis: { show: false, min: 0, max: RADAR_MAX.traits },
+    ...(plotRadius ? { plotOptions: { radar: { size: plotRadius } } } : {}),
   };
 }
 

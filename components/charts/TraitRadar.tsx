@@ -11,14 +11,15 @@ export interface TraitRadarProps {
   readonly width: number; // 626（サマリー）／440（個人特性）。D06-25
   readonly height: number; // 450／440
   readonly onMounted?: () => void; // 07 の PrintReadyMarker が描画完了を数える（07 §9.6）
+  readonly plotRadius?: number | undefined; // 印刷用ページのみ（07 §9.5）
 }
 
 export function TraitRadar(props: TraitRadarProps) {
   const hasComparison = Boolean(props.comparison);
   return (
     <RadarChart
-      buildOptions={(onMounted) => traitRadarOptions(hasComparison, onMounted)}
-      optionsKey={hasComparison ? "comparison" : "subject"}
+      buildOptions={(onMounted) => traitRadarOptions(hasComparison, onMounted, props.plotRadius)}
+      optionsKey={`${hasComparison ? "comparison" : "subject"}:${props.plotRadius ?? "auto"}`}
       series={traitRadarSeries(props)}
       width={props.width}
       height={props.height}

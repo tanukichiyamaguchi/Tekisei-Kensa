@@ -9,6 +9,9 @@ export interface AptitudeRadarProps {
   readonly subjectName: string;
   readonly subject: AptitudeScores; // 0 以上、1.25 刻み
   readonly onMounted?: () => void; // 07 §9.6
+  /** 印刷用ページ（07 §9.5）では小さくする。省略時は画面の大きさ（06 §6） */
+  readonly width?: number;
+  readonly height?: number;
 }
 
 export function AptitudeRadar(props: AptitudeRadarProps) {
@@ -18,8 +21,8 @@ export function AptitudeRadar(props: AptitudeRadarProps) {
       buildOptions={(onMounted) => aptitudeRadarOptions(props.subject, onMounted)}
       optionsKey={series[0]?.data.every((v) => v === 0) ? "empty" : "auto"}
       series={series}
-      width={CHART_SIZES.aptitudeRadar.width}
-      height={CHART_SIZES.aptitudeRadar.height}
+      width={props.width ?? CHART_SIZES.aptitudeRadar.width}
+      height={props.height ?? CHART_SIZES.aptitudeRadar.height}
       ariaLabel="資質のレーダーチャート"
       onMounted={props.onMounted}
     />

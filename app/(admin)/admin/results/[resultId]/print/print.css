@@ -1,0 +1,168 @@
+/* PDF の印刷用ページ（07 §9.5、§9.7）。画面の部品・クラスをそのまま使い、A4 縦の 1 段組みに並べ替える */
+@font-face {
+  font-family: "Noto Sans JP";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("/fonts/NotoSansJP-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Noto Sans JP";
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url("/fonts/NotoSansJP-Bold.woff2") format("woff2");
+}
+
+@page {
+  size: A4 portrait;
+  margin: 14mm 12mm;
+}
+
+/* 管理画面の最小幅 1280px（06 D06-02）と背景色を印刷では外す（A4 の本文幅に合わせる） */
+body:has(.print-root),
+.admin-root:has(.print-root) {
+  min-width: 0;
+  min-height: 0;
+  background: #ffffff;
+}
+
+.print-root {
+  font-family: "Noto Sans JP", system-ui, sans-serif;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--admin-text);
+  background: #ffffff;
+  /* 本文幅 186 mm（07 §9.5） */
+  max-width: 186mm;
+  margin: 0 auto;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.print-root h1 {
+  font-size: 16px;
+  margin: 0 0 4px;
+}
+.print-root .result-subline {
+  margin: 0 0 12px;
+}
+.print-root .result-section {
+  margin-bottom: 8px;
+  break-before: auto;
+}
+.print-root .result-section > h2 {
+  font-size: 14px;
+  break-after: avoid;
+}
+.print-root .result-section h3 {
+  font-size: 12px;
+  margin-bottom: 6px;
+  break-after: avoid;
+}
+.print-root .result-section h4 {
+  font-size: 11px;
+  break-after: avoid;
+}
+/* 2 段組みを 1 段に落とす（07 §9.5） */
+.print-root .result-grid,
+.print-root .result-grid--7-5,
+.print-root .result-grid--5-7 {
+  display: block;
+}
+.print-root .panel,
+.print-root .result-grid > .panel {
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  break-inside: avoid;
+}
+.print-root .gauge-row {
+  gap: 16px;
+}
+.print-root .type-card__name {
+  font-size: 14px;
+}
+.print-root .position-view .illustration {
+  width: 120px;
+  height: 80px;
+}
+.print-root .guide-list__item {
+  padding: 4px 0;
+  break-inside: avoid;
+}
+.print-root .radar-chart {
+  margin: 0 auto;
+}
+/* ApexCharts の文字（軸ラベル・凡例）も同梱フォントで描く（実行環境のシステムフォントに依存しない。07 §9.7） */
+.print-root .apexcharts-text,
+.print-root .apexcharts-legend-text,
+.print-root .apexcharts-datalabel {
+  font-family: "Noto Sans JP", sans-serif !important;
+}
+/* サマリーを 1 ページ目に収めるための詰め（07 §9.5） */
+.print-root .trait-summary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+/* 評価・合致度・信頼係数を縦に並べ、残りの幅をレーダーに使う（16 軸のラベルが幅を取るため） */
+.print-root .trait-summary .gauge-row {
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+}
+/* タイプ: イラストの右にタイプ名とキャラクター名を縦に並べる */
+.print-root .type-card {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  column-gap: 12px;
+  align-items: center;
+  text-align: left;
+}
+.print-root .type-card .illustration {
+  grid-row: span 2;
+}
+.print-root .type-card__name {
+  margin: 0;
+  align-self: end;
+}
+.print-root .type-card p:last-child {
+  margin: 0;
+  align-self: start;
+}
+.print-root .gauge-row--wrap {
+  flex-wrap: nowrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+/* サマリー: 個別特性とリスクは全幅、タイプと立ち位置は 2 列 */
+.print-root .result-grid--summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.print-root .result-grid--summary > .panel {
+  margin-bottom: 0;
+}
+.print-root .result-grid--summary > .panel:first-child,
+.print-root .result-grid--summary > .panel--wide {
+  grid-column: 1 / -1;
+}
+.print-root .result-grid--summary .position-view {
+  flex-direction: column;
+  gap: 8px;
+}
+/* ゲージの見出しは輪の幅に縛らず、使える幅で折り返す（行数を減らしてサマリーを 1 ページに収める） */
+.print-root .donut-gauge figcaption {
+  font-size: 10px;
+  line-height: 1.4;
+}
+.print-root .gauge-row--wrap .donut-gauge {
+  flex: 1 1 0;
+  width: auto !important;
+}
+.print-root .trait-summary .donut-gauge {
+  width: 112px !important;
+}

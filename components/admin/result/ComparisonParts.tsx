@@ -73,6 +73,7 @@ export function TraitRadarWithComparison(props: {
   readonly subject: TraitScores;
   readonly width: number;
   readonly height: number;
+  readonly plotRadius?: number | undefined;
 }) {
   const comparison = useReadyComparison();
   return (
@@ -82,6 +83,7 @@ export function TraitRadarWithComparison(props: {
       comparison={comparison?.traitAverages ?? null}
       width={props.width}
       height={props.height}
+      plotRadius={props.plotRadius}
     />
   );
 }
