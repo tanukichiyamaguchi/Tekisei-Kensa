@@ -1,6 +1,7 @@
 # 01 §6.3 の e2e.yml（内容は 08 §3.4）。ビルド済みのアプリを Firebase Emulator の中で起動し、Playwright で E2E を実行する。
 # 実プロジェクト・実 API には接続しない（環境変数はすべてダミー。Firebase の Secrets は使わない。00 D-33）。
-# PDF 関連（fonts-noto-cjk、PDF_CHROMIUM_EXECUTABLE_PATH）の手順は PDF を実装する M5 で追加する。
+# PDF は Playwright が導入した Chromium で生成する（PDF_CHROMIUM_EXECUTABLE_PATH。07 §9.12）。日本語は印刷用ページが
+# 同梱の Noto Sans JP を読むため fonts-noto-cjk は入れない（07 §9.7）。
 name: e2e
 on:
   workflow_dispatch:
@@ -52,6 +53,8 @@ jobs:
       - name: PDF 印刷トークンの鍵をジョブ内で生成（GitHub Secrets に置かない）
         run: echo "PDF_TOKEN_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
       - run: pnpm exec playwright install --with-deps chromium
+      - name: PDF 生成に使う Chromium のパス（07 §9.12）
+        run: echo "PDF_CHROMIUM_EXECUTABLE_PATH=$(node -e "console.log(require('@playwright/test').chromium.executablePath())")" >> "$GITHUB_ENV"
       - run: pnpm build
       - name: Firebase Emulator のキャッシュ
         uses: actions/cache@v4

@@ -7,6 +7,7 @@ import { AiAnalysisHeaderButton, AiAnalysisProvider, AiAnalysisSection } from ".
 import { PopulationSummary } from "./ComparisonParts";
 import { ComparisonProvider } from "./ComparisonProvider";
 import { ComparisonScopeSelect } from "./ComparisonScopeSelect";
+import { DownloadButton } from "./DownloadDialog";
 import { ResultSections } from "./ResultSections";
 import { getOccupationLabel } from "@/lib/masters/occupations";
 import { ADMIN_TEXTS, RESPONDENT_KIND_LABELS } from "@/lib/presentation/admin-texts";
@@ -30,6 +31,7 @@ export function ResultDetailPage(props: { readonly detail: ResultDetailDto }) {
               <Suspense>
                 <ComparisonScopeSelect />
               </Suspense>
+              <DownloadButton resultId={detail.resultId} />
               <AiAnalysisHeaderButton />
             </div>
           </div>

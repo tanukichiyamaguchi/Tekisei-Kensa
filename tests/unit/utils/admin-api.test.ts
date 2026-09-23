@@ -1,7 +1,12 @@
 // lib/utils/admin-api.ts の adminFetch（06 §10.4）: 401 → ログイン、403（停止・未登録）→ 再読み込み、その他 → AdminApiError
 import { describe, expect, it, vi } from "vitest";
 
-import { AdminApiError, adminFetch } from "@/lib/utils/admin-api";
+import {
+  AdminApiError,
+  adminFetch,
+  downloadPdf,
+  filenameFromDisposition,
+} from "@/lib/utils/admin-api";
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(body === undefined ? null : JSON.stringify(body), {
@@ -102,5 +107,46 @@ describe("adminFetch", () => {
       code: "NETWORK_ERROR",
       message: "通信に失敗しました。ネットワーク接続を確認して再度お試しください",
     });
+  });
+});
+
+describe("downloadPdf（06 §3.5.11、04 §5.10）", () => {
+  it("mode・scope・teamCode をクエリにし、Blob と Content-Disposition のファイル名を返す", async () => {
+    const pdf = new Response(new Uint8Array([37, 80, 68, 70]), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": 'attachment; filename="result-Abcdefgh-full.pdf"',
+      },
+    });
+    const { navigate, fetchImpl } = setup(pdf);
+    const result = await downloadPdf(
+      "AbcdefghIJ",
+      { mode: "full", scope: { kind: "team", teamCode: "B" } },
+      { fetchImpl, navigate },
+    );
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "/api/v1/admin/results/AbcdefghIJ/pdf?mode=full&scope=team&teamCode=B",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(result.filename).toBe("result-Abcdefgh-full.pdf");
+    expect(result.blob.size).toBe(4);
+  });
+
+  it("scope なしは mode だけ。409 POPULATION_EMPTY は AdminApiError で返す", async () => {
+    const { navigate, fetchImpl } = setup(jsonResponse(409, errorBody("POPULATION_EMPTY")));
+    await expect(
+      downloadPdf("R1", { mode: "restricted", scope: null }, { fetchImpl, navigate }),
+    ).rejects.toMatchObject({ status: 409, code: "POPULATION_EMPTY" });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "/api/v1/admin/results/R1/pdf?mode=restricted",
+      expect.anything(),
+    );
+  });
+
+  it("filenameFromDisposition: 取れなければ既定名", () => {
+    expect(filenameFromDisposition('attachment; filename="a.pdf"', "b.pdf")).toBe("a.pdf");
+    expect(filenameFromDisposition(null, "b.pdf")).toBe("b.pdf");
+    expect(filenameFromDisposition("attachment", "b.pdf")).toBe("b.pdf");
   });
 });

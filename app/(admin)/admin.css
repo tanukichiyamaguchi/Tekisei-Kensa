@@ -693,6 +693,30 @@ body {
 .trait-list__row--lowest {
   background: rgba(142, 202, 230, 0.25);
 }
+.admin-root .visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.download-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
+}
+.download-options__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .ai-analysis__actions {
   display: flex;
   gap: 8px;

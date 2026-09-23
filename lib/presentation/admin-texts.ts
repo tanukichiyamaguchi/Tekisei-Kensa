@@ -73,6 +73,9 @@ export const ADMIN_TEXTS = {
   subjectNotInPopulation: "（本人は母集団に含まれていません: 除外中または別チーム）", // T-28
   pollingTimeout: "時間内に完了しませんでした。ページを再読み込みしてください", // T-29
   pdfWithoutComparison: "比較対象がいないため、比較なしで出力します", // T-31
+  pdfGenerating: "PDF を生成しています…", // 06 §3.5.11
+  pdfComparisonNone: "比較組織: 未選択", // 06 §3.5.11
+  pdfComparisonEmpty: "比較組織: 未選択（比較対象がいないため比較なしで出力します）", // 06 §3.5.11
   networkError: "通信に失敗しました。ネットワーク接続を確認して再度お試しください", // T-33
   excludedBadge: "除外中", // T-34
   signupDone:
