@@ -100,7 +100,8 @@ lib/ai/
 ├── input.ts                 # buildAiAnalysisInput（04 §7.1 の契約）と埋め込み値の整形（§2.3）
 ├── prompts/
 │   ├── index.ts             # PROMPT_REGISTRY: プロンプト版 → PromptDefinition（§2.2）
-│   └── recruitment-v1.ts    # 付録D §3 の system 指示とユーザー入力テンプレート（§2.1）
+│   ├── recruitment-v1.ts    # 付録D §3 の system 指示とユーザー入力テンプレート（§2.1）
+│   └── recruitment-v2.ts    # 付録D §5 のアイリスト向けのプロンプト（10 K-19。PR #13・#14）
 ├── prompt-builder.ts        # buildMessages(input, promptVersion): { system, user }（§2.1）
 ├── provider.ts              # getAiProvider(): AI_PROVIDER に応じた実装を返す（§5.2）
 └── providers/
@@ -127,8 +128,8 @@ lib/ai/
 
 | 項目 | 内容 |
 |---|---|
-| 置き場所 | `lib/ai/prompts/recruitment-v1.ts` に、system 指示全文とユーザー入力テンプレートを **文字列定数** として置く。Firestore には持たない（00 D-01 と同じ考え方。文言の変更はコード改版で行う） |
-| 版の識別子 | 環境変数 `AI_PROMPT_VERSION`（00 §3.2）の値。初期値 `recruitment-v1`（設計判断 D07-02。`aiAnalyses.analysisKind` の値 `recruitment`（00 §2.2）に版番号を付けた形） |
+| 置き場所 | `lib/ai/prompts/recruitment-v1.ts`（付録D §3）と `lib/ai/prompts/recruitment-v2.ts`（付録D §5。アイリスト向け。10 K-19）に、system 指示全文とユーザー入力テンプレートを **文字列定数** として置く。Firestore には持たない（00 D-01 と同じ考え方。文言の変更はコード改版で行う） |
+| 版の識別子 | 環境変数 `AI_PROMPT_VERSION`（00 §3.2）の値。初期値は `recruitment-v1`（設計判断 D07-02。`aiAnalyses.analysisKind` の値 `recruitment`（00 §2.2）に版番号を付けた形）。10 K-19（アイリスト向け）で `recruitment-v2`（付録D §5）を追加し、本番・`.env.example`・CI の値は `recruitment-v2` にしている（PR #13・#14）。`recruitment-v1` はレジストリに残す |
 | レジストリ | `lib/ai/prompts/index.ts` の `PROMPT_REGISTRY: Readonly<Record<string, PromptDefinition>>`。起動時検証（01 §4.3 の env スキーマ）で `AI_PROMPT_VERSION` がレジストリに存在しなければ失敗させる（本書から 01 への依頼。§11） |
 | 保存 | 生成に使った版を `aiAnalyses.promptVersion` に保存する（00 §2.2）。同じ結果に対して版が変わっても再生成はしない（要件定義書 §6.6「再表示時は再生成しない」） |
 | 転記ルール | 付録D §3 の system 指示は **一字一句そのまま** 転記する。ただし次の 1 箇所だけ修正する（下記） |
@@ -139,7 +140,7 @@ lib/ai/
 |---|---|---|---|
 | 「# 適性タイプ」の辞書 | `コンタクター=人を活かす大組織のリーダー` | `コンダクター=人を活かす大組織のリーダー` に修正する | 推定: 既存プロンプトの誤記（00 §1.6）。ユーザー入力の【適性タイプ】には 00 §1.6 の短縮名「コンダクター」が入るため、辞書側が「コンタクター」のままだと該当タイプの受検者で辞書引きが失敗し得る。修正は 1 語のみで、他の文言には触れない |
 | 「# 資質タイプ」の辞書 | `直感型／感性解放型（言語感覚）` | **そのまま残す** | 00 §1.4「付録D のプロンプト全文は初期値としてそのまま採用するため、プロンプト内の『感性解放型』表記はそのまま残す」。ユーザー入力には表示名（直感型など）のみを入れるため内部名の表記ゆれは AI 入力に現れない |
-| 「# 資質タイプ（各0〜100 …）」 | 資質の範囲を 0〜100 と記載 | そのまま残す。値は 100 を超えても **そのまま渡す**（§2.3） | 実際の値域は 0〜約 150（付録B §4、00 §1.4。03 §5 の計算上の最大は 145）だが、既存プロンプトの記載を初期値として踏襲する。付録D は資質を「最高点=第一候補／2位=第二候補」の相対比較にしか使わず、絶対値の閾値判定が無いため、宣言範囲を超えた値が判定を狂わせる経路は無い（§2.3 補足）。依頼主確認事項（D07-04）。修正する場合は `recruitment-v2` として追加する |
+| 「# 資質タイプ（各0〜100 …）」 | 資質の範囲を 0〜100 と記載 | そのまま残す。値は 100 を超えても **そのまま渡す**（§2.3） | 実際の値域は 0〜約 150（付録B §4、00 §1.4。03 §5 の計算上の最大は 145）だが、既存プロンプトの記載を初期値として踏襲する。付録D は資質を「最高点=第一候補／2位=第二候補」の相対比較にしか使わず、絶対値の閾値判定が無いため、宣言範囲を超えた値が判定を狂わせる経路は無い（§2.3 補足）。依頼主確認事項（D07-04）。修正する場合は新しい版として追加する（`recruitment-v2` は 10 K-19 でアイリスト向けのプロンプト（付録D §5）に使っているため、別の版名にする） |
 
 `PromptDefinition` の型:
 
@@ -154,6 +155,7 @@ export interface PromptDefinition {
 
 export const PROMPT_REGISTRY: Readonly<Record<string, PromptDefinition>> = {
   "recruitment-v1": RECRUITMENT_V1,
+  "recruitment-v2": RECRUITMENT_V2,   // 付録D §5。アイリスト向け（10 K-19）
 };
 
 export function getPromptDefinition(version: string): PromptDefinition {
@@ -172,7 +174,7 @@ export function getPromptDefinition(version: string): PromptDefinition {
 | プレースホルダ（付録D） | 取得元 | 整形規則 | 例 |
 |---|---|---|---|
 | `<氏名>` | `input.respondentName` | そのまま（前後の空白を除去） | 山田 太郎 |
-| `<職種>` | `input.occupationLabel`（`lib/masters/occupations.ts` の表示名。00 §1.10） | そのまま | 歯科衛生士、TC |
+| `<職種>` | `input.occupationLabel`（`lib/masters/occupations.ts` の表示名。00 §1.10） | そのまま | アイリスト、受付（10 K-19） |
 | `<信頼係数>` | `result.reliability` | 四捨五入して整数（画面のゲージ表示と同じ。03 §9.2） | 89.71 → `90` |
 | 16 尺度（`<協力性>` など 16 個） | `result.traits[TraitKey]` | 0.5 刻みの真値。整数なら小数を付けない（03 §9.2 `formatStep`） | 22.5 → `22.5`、27 → `27` |
 | ソーシャルスタイル 4 値（`<SS_ドライビング>` など） | `result.socialStyles[SocialStyleKey]` | 0.25 刻みの真値。末尾の 0 を除く（最大 2 桁）。負値は 0（画面のレーダーと同じ。03 §8.4） | 28.75 → `28.75`、−1.5 → `0` |
@@ -225,7 +227,7 @@ export function buildMessages(input: AiAnalysisInput, promptVersion: string): Bu
 
 ```text
 【氏名】山田 太郎
-【評価する職種】歯科衛生士
+【評価する職種】アイリスト（アシスタント・見習い）
 【信頼係数】79%
 
 【性格特性｜0〜30, 15=平均】
@@ -282,7 +284,7 @@ export const AiAnalysisOutputSchema = z
       teichaku_risk: z.enum(["非常に低い", "低い", "中", "高い", "非常に高い"]),
       sougou: z.enum(["推奨", "条件付きで推奨", "要検討", "非推奨"]),
     }).strict(),
-    strengths: z.array(z.string()).describe("このクリニックで活きる強み。2〜4個"),
+    strengths: z.array(z.string()).describe("このサロンで活きる強み。2〜4個"),   // 10 K-19 で「クリニック」→「サロン」
     cautions: z.array(z.string()).describe("採用前に見極めたい注意点。2〜4個（根拠スコア付き）"),
     questions: z.array(
       z.object({
@@ -353,7 +355,7 @@ export function parseAiOutputText(text: string): AiAnalysisOutput {
 | `verdict.sokusenryoku` | enum 5 値 | `verdict.sokusenryoku` | 2. 即戦力性 | `output.verdict.sokusenryoku`（map のまま。別フィールドへの抜粋はしない） |
 | `verdict.teichaku_risk` | enum 5 値 | `verdict.teichaku_risk` | 2. 離職リスク | `output.verdict.teichaku_risk` |
 | `verdict.sougou` | enum 4 値 | `verdict.sougou` | 2. 総合判定 | `output.verdict.sougou` |
-| `strengths[]` | string[] | `strengths` | 3. このクリニックで活きる強み | `output.strengths` |
+| `strengths[]` | string[] | `strengths` | 3. このサロンで活きる強み（10 K-19） | `output.strengths` |
 | `cautions[]` | string[] | `cautions` | 4. 採用前に見極めたい注意点 | `output.cautions` |
 | `questions[].q` / `.intent` | object[] | `questions` | 5. 面接で深掘りすべき質問 | `output.questions` |
 | `retention.levers[].label` / `.text` | object[]（4 固定） | `retention.levers` | 6. 接し方・育て方（関わり方／任せ方／認め方／伸ばし方） | `output.retention.levers` |
@@ -433,7 +435,7 @@ const response = await client.messages.parse(
 );
 ```
 
-- `client` は `new Anthropic({ apiKey })` で、`apiKey` は `serverEnv().ANTHROPIC_API_KEY`（01 §4.3 の `lib/utils/env.ts`。`AI_PROVIDER=anthropic` のとき存在することを起動時検証が保証する）をファクトリ（§5.2）が渡します（skill の「Client Initialization」）。サーバ専用の値で、`lib/ai/providers/anthropic.ts` と `lib/ai/provider.ts` 以外では参照しません（01 §3.2、01 §8.7）。
+- `client` は `new Anthropic({ apiKey })` で、`apiKey` は `serverEnv().ANTHROPIC_API_KEY`（01 §4.3 の `lib/utils/env.ts`。`AI_PROVIDER=anthropic` のとき存在することを起動時検証が保証する）をファクトリ（§5.2）が渡します（skill の「Client Initialization」）。サーバ専用の値で、`lib/ai/providers/anthropic.ts` と `lib/ai/provider.ts` 以外では参照しません（01 §3.2、01 §8.7）。`ANTHROPIC_API_KEY` には、ワークスペースに属する（workspace-scoped）API キーを使います。ワークスペースに属さないキーでは 400 `invalid_request_error`（「This API key is not scoped to a workspace, so this request must include the anthropic-workspace-id header ...」）になり、§4.6 の `invalid_request` として失敗します（2026-09-24。依頼主がワークスペースに属するキーを発行し直して解決）。
 - `output_config` は `effort` と `format` を同じオブジェクトに入れます（skill: いずれも `output_config` の下）。
 - リクエストオプションのうち `timeout` と `maxRetries` は skill の「Client config」に記載があります。`signal` は同じリクエストオプションに渡す想定ですが skill には記載がないため、実装時に SDK の型定義で確認し、無ければ `AbortSignal` の `abort` イベントで `timeout` を短縮する（`AbortSignal.timeout` と `Promise.race` を使わず、SDK の `timeout` を 240 秒に固定する）方式に倒します（§12 D07-10）。
 
@@ -539,6 +541,7 @@ SDK 例外との対応（skill `shared/error-codes.md` の TypeScript 列。`API
 |---|---|
 | `resultId`、`organizationId`、`provider`、`model`、`promptVersion` | サービス |
 | `status`（`completed` / `failed`）、`reason`、`retryable` | provider の結果 |
+| `detail`（失敗時のみ。`ai.generate` の warn、`status: failed`） | `AiProviderError` の message（例外クラス名・HTTP ステータス・`error.type` と、API のエラー本文の message 300 文字まで。PR #15） |
 | `requestId` | SDK の応答ヘッダー（`request-id`。skill `error-codes.md` の例に `request_id` がある）。取得方法は SDK の `withResponse()` 等を実装時に確認 |
 | `stopReason` | `response.stop_reason` |
 | `inputTokens`、`outputTokens`、`cacheReadInputTokens`、`cacheCreationInputTokens` | `response.usage`（skill「Verifying Cache Hits」） |
@@ -1100,9 +1103,9 @@ export async function renderResultPdf(args: RenderResultPdfArgs): Promise<Render
 }
 ```
 
-- `launchBrowser()`（`lib/pdf/browser.ts`）: `isVercel()`（01 §4.3 の `lib/utils/env.ts`。`serverEnv().VERCEL === "1"`）が真のときは `@sparticuz/chromium` の `executablePath()` と推奨 `args` / `headless` を `puppeteer-core` の `launch` に渡す。それ以外（ローカル・CI）は `serverEnv().PDF_CHROMIUM_EXECUTABLE_PATH`（§9.12）を使い、未設定なら `PdfGenerationError("browser_launch_failed")` を投げる。`process.env` は直接読まない（01 §3.5 の `no-restricted-syntax`。01 §12 の 07 宛て改版依頼 (1)(2) に対応）。`@sparticuz/chromium` と `puppeteer-core` の版の組み合わせは 01 §3.2 の方針で固定する。
+- `launchBrowser()`（`lib/pdf/browser.ts`）: `isVercel()`（01 §4.3 の `lib/utils/env.ts`。`serverEnv().VERCEL === "1"`）が真のときは `@sparticuz/chromium` の `executablePath()` と推奨 `args` / `headless` を `puppeteer-core` の `launch` に渡す。それ以外（ローカル・CI）は `serverEnv().PDF_CHROMIUM_EXECUTABLE_PATH`（§9.12）を使い、未設定なら `PdfGenerationError("browser_launch_failed")` を投げる。`process.env` は直接読まない（01 §3.5 の `no-restricted-syntax`。01 §12 の 07 宛て改版依頼 (1)(2) に対応）。`@sparticuz/chromium` と `puppeteer-core` の版の組み合わせは 01 §3.2 の方針で固定する。Vercel では `@sparticuz/chromium` の `bin/*.br` を PDF の関数に同梱する必要がある。`next.config.ts` の `outputFileTracingIncludes` に pnpm の実体パス `./node_modules/.pnpm/@sparticuz+chromium@*/node_modules/@sparticuz/chromium/bin/**` を指定する（`node_modules/@sparticuz/chromium` はシンボリックリンクのため）。Next.js 16.3.6 の Turbopack ビルドでは `outputFileTracingIncludes` が適用されないため、`package.json` の build は `next build --webpack` にしている（同梱されず本番で `browser_launch_failed` になったことへの対応。PR #15）。
 - URL 中のトークンは Chromium のプロセス内でしか使われず、ログにも出しません（`buildPrintUrl` の結果をログに出さない）。
-- `PdfGenerationError`（`lib/pdf/errors.ts`）の `reason`: `browser_launch_failed` / `print_page_unavailable` / `chart_timeout` / `pdf_timeout` / `aborted`。サービスは 500 `PDF_GENERATION_FAILED` の `details.reason` に載せ、ログに出します（04 §5.10）。
+- `PdfGenerationError`（`lib/pdf/errors.ts`）の `reason`: `browser_launch_failed` / `print_page_unavailable` / `chart_timeout` / `pdf_timeout` / `aborted`。サービスは 500 `PDF_GENERATION_FAILED` の `details.reason` に載せ、ログに出します（04 §5.10）。失敗時のログ（`pdf.export`、error、`status: failed`）には `detail` として `PdfGenerationError` の message を出します（Chromium 起動失敗時は例外の message 300 文字まで。印刷用 URL・トークン・氏名は含めない。PR #15）。
 
 ### 9.9 認可（PDF 印刷トークン）
 
@@ -1183,7 +1186,7 @@ export async function renderResultPdf(args: RenderResultPdfArgs): Promise<Render
 | PDF-05 | 母集団 0 件 | `scope` 指定で 409 `POPULATION_EMPTY`（Chromium を起動しない） |
 | PDF-06 | 失敗 | 印刷用ページが 500 を返す・レーダーが描画されない（`data-print-ready` が付かない）ケースで 500 `PDF_GENERATION_FAILED` と `reason`、`browser.close()` が呼ばれること |
 | PDF-07 | ローカル | `PDF_CHROMIUM_EXECUTABLE_PATH` 未設定時に PDF 以外の機能が影響を受けず、PDF は 500 `PDF_GENERATION_FAILED`（`reason = browser_launch_failed`）になること |
-| PDF-08 | 関数サイズ（Preview のビルドログ） | PDF の Route Handler の関数サイズが 01 §5.4 の上限（展開後 250 MB）に収まり、`public/fonts/` のフォントが関数バンドルに含まれていないこと（§9.7 の推定の確認） |
+| PDF-08 | 関数サイズ・同梱（Preview のビルドログ、CI） | PDF の Route Handler の関数サイズが 01 §5.4 の上限（展開後 250 MB）に収まり、`public/fonts/` のフォントが関数バンドルに含まれていないこと（§9.7 の推定の確認）。`ci.yml` の build 後に `.next/server/app/api/v1/admin/results/[resultId]/pdf/route.js.nft.json` に `chromium/bin/chromium.br` が含まれることを grep で確認する（PR #15） |
 
 ## 11. 他分冊への引き渡し事項
 
@@ -1244,3 +1247,4 @@ export async function renderResultPdf(args: RenderResultPdfArgs): Promise<Render
 | 1.2 | 2026-09-21 | 最終点検（09）。06 §9 の依頼により `PdfSectionVisibility.showPosition`（当面 `true`。06 D06-26）を追加（§9.5、§11）。§6.3 のポーリング上限を 06 §3.5.9 と同じ 10 分に訂正。§9.4 のレイアウト行を 06 D06-27 の読み替えに、検索避け・ミドルウェア行を 01 §8.7・§5.5、04 D04-41 で確定済みに更新。§9.12・§11 の「00 §3.2 未掲載」「01 への改版依頼」を反映済みに更新 |
 | 1.1 | 2026-09-21 | レビュー指摘への対応。must: `restricted` の PDF に AI 解説を掲載しない（付録D §3 の必須引用のため。§7.2、§9.5、§10 PDF-03、§11、D07-15）。should: 印刷用ページのオリジンを `appBaseUrl()` に（§9.8、§9.13、D07-22）、環境変数の読み取りを `serverEnv()` / `isVercel()` に統一し非 null 断言を排除（§4.2、§5.2、§9.8）、`PDF_CHROMIUM_EXECUTABLE_PATH` の 00 §3.2 追記依頼と CI での設定（§9.12、§11）、Storage 仕様の 01／02 の食い違いを 01 §8.5 で確定（§9.11、§11、D07-21）、08 への回答（`schema.ts`、`parseAiOutputText()`、`.strict()`、stub の不正 JSON モードと `model`、U-11 の `{{…}}` 検査。§3.2、§5.4、§10、§11、D07-24）、フォント配置の理由とサブセット化の判断（§9.7、D07-20）、SelectPDF の記述を推定に（§9.2）、資質の 100 超と相性の負値の扱いの理由を揃えた（§2.2、§2.3、D07-04、D07-05）、`lib/pdf/` のツリーに `errors.ts` / `templates.ts` / `protection-bypass.ts` を追加（§9.8）、402 を `auth_error`・`retryable: false` に（§4.6、§5.3）、§4.4・§4.5 の参照誤りの訂正、キャッシュ TTL の命中条件（§4.4、D07-11） |
 | 1.4 | 2026-09-21 | Firebase 化後の分冊間整合。02 2.1 版・04 2.1 版に合わせ、§4.8（監査ログ `details` のトークン数は 04 §5.9 で確定）、§6.2（状態遷移は 02 の `markAiGenerationStarted`・`saveAiAnalysis`・`markAiGenerationFailed`・`countAiAnalysesSince` と 04 §5.9 の分担）、§6.3（GET で滞留を検知した場合も監査ログが残る）、§6.4（日次上限は `count()` 集計で確定）、§7.1（`generatedBy` で確定、同一バッチは `saveAiAnalysis()`）、§9.3・§9.4（印刷トークンの `adminUid`・`role`。可視性の再検証はトークンの `role` で行い `adminUsers` を再読しない）、§11 の 02・04 宛てを反映済みに更新。Claude API の呼び出し仕様・プロンプト・PDF の生成方式は変更なし |
+| 1.5 | 2026-09-24 | 本番デプロイで判明した事項の反映（§1.2・§2.2 のプロンプト `recruitment-v2`（アイリスト向け）と `AI_PROMPT_VERSION` の現在値、§2.3・§2.4・§3.2・§3.3 の職種例と「サロン」の文言（10 K-19。PR #13・#14）、§4.2 のワークスペースに属する API キー、§4.8・§9.8 の失敗時ログの `detail`、§9.8 の Chromium バイナリの同梱と `next build --webpack`、§10 PDF-08 の CI での同梱確認（PR #15）） |
