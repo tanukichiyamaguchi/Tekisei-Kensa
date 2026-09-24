@@ -862,6 +862,7 @@ export function normalizePhoneNumber(raw: string): string {
 import { z } from "zod";
 import { requiredText, docIdSchema } from "./common";
 import { normalizePhoneNumber, PHONE_PATTERN } from "@/lib/utils/phone-number";   // 1.2 版: 実体を lib/utils/ に移し、05 と共有（D05-16）
+import { occupationCodeSchema } from "@/lib/db/schemas/values";   // 10 K-19
 
 export const registerRespondentInputSchema = z.object({
   organizationId: docIdSchema,
@@ -871,7 +872,7 @@ export const registerRespondentInputSchema = z.object({
     .string()
     .transform(normalizePhoneNumber)
     .refine((s) => PHONE_PATTERN.test(s), { message: "電話番号の形式が正しくありません" }),
-  occupationCode: z.number().int().min(1).max(9),
+  occupationCode: occupationCodeSchema,   // 1〜8（00 §1.10、10 K-19。PR #13・#14）。旧コード 9 は保存済み文書の検証（storedOccupationCodeSchema）だけが読み、新規登録では受け付けない
   diagnosisExperience: z.enum(["first_time", "experienced"]),
 });
 export type RegisterRespondentInput = z.infer<typeof registerRespondentInputSchema>;
@@ -1477,7 +1478,7 @@ export type ListResultsQuery = z.infer<typeof listResultsQuerySchema>;
 }
 ```
 
-- 職業名（`歯科衛生士`）は返しません。06 分冊が `lib/masters/occupations.ts` で引きます（00 §1.10）。
+- 職業名（例: `アイリスト`）は返しません。06 分冊が `lib/masters/occupations.ts` で引きます（00 §1.10、10 K-19）。K-19 より前に受検した旧データの職業コード 9 は「その他」と表示します（保存済み文書の検証 `storedOccupationCodeSchema`。PR #13・#14）。
 - `aptitudeType` / `socialStyle` / `aiGenerationStatus` は一覧の要件（A-02）には無い項目ですが、組織内分類やアイコン表示に使えるよう含めます（設計判断 D04-27。`results` 文書にあるフィールドのみで追加の読み取りが無い）。
 - `sort=name` は `respondents.name` を `Intl.Collator("ja")` で比べた順（コードポイント順に近く、日本語の読み順にはならない。仮置き）。
 
@@ -2169,7 +2170,7 @@ export function getAiProvider(): AiProvider;  // AI_PROVIDER に応じた実装�
 export function buildAiAnalysisInput(args: { respondentName: string; occupationCode: number; score: ScoreResult }): AiAnalysisInput;
 ```
 
-- `AiAnalysisInput.occupationLabel` は `lib/masters/occupations.ts` の表示名（例: `歯科衛生士`、`TC`）です（00 §1.10、D-19）。
+- `AiAnalysisInput.occupationLabel` は `lib/masters/occupations.ts` の表示名（例: `アイリスト`、`ネイリスト`）です（00 §1.10、10 K-19）。
 - 応答の `output` は `zod` で付録D §2 のスキーマに検証済みのもの（07）。検証に失敗した生テキストは `aiAnalyses` に保存せず（成功時のみ文書を作成。07 §4.6）、`aiGenerationError = "invalid_json"` にします。
 
 ### 7.2 PDF
@@ -2795,5 +2796,6 @@ sequenceDiagram
 | 2.0 | 2026-09-21 | 技術構成の変更（10 K-06。Supabase → Firebase）に伴う全面改版。00 2.0 版を正とし、API のパス・入出力・エラーコードは原則維持したうえで、Supabase Auth・RLS・SQL 関数（RPC）に依存する記述を置き換えた。**追加**: `POST /auth/session`（ID トークン → セッション Cookie。§6.1 D04-53・D04-54）、`DELETE /auth/session`（§6.2）、エラーコード `ID_TOKEN_INVALID`・`SERVICE_UNAVAILABLE` と Firebase 由来のエラー対応表（§2.4 D04-60）、`lib/services/visibility.ts`・`firebase-errors.ts`・`admin-session.ts`（§8.1）、監査 action `session.submit`・`respondent.delete`・`organization.rotate_invite_token`（§2.6）、シーケンス §9.3。**廃止**: `GET /auth/callback`、`lib/auth/password-check.ts`、`lib/db/rpc-errors.ts`、§4.2.2 の RPC の写し、1.x 版の RPC 一式。**変更**: パスパラメータを Firestore の文書 ID に（§2.1 D04-03）、`requireAdmin` を `verifySessionCookie` → クレーム → `adminUsers` の 3 段階に（§2.5.1 D04-09 改）、受検者セッションを `sessionTokenHash` の照合に（§2.5.2）、監査ログを `actorUid` / `actorRole` / `actorKind` / `targetCollection` に（§2.6 D04-61）、レート制限を `count()` 集計に（§2.8）、受検者登録をバッチ・保存／開始／送信をトランザクションに（§4 D04-17 改・D04-59）、`POST /auth/invite` の本文からパスワードを外し Admin SDK `createUser` + クレーム + `adminUsers` に（§6.3 D04-36 改・D04-37 改・D04-51 改・D04-58）、`GET /me` の `links.adminInvite` を `null` に（§5.1 D04-56。D04-22 取り下げ）、`PATCH /me` の `currentPassword` を `reauthIdToken` に・`pendingEmail` 廃止・変更後は再ログイン（§5.1 D04-47 改・D04-57）、`GET /admin-users` に `email` を追加（§5.11 D04-49 改）、一覧・分類をメモリ上で処理（§5.3 D04-55）、チーム・除外・削除で `results` の複製フィールドを同一トランザクションで更新（§5.6）、AI 生成の開始をトランザクション・保存をバッチに（§5.9）、PDF トークンのペイロードに `adminUid`・`role`（§7.2）、`middleware.ts` を Cookie の有無だけの判定に（§8.5）、`lib/db/` の関数名を 00 §3.3 の範囲で仮置き（§8.4）。§10 の引き渡し事項と §11 の D04-xx を更新し D04-53〜D04-62 を追加 |
 | 1.2 | 2026-09-21 | 最終点検（09）。01 D01-35 に従い §6.3 の `resetPasswordForEmail` の `redirectTo` を `window.location.origin` に改版。§5.1 `GET /me` のリンク生成を `appBaseUrl()` に明記。05 D05-16 に従い `normalizePhoneNumber`／`PHONE_PATTERN` の実体を `lib/utils/phone-number.ts` に移し §4.2 のスキーマはそこから import。05 D05-32 に従い §4.3・D04-12 の「失敗しても画面は進める」を取り下げ（成功時のみ遷移）。05 D05-34 に従い §4.1・§4.6 の「組織名を表示」を改版。02 D02-27 に従い §4.1・D04-15 の `is_active` の保留を解消。§4.2.2 を「02 §11.16 が正」に改め D04-17 を採用済みに。§5.9 の監査ログ `details` に `inputTokens`／`outputTokens`（07 §4.8）を追加。§7.2・D04-40・§10 の「00 §3.2 未掲載」を掲載済みに更新 |
 | 1.1 | 2026-09-19 | レビュー指摘への対応。must: (1) `middleware.ts` の認証不要パスに `/admin/results/[resultId]/print` を追加（§7.2、§8.5、D04-41）。(2) `login-events` の `admin.signup` 補完を取り下げ、招待受理がサービスロールで書く（§2.6、§5.1、§6.2、§8.3、D04-36 改）。(3) 回答保存の入力を `pageNo`（1〜20）に変更し、ページ所属をサーバで検証（§4.4、§8.2、D04-18 改、D04-46）。(4) `GET /api/v1/admin/admin-users` を追加（§3.2、§5.11、§8.1〜§8.3、D04-49）。should: 管理者追加方式の整合確認（§6.2、D04-51）、エラー表の追加と表内 JSON のコードブロック化（§4.1、§4.3、§5.1、§5.2、§5.6〜§5.9）、05・06・08 への読み替えを §10 に列挙（D04-42、D04-44、D04-45、D04-48、D04-52）、再開判定 `findResumableSession` と Server Component からの認可ヘルパーの呼び方（§2.5.2、§4.1、§8.3、D04-43）、`PDF_TOKEN_SECRET` の 00 §3.2 追記依頼（§7.2、§10、D04-40）、役割変更 API の不提供（§3.3、§5.12、D04-50）、パスワード検証の一時クライアント（§5.1、D04-47）、`AuditDetails` に配列を許容（§2.6）、比較応答例の `scope` を `organization` に・結果詳細例に `reliability` を追加（§5.4、§5.5）、D04-16 の既存挙動を推定に改める（§4.2.1）。あわせて `ai_generation_error` の語彙を 07 §4.6 に合わせ（§5.9）、§0.2 の節番号を訂正 |
+| 2.2 | 2026-09-24 | 本番デプロイで判明した事項の反映（職業コードを 1〜8 に。旧コード 9 は保存済み文書の検証だけが読む。§4.2 の `occupationCode`、§5.3・§7.1 の職業名の例。10 K-19、PR #13・#14） |
 
 以上。

@@ -33,13 +33,13 @@
 
 ## 開発
 
-実装計画は [08 実装計画とテスト計画](docs/基本設計/08_実装計画とテスト計画.md) のマイルストーン（M0〜M6）に沿って進めます。現在は M5（AI 解説・PDF 出力）まで実装済みです。
+実装計画は [08 実装計画とテスト計画](docs/基本設計/08_実装計画とテスト計画.md) のマイルストーン（M0〜M6）に沿って進めます。現在は M5（AI 解説・PDF 出力）まで実装済みです。本番は Vercel（Hobby プラン、リージョン hnd1）で動いています。2026-09-23 に `firebase-ops` の create-owner で初期オーナーを作成し、ログインできることを確認しました。2026-09-24 に、本番で AI 解説の生成（`claude-opus-5`）と PDF のダウンロードを確認しました（PDF の見た目の目視 H-04 は未完了です。10 K-18 で決めた `claude-opus-5-5` での生成は再確認中です）。詳細は [検証記録](docs/検証記録/2026-09-24_M5_本番確認.md) にあります。
 
 必要なもの: Node.js 22 系（`.nvmrc`）、pnpm（`package.json` の `packageManager` の版。Corepack で有効化）、Java 21（Firebase Emulator の実行に必要）。
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm run ci                # lint・format・typecheck・マスタ再生成検査・単体テスト（CI と同じ）
+pnpm run ci                # lint・format・typecheck・マスタ再生成検査・単体テスト（CI の検査の一部。CI ではこのほか、firebase-admin を require(esm) なしで読み込めるかの確認（PR #11）や、build 後に PDF の関数に Chromium が同梱されているかの確認（PR #15）なども行う）
 pnpm test:integration:emu  # Firebase Emulator を起動して結合テストを実行し、終了後に止める
 ```
 
@@ -62,29 +62,29 @@ pnpm dev                          # http://localhost:3000
 
 受検者画面は `http://localhost:3000/exam?q={組織ID}&p=user`（既存スタッフ用は `p=executives`）から開きます。組織 ID は `pnpm seed:local` の出力に表示されます。管理画面は `http://localhost:3000/admin/login` から、シードのオーナー（`owner@example.com`）・管理者（`admin@example.com`）と `SEED_OWNER_PASSWORD` でログインします（ブラウザは `NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST` で Auth Emulator に接続します）。
 
-- AI 解説: ローカルと CI は `AI_PROVIDER=stub`（API キー不要。確認用の固定文章を返す）。実際の Claude API を使うのは `AI_PROVIDER=anthropic` と `ANTHROPIC_API_KEY` を設定した環境だけです（キーはリポジトリや `.env.example` に書かない）。
+- AI 解説: ローカルと CI は `AI_PROVIDER=stub`（API キー不要。確認用の固定文章を返す）。実際の Claude API を使うのは `AI_PROVIDER=anthropic` と `ANTHROPIC_API_KEY` を設定した環境だけです（キーはリポジトリや `.env.example` に書かない）。`ANTHROPIC_API_KEY` には、Anthropic のワークスペースに属する API キーを使います。ワークスペースに属さないキーでは、`anthropic-workspace-id` ヘッダーを求める 400 `invalid_request_error` になり、AI 解説を生成できません。
 - PDF 出力: ローカルでは Chrome／Chromium の実行ファイルのパスを `PDF_CHROMIUM_EXECUTABLE_PATH` に設定します（未設定なら PDF だけが失敗し、他の機能は動きます）。Vercel では `@sparticuz/chromium` を使うため設定不要です。
 
-| コマンド                    | 内容                                                                                    |
-| --------------------------- | --------------------------------------------------------------------------------------- |
-| `pnpm test`                 | 単体テスト（Vitest、`tests/unit/`。Firebase 不要）                                      |
-| `pnpm test:integration:emu` | 結合テスト（`tests/integration/`。Emulator の起動から停止まで行う）                     |
-| `pnpm test:integration`     | 結合テストのみ（`pnpm emulators` を別に起動しておく）                                   |
-| `pnpm test:e2e`             | E2E（`tests/e2e/`。Emulator の中で、`pnpm build` 済みのアプリに対して実行する）         |
-| `pnpm typecheck`            | TypeScript の型検査                                                                     |
-| `pnpm lint` / `pnpm format` | ESLint / Prettier の検査（`pnpm format:write` で整形）                                  |
-| `pnpm build`                | Next.js のビルド                                                                        |
-| `pnpm masters:generate`     | 付録A・付録B から `lib/masters/data/*.json` を再生成する                                |
-| `pnpm masters:check`        | 生成物が付録と一致しているかを検査する（CI で実行）                                     |
-| `pnpm texts:generate`       | 付録C から `lib/masters/data/texts/*.json`（表示文言マスタ）を再生成する                |
-| `pnpm texts:check`          | 文言マスタの生成物が付録C と一致しているかを検査する（CI で実行）                       |
-| `pnpm check-env`            | `.env.local` と環境変数の検証（値は表示しない）                                         |
-| `pnpm emulators`            | Firebase Emulator（Auth 9099、Firestore 8080、UI 4000）を起動する                       |
-| `pnpm seed:local`           | Emulator にローカル用のデータを投入する（Emulator 以外には接続を拒否する）              |
-| `pnpm owner:create`         | 組織と初期オーナーを作成する（02 §9.6。実プロジェクトでは `firebase-ops` から実行する） |
-| `pnpm admin:set-role`       | 管理者の役割変更・利用停止・停止解除・削除・クレームとの同期（02 §9.9）                 |
-| `pnpm firebase:verify`      | 実プロジェクトに対する実装時確認（08 D08-33。`--confirm-project <ID>` が必要）          |
-| `pnpm firestore:deploy`     | ルール・インデックスのデプロイ（通常は GitHub Actions の `firebase-deploy` を使う）     |
+| コマンド                    | 内容                                                                                                                                                          |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm test`                 | 単体テスト（Vitest、`tests/unit/`。Firebase 不要）                                                                                                            |
+| `pnpm test:integration:emu` | 結合テスト（`tests/integration/`。Emulator の起動から停止まで行う）                                                                                           |
+| `pnpm test:integration`     | 結合テストのみ（`pnpm emulators` を別に起動しておく）                                                                                                         |
+| `pnpm test:e2e`             | E2E（`tests/e2e/`。Emulator の中で、`pnpm build` 済みのアプリに対して実行する）                                                                               |
+| `pnpm typecheck`            | TypeScript の型検査                                                                                                                                           |
+| `pnpm lint` / `pnpm format` | ESLint / Prettier の検査（`pnpm format:write` で整形）                                                                                                        |
+| `pnpm build`                | Next.js のビルド（`next build --webpack`。Turbopack のビルドでは `outputFileTracingIncludes` が適用されず、PDF の関数に Chromium が同梱されないため。PR #15） |
+| `pnpm masters:generate`     | 付録A・付録B から `lib/masters/data/*.json` を再生成する                                                                                                      |
+| `pnpm masters:check`        | 生成物が付録と一致しているかを検査する（CI で実行）                                                                                                           |
+| `pnpm texts:generate`       | 付録C から `lib/masters/data/texts/*.json`（表示文言マスタ）を再生成する                                                                                      |
+| `pnpm texts:check`          | 文言マスタの生成物が付録C と一致しているかを検査する（CI で実行）                                                                                             |
+| `pnpm check-env`            | `.env.local` と環境変数の検証（値は表示しない）                                                                                                               |
+| `pnpm emulators`            | Firebase Emulator（Auth 9099、Firestore 8080、UI 4000）を起動する                                                                                             |
+| `pnpm seed:local`           | Emulator にローカル用のデータを投入する（Emulator 以外には接続を拒否する）                                                                                    |
+| `pnpm owner:create`         | 組織と初期オーナーを作成する（02 §9.6。実プロジェクトでは `firebase-ops` から実行する）                                                                       |
+| `pnpm admin:set-role`       | 管理者の役割変更・利用停止・停止解除・削除・クレームとの同期（02 §9.9）                                                                                       |
+| `pnpm firebase:verify`      | 実プロジェクトに対する実装時確認（08 D08-33。`--confirm-project <ID>` が必要）                                                                                |
+| `pnpm firestore:deploy`     | ルール・インデックスのデプロイ（通常は GitHub Actions の `firebase-deploy` を使う）                                                                           |
 
 Firebase プロジェクトは `tekisei-kensa-697c4` の 1 つだけで運用します（10 K-13）。このプロジェクトに対する運用スクリプト（`owner:create`、`firebase:verify`）は、GitHub の Actions タブから `firebase-ops` ワークフローを手動実行して行います（10 K-12）。ルール・インデックスのデプロイは `firebase-deploy` ワークフローです。
 
