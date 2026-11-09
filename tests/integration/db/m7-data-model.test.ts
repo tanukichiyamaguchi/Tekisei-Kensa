@@ -1,12 +1,14 @@
 // M7 のデータモデル（11 総論 5.4 の PR-7.2 の完了条件「項目の無い既存の文書を読んでも壊れない」、08 §8.2 の 5・D08-30）。
 // (1) 作成時の値: M7-exam-20・24・25 のデータの分、M7-list-31（求職者・既存スタッフ）、M7-ai-37 の作成時の値、
 //     aiAnalyses の 3 項目、adminUsers の既読
-// (2) M7 より前の形の文書: M7 で足した項目を消した文書を、リポジトリと今の API が補って読む
-//     （M7-exam-31、M7-list-32 の補いの分、M7-ai-34 の M7 より前の形の文書の分）
+// (2) M7 より前の形の文書: M7 で足した項目を消した文書を、リポジトリと今の API・印刷用ページのデータが補って読む
+//     （M7-exam-31、M7-list-32 の補いの分、M7-ai-34 の M7 より前の形の文書の分）。公開の時点で受験中の人の
+//     保存と送信（11-1 §3.6）、M7 より前の組織の招待の受け付けとリンクの作り直しも確かめる
 import { FieldValue } from "firebase-admin/firestore";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { GET as getMeRoute } from "@/app/api/v1/admin/me/route";
+import { POST as rotateInviteRoute } from "@/app/api/v1/admin/organization/invite-token/route";
 import { PATCH as patchRespondentRoute } from "@/app/api/v1/admin/respondents/[respondentId]/route";
 import {
   GET as getAiRoute,
@@ -15,7 +17,10 @@ import {
 import { GET as getComparisonRoute } from "@/app/api/v1/admin/results/[resultId]/comparison/route";
 import { GET as getResultRoute } from "@/app/api/v1/admin/results/[resultId]/route";
 import { GET as listResultsRoute } from "@/app/api/v1/admin/results/route";
+import { POST as postInviteRoute } from "@/app/auth/invite/route";
 import type { Viewer } from "@/lib/auth/claims";
+import { hashInviteToken } from "@/lib/auth/invite-token";
+import { issuePdfToken } from "@/lib/auth/pdf-token";
 import { COLLECTIONS, type CollectionName } from "@/lib/db/collections";
 import { getAdminUser } from "@/lib/db/repositories/admin-users-repository";
 import { getAiAnalysis } from "@/lib/db/repositories/ai-analyses-repository";
@@ -23,15 +28,17 @@ import { getSession } from "@/lib/db/repositories/assessment-sessions-repository
 import { getOrganization } from "@/lib/db/repositories/organizations-repository";
 import { getRespondent } from "@/lib/db/repositories/respondents-repository";
 import { getResult } from "@/lib/db/repositories/results-repository";
-import { adminFirestore } from "@/lib/firebase/admin";
+import { adminAuth, adminFirestore } from "@/lib/firebase/admin";
 import { getExamPage } from "@/lib/presentation/exam-pages";
-import type { RespondentUpdatedDto } from "@/lib/services/dto/admin";
+import type { InviteRotatedDto, RespondentUpdatedDto } from "@/lib/services/dto/admin";
+import { loadPrintData, type PrintData } from "@/lib/services/print-data";
 
 import {
   createOrganizationWithOwner,
   cyclicAnswers,
   submitAnswerSet,
   uniformAnswers,
+  uniqueEmail,
   type TestAdmin,
   type TestOrganization,
 } from "../helpers/fixtures";
@@ -212,6 +219,24 @@ describe("M7 より前の形の文書を読んでも壊れない（例外的な�
   let aiAnalysisId: string;
   /** 項目を消す前の応答（同じ形と値を返すことを確かめる） */
   const before = new Map<string, unknown>();
+  let printBefore: PrintData | null;
+
+  /** 印刷用ページのデータ（PDF。比較なし・full）。トークンはその時刻で作る */
+  const loadPrint = () => {
+    const now = new Date();
+    const token = issuePdfToken(
+      {
+        resultId: target.resultId,
+        organizationId: legacyOrg.organizationId,
+        adminUid: legacyOwner.uid,
+        role: "owner",
+        mode: "full",
+        scope: null,
+      },
+      now,
+    );
+    return loadPrintData({ resultId: target.resultId, query: { mode: "full", token }, now });
+  };
 
   const calls = () => {
     const resultId = target.resultId;
@@ -263,6 +288,8 @@ describe("M7 より前の形の文書を読んでも壊れない（例外的な�
       expect(res.status, name).toBe(200);
       before.set(name, stableBody(name, await res.json()));
     }
+    printBefore = await loadPrint();
+    expect(printBefore?.visibility.showAiAnalysis).toBe(true);
 
     for (const r of [target, executive]) {
       await stripFields(COLLECTIONS.results, r.resultId, RESULT_M7_FIELDS);
@@ -349,6 +376,10 @@ describe("M7 より前の形の文書を読んでも壊れない（例外的な�
     }
   });
 
+  it("印刷用ページのデータ（loadPrintData。PDF）も補って読み、項目を消す前と同じ値を返す", async () => {
+    expect(await loadPrint()).toEqual(printBefore);
+  });
+
   it("PATCH /admin/respondents/{id} も補って読み、200 で今の応答の形を返す", async () => {
     const res = await callRoute(patchRespondentRoute, {
       method: "PATCH",
@@ -364,5 +395,73 @@ describe("M7 より前の形の文書を読んでも壊れない（例外的な�
     expect(result.teamCode).toBe("A");
     // 移行（backfill-m7）の前なので、M7 の項目は書かれないまま
     expect(result).not.toHaveProperty("employmentStatus");
+  });
+
+  it("公開の時点で受験中の人（11-1 §3.6）: M7 より前の形の受検者・セッションのまま残りを保存して送信でき、results に M7 の項目が入る", async () => {
+    for (let pageNo = 2; pageNo <= 20; pageNo += 1) {
+      const saved = await respondentApi.saveAnswers(
+        draft.sessionId,
+        draft.cookieHeader,
+        pageBody(pageNo),
+      );
+      expect(saved.status, `ページ ${pageNo}`).toBe(200);
+    }
+    expect((await respondentApi.submit(draft.sessionId, draft.cookieHeader)).status).toBe(200);
+
+    const session = (await getDocForTest<Doc>(COLLECTIONS.assessmentSessions, draft.sessionId))!;
+    expect(session.status).toBe("submitted");
+    const result = (await getDocForTest<Doc>(COLLECTIONS.results, session.resultId as string))!;
+    expect(result).toMatchObject({
+      respondentKind: "applicant",
+      employmentStatus: "candidate",
+      hiredOn: null,
+      leftOn: null,
+      staffRole: null,
+      previousResultId: null,
+      ...AI_INITIAL,
+    });
+    for (const field of RESULT_M7_FIELDS) expect(Object.hasOwn(result, field), field).toBe(true);
+    // 既存の受検者は変えない（11-1 §3.6）。送信も previousResultId を足さない（読み取りで null とみなす）
+    const respondent = (await getDocForTest<Doc>(
+      COLLECTIONS.respondents,
+      session.respondentId as string,
+    ))!;
+    expect(respondent.resultId).toBe(session.resultId);
+    expect(respondent).not.toHaveProperty("previousResultId");
+  });
+
+  it("M7 より前の組織（inviteToken なし）でも招待を受け付け、作った管理者の dismissedAnnouncements は {}", async () => {
+    const email = uniqueEmail("legacy-invite");
+    const res = await callRoute(postInviteRoute, {
+      method: "POST",
+      url: "/auth/invite",
+      body: { inviteToken: legacyOrg.inviteToken, name: "移行前 招待", email },
+    });
+    expect(res.status).toBe(200);
+    const { uid } = await adminAuth().getUserByEmail(email);
+    const invited = (await getDocForTest<Doc>(COLLECTIONS.adminUsers, uid))!;
+    expect(invited).toMatchObject({ organizationId: legacyOrg.organizationId, role: "admin" });
+    expect(invited.dismissedAnnouncements).toEqual({});
+    // 組織の文書は変わらない（inviteToken は無いまま）
+    expect(
+      await getDocForTest<Doc>(COLLECTIONS.organizations, legacyOrg.organizationId),
+    ).not.toHaveProperty("inviteToken");
+  });
+
+  it("M7 より前の組織（inviteToken なし）で招待のリンクを作り直すと、平文とハッシュが同じトークンで入る", async () => {
+    const res = await callRoute(rotateInviteRoute, {
+      method: "POST",
+      url: "/api/v1/admin/organization/invite-token",
+      cookieHeader: legacyOwner.cookieHeader,
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as InviteRotatedDto;
+    const orgDoc = (await getDocForTest<Doc>(COLLECTIONS.organizations, legacyOrg.organizationId))!;
+    const token = orgDoc.inviteToken as string;
+    expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(token).not.toBe(legacyOrg.inviteToken);
+    expect(orgDoc.inviteTokenHash).toBe(hashInviteToken(token));
+    expect(body.adminInvite.endsWith(`?q=${token}`)).toBe(true);
+    expect((await getOrganization(legacyOrg.organizationId))?.inviteToken).toBe(token);
   });
 });

@@ -83,11 +83,10 @@ pnpm dev                          # http://localhost:3000
 | `pnpm seed:local`           | Emulator にローカル用のデータを投入する（Emulator 以外には接続を拒否する）                                                                                    |
 | `pnpm owner:create`         | 組織と初期オーナーを作成する（02 §9.6。実プロジェクトでは `firebase-ops` から実行する）                                                                       |
 | `pnpm admin:set-role`       | 管理者の役割変更・利用停止・停止解除・削除・クレームとの同期（02 §9.9）                                                                                       |
-| `pnpm m7:backfill`          | M7 で足した項目の補い（項目の無い文書にだけ書く。`--dry-run` で件数だけを出す。実プロジェクトでは `firebase-ops` から実行する。08 §8.2）                      |
 | `pnpm firebase:verify`      | 実プロジェクトに対する実装時確認（08 D08-33。`--confirm-project <ID>` が必要）                                                                                |
 | `pnpm firestore:deploy`     | ルール・インデックスのデプロイ（通常は GitHub Actions の `firebase-deploy` を使う）                                                                           |
 
-Firebase プロジェクトは `tekisei-kensa-697c4` の 1 つだけで運用します（10 K-13）。このプロジェクトに対する運用スクリプト（`owner:create`、`firebase:verify`、`m7:backfill`）は、GitHub の Actions タブから `firebase-ops` ワークフローを手動実行して行います（10 K-12）。ルール・インデックスのデプロイは `firebase-deploy` ワークフローです。
+Firebase プロジェクトは `tekisei-kensa-697c4` の 1 つだけで運用します（10 K-13）。このプロジェクトに対する運用スクリプト（`owner:create`、`firebase:verify`）は、GitHub の Actions タブから `firebase-ops` ワークフローを手動実行して行います（10 K-12）。ルール・インデックスのデプロイは `firebase-deploy` ワークフローです。
 
 主なディレクトリ:
 

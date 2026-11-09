@@ -62,7 +62,10 @@ const RESULT_AI_INITIAL_FIELDS = {
 /**
  * コレクションを文書 ID の順に pageSize 件ずつ読み、ページごとに visit を呼ぶ。
  * 項目の有無を見るため、select() で絞らずに文書を丸ごと読む（空の map・null の項目の射影に頼らない。
- * 読み取りの回数は絞っても同じ）
+ * 読み取りの回数は絞っても同じ）。
+ * 呼び出し側は 1 ページの書き込みを 1 つのバッチにするので、1 文書に 1 書き込みの手順にだけ使う
+ * （1 文書に 2 書き込みの手順（11-8 §3.5 の招待トークンの作り直しと監査ログ）では、1 ページを
+ * MAX_PAGE_SIZE の半分以下にする）
  */
 async function forEachPage(
   collection: CollectionName,

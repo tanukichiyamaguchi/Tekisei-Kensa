@@ -13,6 +13,7 @@ import type {
   Respondent,
   UsageLog,
 } from "@/lib/db/domain";
+import { trainingContextSchema } from "@/lib/db/schemas/training-context";
 import {
   ANNOUNCEMENT_KEYS,
   type AdminUserDoc,
@@ -24,6 +25,7 @@ import {
   type RespondentDoc,
   type UsageLogDoc,
 } from "@/lib/db/types";
+import type { TrainingContext } from "@/lib/masters/training-context";
 
 function requireFields(doc: object, fields: readonly string[], where: string): void {
   for (const f of fields) {
@@ -157,6 +159,16 @@ export function toAssessmentSession(id: string, doc: AssessmentSessionDoc): Asse
   };
 }
 
+/**
+ * aiAnalyses.trainingContext（11-6 §3.2・§3.7.4）。無い（M7 より前の文書）・null は null。
+ * 8 項目の形（trainingContextSchema）に合わなければ null とみなす
+ */
+function storedTrainingContext(value: unknown): TrainingContext | null {
+  if (value === undefined || value === null) return null;
+  const parsed = trainingContextSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
 export function toAiAnalysis(id: string, doc: AiAnalysisDoc): AiAnalysis {
   requireFields(
     doc,
@@ -194,7 +206,7 @@ export function toAiAnalysis(id: string, doc: AiAnalysisDoc): AiAnalysis {
     status: doc.status,
     reliability: doc.reliability,
     generatedBy: doc.generatedBy,
-    trainingContext: legacyAi.trainingContext ?? null,
+    trainingContext: storedTrainingContext(legacyAi.trainingContext),
     previousResultId: legacyAi.previousResultId ?? null,
     usedTrainingAction: legacyAi.usedTrainingAction ?? null,
     createdAt: toDate(doc.createdAt, "createdAt"),

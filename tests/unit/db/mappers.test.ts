@@ -389,29 +389,31 @@ describe("respondents・assessmentSessions・aiAnalyses の M7 の項目の読�
     expect(toAssessmentSession("sess1", doc).lastSavedStepNo).toBe(2);
   });
 
+  const aiAnalysisDoc: AiAnalysisDoc = {
+    organizationId: "org1",
+    resultId: "res1",
+    respondentId: "resp1",
+    analysisKind: "longitudinal",
+    provider: "stub",
+    model: "claude-opus-5",
+    promptVersion: "longitudinal-v1",
+    output: {} as AiAnalysisDoc["output"],
+    rawText: "{}",
+    usage: null,
+    stopReason: null,
+    requestId: null,
+    status: "completed",
+    reliability: 80,
+    generatedBy: "uid1",
+    trainingContext: VALID_CONTEXT,
+    previousResultId: "prev1",
+    usedTrainingAction: true,
+    createdAt: now,
+    updatedAt: now,
+  };
+
   it("aiAnalyses: 3 項目の無い文書は null、ある値はそのまま", () => {
-    const doc: AiAnalysisDoc = {
-      organizationId: "org1",
-      resultId: "res1",
-      respondentId: "resp1",
-      analysisKind: "longitudinal",
-      provider: "stub",
-      model: "claude-opus-5",
-      promptVersion: "longitudinal-v1",
-      output: {} as AiAnalysisDoc["output"],
-      rawText: "{}",
-      usage: null,
-      stopReason: null,
-      requestId: null,
-      status: "completed",
-      reliability: 80,
-      generatedBy: "uid1",
-      trainingContext: VALID_CONTEXT,
-      previousResultId: "prev1",
-      usedTrainingAction: true,
-      createdAt: now,
-      updatedAt: now,
-    };
+    const doc = aiAnalysisDoc;
     expect(toAiAnalysis("ai1", doc)).toMatchObject({
       trainingContext: VALID_CONTEXT,
       previousResultId: "prev1",
@@ -431,6 +433,27 @@ describe("respondents・assessmentSessions・aiAnalyses の M7 の項目の読�
       previousResultId: null,
       usedTrainingAction: null,
     });
+  });
+
+  it("aiAnalyses: trainingContext は trainingContextSchema で読み、形が違えば null（11-6 §3.7.4）。ほかの 2 項目はそのまま", () => {
+    const broken: readonly unknown[] = [
+      { ...VALID_CONTEXT, tenure: "unknown_code" },
+      { ...VALID_CONTEXT, extra: "under_1y" },
+      withoutFields(VALID_CONTEXT, ["concern"]),
+      "under_1y",
+      [],
+    ];
+    for (const value of broken) {
+      const ai = toAiAnalysis("ai1", {
+        ...aiAnalysisDoc,
+        trainingContext: value as AiAnalysisDoc["trainingContext"],
+      });
+      expect(ai.trainingContext, JSON.stringify(value)).toBeNull();
+      expect(ai).toMatchObject({ previousResultId: "prev1", usedTrainingAction: true });
+    }
+    expect(
+      toAiAnalysis("ai1", { ...aiAnalysisDoc, trainingContext: null }).trainingContext,
+    ).toBeNull();
   });
 });
 
