@@ -1,4 +1,4 @@
-// 付録C §2 特性詳細（06 §4.1）。表示順はカテゴリの sortOrder → カテゴリ内の sortOrder（付録C の記載順。06 D06-13）
+// 付録C §2 特性詳細（06 §4.1）。表示順はカテゴリの sortOrder → カテゴリ内の sortOrder（付録C の記載順。11-4 §2.9）
 import raw from "../data/texts/trait-details.json";
 import {
   TRAIT_DETAIL_CATEGORY_KEYS,

@@ -339,16 +339,16 @@ export const POSITION_LABELS: ReadonlyArray<{ readonly key: PositionKey; readonl
     { key: "unfit", label: "アンフィットネス" },
   ];
 
-/** 特性詳細のカテゴリ（06 §4.2 TRAIT_DETAIL_CATEGORY_KEYS。配列順 = 付録C §2 の記載順 = 表示順。06 D06-13） */
+/** 特性詳細のカテゴリ（TRAIT_DETAIL_CATEGORY_KEYS。配列順 = 付録C §2 の記載順 = 結果詳細の表示順。11-4 §2.9・§3.3） */
 export const TRAIT_DETAIL_CATEGORY_LABELS: ReadonlyArray<{
-  readonly key: "interpersonal" | "behavior" | "emotion" | "work" | "environment";
+  readonly key: "interpersonal" | "behavior" | "work" | "environment" | "emotion";
   readonly label: string;
 }> = [
   { key: "interpersonal", label: "対人関係" },
   { key: "behavior", label: "行動特性" },
-  { key: "emotion", label: "情緒及び精神面" },
   { key: "work", label: "業務対応" },
   { key: "environment", label: "環境適応" },
+  { key: "emotion", label: "情緒及び精神面" },
 ];
 
 /** 育成方法 14 項目（06 §4.2 DEVELOPMENT_GUIDE_ITEM_KEYS。配列順 = 付録C §4 の記載順） */

@@ -12,3 +12,4 @@ export {
   CLASSIFICATION_EMPTY_MESSAGE,
   CLASSIFICATION_TEXTS,
 } from "./classifications";
+export { TRAIT_DESCRIPTIONS } from "./trait-descriptions";

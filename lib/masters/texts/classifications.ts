@@ -1,16 +1,59 @@
-// 付録C §8 組織内分類（06 §4.1）
+// 付録C §8 組織内分類（06 §4.1、11-3 §3.9）
 import raw from "../data/texts/classifications.json";
-import type { ClassificationAxes, ClassificationTexts } from "./types";
-import { asArray, asKey, asObject, asString, itemsOf, single, toRecord } from "./validate";
+import type { ClassificationAxes, ClassificationCharacterText, ClassificationTexts } from "./types";
+import {
+  asArray,
+  asKey,
+  asNumber,
+  asObject,
+  asString,
+  fail,
+  itemsOf,
+  single,
+  toRecord,
+} from "./validate";
 import { APTITUDE_TYPE_KEYS, SOCIAL_STYLE_KEYS, type SocialStyleKey } from "@/lib/scoring/types";
 
 const items = itemsOf(raw, "classifications");
+
+/** 分類の中の列・行（0 か 1） */
+function asCell(value: unknown, where: string): 0 | 1 {
+  const cell = asNumber(value, where);
+  if (cell !== 0 && cell !== 1) fail(where, `0 か 1 ではありません: ${cell}`);
+  return cell;
+}
 
 export const CLASSIFICATION_TEXTS: Readonly<Record<SocialStyleKey, ClassificationTexts>> = toRecord(
   items.map((item, i) => {
     const where = `classifications[${i}]`;
     const key = asKey(item.socialStyleKey, SOCIAL_STYLE_KEYS, `${where}.socialStyleKey`);
     const axis = asObject(item.axisPosition, `${where}.axisPosition`);
+    const characterOrder = Object.freeze(
+      asArray(item.characterOrder, `${where}.characterOrder`).map((t, j) =>
+        asKey(t, APTITUDE_TYPE_KEYS, `${where}.characterOrder[${j}]`),
+      ),
+    );
+    const characters: readonly ClassificationCharacterText[] = Object.freeze(
+      asArray(item.characters, `${where}.characters`).map((v, j) => {
+        const c = asObject(v, `${where}.characters[${j}]`);
+        return Object.freeze({
+          aptitudeType: asKey(
+            c.aptitudeType,
+            APTITUDE_TYPE_KEYS,
+            `${where}.characters[${j}].aptitudeType`,
+          ),
+          column: asCell(c.column, `${where}.characters[${j}].column`),
+          row: asCell(c.row, `${where}.characters[${j}].row`),
+          positionDescription: asString(
+            c.positionDescription,
+            `${where}.characters[${j}].positionDescription`,
+          ),
+        });
+      }),
+    );
+    if (characters.map((c) => c.aptitudeType).join("|") !== characterOrder.join("|")) {
+      fail(`${where}.characters`, "タイプの並びが characterOrder と一致しません");
+    }
     return [
       key,
       Object.freeze({
@@ -22,11 +65,8 @@ export const CLASSIFICATION_TEXTS: Readonly<Record<SocialStyleKey, Classificatio
           ["listen", "assert"],
           `${where}.axisPosition.assertion`,
         ),
-        characterOrder: Object.freeze(
-          asArray(item.characterOrder, `${where}.characterOrder`).map((t, j) =>
-            asKey(t, APTITUDE_TYPE_KEYS, `${where}.characterOrder[${j}]`),
-          ),
-        ),
+        characterOrder,
+        characters,
       }),
     ] as const;
   }),
@@ -50,7 +90,7 @@ export const CLASSIFICATION_AXES: ClassificationAxes = Object.freeze({
   }),
 });
 
-/** 該当者 0 名のときの文言（付録C §8 末尾「本タイプの回答者はいません。」。06 T-07） */
+/** 該当者 0 名のときの文言（付録C §8 末尾「この分類の回答者はまだいません。」。11-3 §3.9） */
 export const CLASSIFICATION_EMPTY_MESSAGE: string = single(
   items.map((item, i) => asString(item.emptyMessage, `classifications[${i}].emptyMessage`)),
   "classifications.emptyMessage",

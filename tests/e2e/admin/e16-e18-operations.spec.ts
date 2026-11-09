@@ -86,7 +86,7 @@ test("E-17 組織内分類の人数合計が一覧と一致し、分類・キャ
   await expect(openDialog(page).locator(".dialog__title")).toHaveText("Analyticalタイプ（分析型）");
   await page.keyboard.press("Escape");
   await page.getByTestId("classification-driving").locator(".character").first().click();
-  await expect(openDialog(page).locator(".dialog__title")).toHaveText("ひなた（パイオニアタイプ）");
+  await expect(openDialog(page).locator(".dialog__title")).toHaveText("えりか（レビュワータイプ）");
   await page.keyboard.press("Escape");
 
   await page.getByRole("button", { name: "利用履歴" }).click();

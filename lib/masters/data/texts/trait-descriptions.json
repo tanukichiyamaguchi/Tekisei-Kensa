@@ -1,0 +1,91 @@
+{
+  "generatedFrom": ["docs/付録C_表示文言マスタ.md", "scripts/lib/labels.ts"],
+  "sourceHash": {
+    "docs/付録C_表示文言マスタ.md": "sha256:2434b49bef623cdb0630a7103c8595df041112b9ef4ee2a5413a0df0381c7e16",
+    "scripts/lib/labels.ts": "sha256:7d19c21be905d71f1e8f362dec3f9840dd3e4929ad6ca510bfffd1d5594bc19a"
+  },
+  "generatorVersion": "2",
+  "kind": "trait_descriptions",
+  "items": [
+    {
+      "key": "cooperativeness",
+      "description": "周りと力を合わせ、チームで動こうとする力です。",
+      "highLow": "高いと協調的で、低いと自分のやり方を優先しやすい傾向です。"
+    },
+    {
+      "key": "adaptability",
+      "description": "環境や状況の変化に合わせて、柔軟に対応する力です。",
+      "highLow": "高いと新しい環境になじみやすく、低いと慣れた方法を好みます。"
+    },
+    {
+      "key": "deliberateness",
+      "description": "物事を決める前に、どれだけじっくり考えるかを表します。",
+      "highLow": "高いと冷静で思慮深く、低いと判断が早い反面、早とちりしやすくなります。"
+    },
+    {
+      "key": "humility",
+      "description": "自分を控えめに捉え、人の意見に耳を傾ける姿勢です。",
+      "highLow": "高いと素直に学べ、低いと自分の考えを強く出します。"
+    },
+    {
+      "key": "reflectiveness",
+      "description": "失敗や自分の言動を振り返り、改善につなげる力です。",
+      "highLow": "高いと学びが早い反面、考え込みすぎることもあります。"
+    },
+    {
+      "key": "rule_compliance",
+      "description": "ルールや決まりごとを守って行動する力です。",
+      "highLow": "高いと安心して任せられ、低いと自分の判断で動きがちです。"
+    },
+    {
+      "key": "persistence",
+      "description": "自分のやり方や考えを大事にし、納得するまで貫く傾向です。",
+      "highLow": "高いと丁寧で粘り強く、低いと柔軟に切り替えられます。"
+    },
+    {
+      "key": "emotionality",
+      "description": "喜びや不安などの気持ちを、表に出しやすい度合いです。",
+      "highLow": "高いと感情が伝わりやすく、低いと落ち着いて見えます。"
+    },
+    {
+      "key": "sensitivity",
+      "description": "周りの変化や人の言動に気づきやすく、影響を受けやすい度合いです。",
+      "highLow": "高いと気配りができる反面、疲れやすいこともあります。"
+    },
+    {
+      "key": "self_esteem",
+      "description": "自分を価値ある存在として受け入れ、自信を持てる度合いです。",
+      "highLow": "高いと前向きに挑戦でき、低いと自信を持ちにくい傾向です。"
+    },
+    {
+      "key": "innovativeness",
+      "description": "新しい方法や考え方を取り入れ、変えていこうとする力です。",
+      "highLow": "高いと改善を進め、低いと今のやり方を大切にします。"
+    },
+    {
+      "key": "activeness",
+      "description": "考えたことを、すぐ実行に移す力です。",
+      "highLow": "高いとスピード感があり、低いとじっくり準備してから動きます。"
+    },
+    {
+      "key": "positiveness",
+      "description": "物事を明るく、良い方向に捉える力です。",
+      "highLow": "高いと周りを元気にし、低いと慎重に物事を見ます。"
+    },
+    {
+      "key": "leadership",
+      "description": "周りを引っ張り、方向を示してまとめる力です。",
+      "highLow": "高いと自ら率先し、低いとサポート役で力を出します。"
+    },
+    {
+      "key": "creativity",
+      "description": "新しいアイデアを思いつく力です。",
+      "highLow": "高いと企画や工夫が得意で、低いと確実な方法を重視します。"
+    },
+    {
+      "key": "communication",
+      "description": "相手と話し、考えや気持ちを伝え合う力です。",
+      "highLow": "高いと人との関わりが得意で、低いと一人で進める作業を好みます。"
+    }
+  ]
+}

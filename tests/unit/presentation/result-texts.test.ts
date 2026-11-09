@@ -32,14 +32,6 @@ describe("resolveTraitDetails（付録C §2 のコンダクタータイプの表
         sentences: ["決断力がありじっくり考えるより行動を優先する。臨機応変で好奇心が強い。"],
       },
       {
-        category: "emotion",
-        label: "情緒及び精神面",
-        sentences: [
-          "明るく素直な性質で細かいことにこだわらず穏やかな印象を人に与える。",
-          "楽天的に考えることが多くストレスがたまりにくい。開放的な心理状態である。",
-        ],
-      },
-      {
         category: "work",
         label: "業務対応",
         sentences: [
@@ -55,6 +47,14 @@ describe("resolveTraitDetails（付録C §2 のコンダクタータイプの表
           "自己実現への達成意欲が高く粘り強い。集団依存せず個としての行動ができる。",
           "環境に順応しやすく、組織を重視し現実主義。客観的かつ冷静な判断ができる。",
           "現状肯定的・妥協的に物事を考え、周りを意識して意思決定することが多い。",
+        ],
+      },
+      {
+        category: "emotion",
+        label: "情緒及び精神面",
+        sentences: [
+          "明るく素直な性質で細かいことにこだわらず穏やかな印象を人に与える。",
+          "楽天的に考えることが多くストレスがたまりにくい。開放的な心理状態である。",
         ],
       },
     ]);
@@ -92,9 +92,7 @@ describe("resolveResultTexts", () => {
       "エミアブルなあなたは",
       "アナリティカルなあなたは",
     ]);
-    expect(texts.styleInteractions[0]!.text.startsWith("穏やかに対話する事を好むエミアブル")).toBe(
-      true,
-    );
+    expect(texts.styleInteractions[0]!.text.startsWith("穏やかに話したいエミアブル")).toBe(true);
   });
 
   it("育成方法の見出しは表示名（内部名は出さない）", () => {
