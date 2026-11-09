@@ -244,6 +244,8 @@ test.describe("M7-exam-51 アクセシビリティ", () => {
     await answerCurrentStep(page, 4);
     await page.getByTestId("submit-button").click();
     await page.waitForURL(new RegExp(`/exam/${sessionId}/complete$`));
+    // 画面の中の移動の直後は、タブ名（K-37「適性検査」）が数ミリ秒だけ空になる。戻ってから調べる
+    await expect(page).toHaveTitle("適性検査");
     await expectAccessible(page, "R-05");
 
     // R-06（Cookie の無いコンテキスト）

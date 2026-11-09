@@ -1,6 +1,7 @@
 "use client";
 // ステップ表示（11-1 §2.4.3）。[先頭の線][番号 1〜4][末尾の線]。今のステップ・済んだステップ・先のステップで丸の色を変える。
-// 丸とラベルは飾り（値は見出しの「Step n」と、行の読み上げ「ステップ n / 4」でも出す）。丸を押しても何も起きない
+// 丸とラベルは飾り（値は見出しの「Step n」と、行の読み上げ「ステップ n / 4」でも出す）。丸を押しても何も起きない。
+// 行は aria-label を効かせるため role="img"（値を文字でも出す小さな図。11-1 §2.4.3）
 import type { Ref } from "react";
 
 import { examTextStepIndicatorLabel, examTextStepLabel } from "@/lib/presentation/exam-texts";

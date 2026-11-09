@@ -161,7 +161,7 @@ test.describe("M7-exam-44 登録の入力チェック", () => {
     const name = e2eName();
     const fields = registrationFields(page);
     await fields.name.fill(`\u3000${name}\u3000`); // 前後に全角の空白
-    await fields.phoneNumber.fill(" ０９０－１２３４－５６７８ ");
+    await fields.phoneNumber.fill(" ０００－００００－００００ ");
     await fields.occupation.selectOption({ label: "受付" });
     await fields.experience.selectOption({ label: "過去に診断したことがある" });
     await expect(page.getByTestId("register-submit")).not.toHaveAttribute("aria-disabled", "true");
@@ -175,7 +175,7 @@ test.describe("M7-exam-44 登録の入力チェック", () => {
     }>("respondent-of-session", sessionIdFromUrl(page.url()));
     expect(respondent).toEqual({
       name,
-      phoneNumber: "０９０－１２３４－５６７８",
+      phoneNumber: "０００－００００－００００",
       occupationCode: 6,
       kind: "executive",
     });

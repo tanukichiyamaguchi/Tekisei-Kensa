@@ -48,7 +48,7 @@
 | 3 | 出題は Q1〜Q144 のみ | 回答保存 API は `questionNo` 1〜144 以外を 422 で拒否（§4.4）。送信 API は Q1〜Q144 の揃いを検証（§4.5）。`assessmentSessions.answers` map のキーは `"1"`〜`"144"` に限る（00 §2.2） |
 | 4 | 既存データは移行しない | 移行用 API は作らない。`results.scoringVersion` は送信時に `SCORING_VERSION` を保存 |
 | 5 | AI 解説は Claude API、差し替え可能 | AI 解説 API は `lib/ai/` の `AiProvider` 経由でのみ生成し、provider 名を応答に含める（§5.9） |
-| 6 | 日本語のみ、管理画面 PC 幅、受検者画面スマートフォン対応 | エラーメッセージは日本語固定。受検者 API は 1 ページ分の回答をまとめて保存し、通信回数を抑える（§4.4） |
+| 6 | 日本語のみ、管理画面 PC 幅、受検者画面スマートフォン対応 | エラーメッセージは日本語固定。受検者 API は、1 ステップのうち未送信の選択（1〜41 問）を 1 回にまとめて保存する（画面は選んだ時点で送り、送るのは同時に 1 本だけ。送信中に選んだ分は次の 1 回にまとめる。§4.4、11-1 §2.4.5） |
 
 ## 1. 全体方針
 
@@ -740,7 +740,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ resu
 | POST | `/api/v1/respondent/sessions` | 受検者登録とセッション作成。Cookie 発行 | なし（レート制限あり） | §4.2 |
 | GET | `/api/v1/respondent/sessions/{sessionId}` | 進行状態と保存済み回答の取得（再開） | セッショントークン | §4.3 |
 | POST | `/api/v1/respondent/sessions/{sessionId}/start` | 「開始する」の記録。追加 | セッショントークン、`draft` | §4.3 |
-| PUT | `/api/v1/respondent/sessions/{sessionId}/answers` | ページ単位の回答保存（上書き） | セッショントークン、`draft` | §4.4 |
+| PUT | `/api/v1/respondent/sessions/{sessionId}/answers` | ステップ単位の回答保存（上書き。1〜41 問。画面は選んだ時点で送る。2.3 版で変更: ページ単位をやめた） | セッショントークン、`draft` | §4.4 |
 | POST | `/api/v1/respondent/sessions/{sessionId}/submit` | 送信・採点・結果保存 | セッショントークン、`draft` | §4.5 |
 
 ### 3.2 管理者用（セッション Cookie 必須）
@@ -1072,7 +1072,7 @@ export const saveAnswersInputSchema = z
 export type SaveAnswersInput = z.infer<typeof saveAnswersInputSchema>;
 ```
 
-`stepNo` と設問番号の対応（service が使う純関数。`lib/masters/exam-steps.ts` に置く。画面のステップの定義（`EXAM_STEPS` など）は 05 の `lib/presentation/exam-steps.ts` が作る。設計判断 D04-46: service は `lib/presentation/` を import しないため、対応の関数は `lib/masters/` 側に置く）:
+`stepNo` と設問番号の対応（service が使う純関数。`lib/masters/exam-steps.ts` に置く。画面のステップの定義（`EXAM_STEPS` など）は 05 の `lib/presentation/exam-steps.ts` が作る。設計判断 D04-46: service は `lib/presentation/` を import しないため、対応の関数は `lib/masters/` 側に置く。例外は入力の上限の定数 `NAME_MAX_LENGTH`・`PHONE_MAX_LENGTH`（§4.2。I/O の無い定数だけ）で、画面の検査と同じ値を 1 か所に置くため `lib/presentation/registration-rules.ts` から読む）:
 
 ```ts
 // lib/masters/exam-steps.ts（純関数。I/O なし。2.3 版で lib/masters/exam-pages.ts を置き換えた）
@@ -2743,7 +2743,7 @@ sequenceDiagram
 | D04-43 | 設計判断（05 §6.3 の要求） | 受検リンク再訪時の再開判定 `findResumableSession`（§2.5.2）を追加し、`GET organizations/{organizationId}` の応答 `resumable` で返す | Cookie のトークンハッシュだけで `draft` セッションを 1 件引く（`sessionTokenHash` の等価クエリ）。組織・区分・期限・状態が合わないときは `null`。個人情報は返さない。2.3 版から受験者登録の画面はこの API と `resumable` を使わない（画面を開いた時点では組織を確かめず、再開の案内も出さない。11-1 §2.2.1・§3.4.4）。API と `findResumableSession` は残す | 02、05 |
 | D04-44 | 設計判断（05 §7.1 との差） | `SessionProgressDto.answers` は `{ questionNo, choiceCode }` の昇順配列（`Record` ではない）。`resumePageNo` は応答に含めない | `answers` map（00 D-29）は API 境界で配列に変換する。再開位置は 05 D05-08 のとおり画面側が導出 | 05 |
 | D04-45 | 設計判断（05 §6.1・§7.1 との整合） | `POST …/start` は `tokenExpiresAt` を 7 日延長して Cookie を再発行し、応答は `SessionStartedDto` | 直後の設問ページは Server Component が `getSessionProgress` で初期表示するため、回答を応答に含める必要がない | 01、05 |
-| D04-46 | 設計判断（2.3 版で改） | `stepNo` と設問番号の対応（`EXAM_STEP_COUNT`・`questionNosOfStep`）は `lib/masters/exam-steps.ts`（03 側）に置き、画面のステップの定義は 05 の `lib/presentation/exam-steps.ts` が作る | service は `lib/presentation/` を import しない（層の依存方向）。2.2 版までは `lib/masters/exam-pages.ts`（`pageNo` ⇄ `step` / `page` と `questionNosOfPage`） | 03、05 |
+| D04-46 | 設計判断（2.3 版で改） | `stepNo` と設問番号の対応（`EXAM_STEP_COUNT`・`questionNosOfStep`）は `lib/masters/exam-steps.ts`（03 側）に置き、画面のステップの定義は 05 の `lib/presentation/exam-steps.ts` が作る | service は `lib/presentation/` を import しない（層の依存方向）。例外: 入力の上限の定数（`NAME_MAX_LENGTH`・`PHONE_MAX_LENGTH`。I/O の無い定数だけ）は、画面の検査と同じ値を 1 か所に置くため、`lib/services/schemas/respondent.ts` が `lib/presentation/registration-rules.ts` から読む（§4.2、11-1 §3.4.1・§3.5。`lib/db/schemas/values.ts` が `lib/presentation/employment.ts` の `isValidCalendarDate` を読むのと同じ扱い。11 総論 8.3 の 4）。2.2 版までは `lib/masters/exam-pages.ts`（`pageNo` ⇄ `step` / `page` と `questionNosOfPage`） | 03、05 |
 | D04-47 | 設計判断（2.0 版で改） | 現在のパスワードの検証はブラウザの再認証で得た ID トークン（`reauthIdToken`）をサーバで `verifyIdToken` し、`uid` 一致と `auth_time` 5 分以内を確認する（§5.1） | Admin SDK にパスワード照合が無く、Auth の REST API をサーバから呼ぶ方式は Web API キーの利用制限と衝突する。セッション Cookie は書き換えない。`currentPassword` は API に送らない | 06、08 |
 | D04-48 | 設計判断（06 D06-09 の任意項目） | 結果詳細の `availableTeamCodes` は採用しない | 閲覧者の可視範囲で数えたチーム人数は `fetchPopulation()` の母集団（幹部を含む）と食い違い、比較の `populationSize` と異なる値を画面に出すことになる。06 は全チームを同じ表記で表示 | 06 |
 | D04-49 | 設計判断（06 D06-20 の依頼を採用。要件定義書 §6.2 A-12 に管理者一覧の記載なし。未確認。2.0 版で改） | `GET /api/v1/admin/admin-users`（§5.11）を追加 | owner／super_admin 限定、読み取り専用。2.0 版でメールアドレスを含める（Admin SDK `getUsers` で引ける。00 §2.2） | 06、08 |
@@ -2771,6 +2771,6 @@ sequenceDiagram
 | 1.2 | 2026-09-21 | 最終点検（09）。01 D01-35 に従い §6.3 の `resetPasswordForEmail` の `redirectTo` を `window.location.origin` に改版。§5.1 `GET /me` のリンク生成を `appBaseUrl()` に明記。05 D05-16 に従い `normalizePhoneNumber`／`PHONE_PATTERN` の実体を `lib/utils/phone-number.ts` に移し §4.2 のスキーマはそこから import。05 D05-32 に従い §4.3・D04-12 の「失敗しても画面は進める」を取り下げ（成功時のみ遷移）。05 D05-34 に従い §4.1・§4.6 の「組織名を表示」を改版。02 D02-27 に従い §4.1・D04-15 の `is_active` の保留を解消。§4.2.2 を「02 §11.16 が正」に改め D04-17 を採用済みに。§5.9 の監査ログ `details` に `inputTokens`／`outputTokens`（07 §4.8）を追加。§7.2・D04-40・§10 の「00 §3.2 未掲載」を掲載済みに更新 |
 | 1.1 | 2026-09-19 | レビュー指摘への対応。must: (1) `middleware.ts` の認証不要パスに `/admin/results/[resultId]/print` を追加（§7.2、§8.5、D04-41）。(2) `login-events` の `admin.signup` 補完を取り下げ、招待受理がサービスロールで書く（§2.6、§5.1、§6.2、§8.3、D04-36 改）。(3) 回答保存の入力を `pageNo`（1〜20）に変更し、ページ所属をサーバで検証（§4.4、§8.2、D04-18 改、D04-46）。(4) `GET /api/v1/admin/admin-users` を追加（§3.2、§5.11、§8.1〜§8.3、D04-49）。should: 管理者追加方式の整合確認（§6.2、D04-51）、エラー表の追加と表内 JSON のコードブロック化（§4.1、§4.3、§5.1、§5.2、§5.6〜§5.9）、05・06・08 への読み替えを §10 に列挙（D04-42、D04-44、D04-45、D04-48、D04-52）、再開判定 `findResumableSession` と Server Component からの認可ヘルパーの呼び方（§2.5.2、§4.1、§8.3、D04-43）、`PDF_TOKEN_SECRET` の 00 §3.2 追記依頼（§7.2、§10、D04-40）、役割変更 API の不提供（§3.3、§5.12、D04-50）、パスワード検証の一時クライアント（§5.1、D04-47）、`AuditDetails` に配列を許容（§2.6）、比較応答例の `scope` を `organization` に・結果詳細例に `reliability` を追加（§5.4、§5.5）、D04-16 の既存挙動を推定に改める（§4.2.1）。あわせて `ai_generation_error` の語彙を 07 §4.6 に合わせ（§5.9）、§0.2 の節番号を訂正 |
 | 2.2 | 2026-09-24 | 本番デプロイで判明した事項の反映（職業コードを 1〜8 に。旧コード 9 は保存済み文書の検証だけが読む。§4.2 の `occupationCode`、§5.3・§7.1 の職業名の例。10 K-19、PR #13・#14） |
-| 2.3 | 2026-11-09 | M7 の PR-7.3（受検者画面。11 総論 5.4・6.1、11-1 §3.4・§4.1。冒頭の版の欄を 2.3 にそろえた。2.2 版の改版の記録は冒頭の版の欄に入っていなかった）。§2.3 の電話番号を必須と 30 文字の上限だけに（書式・正規化をやめた。D04-06）、氏名を前後の空白を除いて 1〜100 文字に。§4 の冒頭に受検者 API が書く文書（登録は 3 文書、送信で利用履歴を作るか M7 より前の文書を更新）を足した。§4.1 を受験者登録の画面から使わないことに（D04-43）。§4.2 の処理を 3 文書のバッチに、監査ログの `details` に `previousCandidate` を足し、リクエストの例を見本の値に、`lib/utils/phone-number.ts` のコードを消して `name`・`phoneNumber` を `requiredText(NAME_MAX_LENGTH)`・`requiredText(PHONE_MAX_LENGTH)` に、`occupationCodeSchema` のコメントを 1〜8・10 に、§4.2.1・§4.2.2 から `usageLogId` と利用履歴の文書を外した（前回の候補は PR-7.4）。§4.3 の応答を `lastSavedStepNo` に。§4.4 を 1 ステップ分の保存（`{ stepNo, answers }`、1〜41 問、`questionNosOfStep`、`lib/masters/exam-steps.ts`。`pageNo` の古い形は 422）に改めた。§4.5 に利用履歴の作成か更新、`linkedPrevious`、区分の作成時の値、2 秒の待ちは画面で行うことを足した（つながりは PR-7.4）。§4.6 のシーケンス、§8.2 の Dto（`SessionProgressDto.lastSavedStepNo`、`AnswersSavedDto.stepNo`・`lastSavedStepNo`）、§8.3・§8.4 の表、§10 の 03・05 宛て、§11 の D04-06・D04-18・D04-19・D04-43・D04-46・D04-62 を改めた |
+| 2.3 | 2026-11-09 | M7 の PR-7.3（受検者画面。11 総論 5.4・6.1、11-1 §3.4・§4.1。冒頭の版の欄を 2.3 にそろえた。2.2 版の改版の記録は冒頭の版の欄に入っていなかった）。§0.2 の決定事項 6 と §3.1 の回答保存の用途をステップ単位（選んだ時点）に改めた。§2.3 の電話番号を必須と 30 文字の上限だけに（書式・正規化をやめた。D04-06）、氏名を前後の空白を除いて 1〜100 文字に。§4 の冒頭に受検者 API が書く文書（登録は 3 文書、送信で利用履歴を作るか M7 より前の文書を更新）を足した。§4.1 を受験者登録の画面から使わないことに（D04-43）。§4.2 の処理を 3 文書のバッチに、監査ログの `details` に `previousCandidate` を足し、リクエストの例を見本の値に、`lib/utils/phone-number.ts` のコードを消して `name`・`phoneNumber` を `requiredText(NAME_MAX_LENGTH)`・`requiredText(PHONE_MAX_LENGTH)` に、`occupationCodeSchema` のコメントを 1〜8・10 に、§4.2.1・§4.2.2 から `usageLogId` と利用履歴の文書を外した（前回の候補は PR-7.4）。§4.3 の応答を `lastSavedStepNo` に。§4.4 を 1 ステップ分の保存（`{ stepNo, answers }`、1〜41 問、`questionNosOfStep`、`lib/masters/exam-steps.ts`。`pageNo` の古い形は 422）に改めた。§4.5 に利用履歴の作成か更新、`linkedPrevious`、区分の作成時の値、2 秒の待ちは画面で行うことを足した（つながりは PR-7.4）。§4.6 のシーケンス、§8.2 の Dto（`SessionProgressDto.lastSavedStepNo`、`AnswersSavedDto.stepNo`・`lastSavedStepNo`）、§8.3・§8.4 の表、§10 の 03・05 宛て、§11 の D04-06・D04-18・D04-19・D04-43・D04-46（入力の上限の定数の例外を含む）・D04-62 を改めた |
 
 以上。

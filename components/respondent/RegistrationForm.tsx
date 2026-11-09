@@ -210,7 +210,6 @@ export function RegistrationForm({ organizationId, kind }: RegistrationFormProps
                   className="exam-input exam-input--name"
                   type="text"
                   autoComplete="name"
-                  required
                   placeholder={EXAM_TEXTS["R1-P1"]}
                   aria-label={EXAM_TEXTS["R1-03"]}
                   value={draft.name}
@@ -230,7 +229,6 @@ export function RegistrationForm({ organizationId, kind }: RegistrationFormProps
                   className="exam-input exam-input--phone"
                   type="text"
                   autoComplete="tel"
-                  required
                   placeholder={EXAM_TEXTS["R1-P2"]}
                   aria-label={EXAM_TEXTS["R1-04"]}
                   value={draft.phoneNumber}
@@ -248,7 +246,6 @@ export function RegistrationForm({ organizationId, kind }: RegistrationFormProps
                 <select
                   id={FIELD_IDS.occupationCode}
                   className="exam-select"
-                  required
                   aria-label={EXAM_TEXTS["R1-06"]}
                   data-empty={draft.occupationCode === null ? "true" : undefined}
                   value={draft.occupationCode === null ? "" : String(draft.occupationCode)}
@@ -281,7 +278,6 @@ export function RegistrationForm({ organizationId, kind }: RegistrationFormProps
                 <select
                   id={FIELD_IDS.diagnosisExperience}
                   className="exam-select"
-                  required
                   aria-label={EXAM_TEXTS["R1-08"]}
                   data-empty={draft.diagnosisExperience === null ? "true" : undefined}
                   value={draft.diagnosisExperience ?? ""}
