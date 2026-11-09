@@ -1,7 +1,8 @@
 // 未送信の選択の退避（11-1 §2.4.5・§2.6・§3.6）。sessionStorage のキー tk_exam_step:{sessionId}:{stepNo} に
 // {"42":3,"43":1} の形で選択の値だけを置く（個人情報は置かない）。
 // M7 より前の画面のキー tk_exam_draft:{sessionId}:{pageNo}（値は同じ形）は、読み込みのときにこのセッションの分だけを
-// 新しいキーへ取り込んでから消す（ページ番号は使わない）。「戻る」用の tk_exam_flash:{sessionId} はやめ、残っていれば消す。
+// 新しいキーへ取り込んでから消す（ページ番号は使わない）。新しいキーに書けなかったときは消さずに残し、次に開いたときに
+// 取り込み直す（保存前の選択を失わないため）。「戻る」用の tk_exam_flash:{sessionId} はやめ、残っていれば消す。
 // 読み書きはすべて try/catch で囲み、使えない環境（プライベートモードなど）でも例外を投げない
 import { SCORED_QUESTION_COUNT, stepOf } from "@/lib/masters/question-layout";
 
@@ -66,19 +67,22 @@ function readKey(storage: StorageLike, key: string): Map<number, number> {
   }
 }
 
-/** ステップの退避を書く（空なら消す） */
+/** ステップの退避を書く（空なら消す）。書けたら true、ストレージが無い・容量超過などで書けなければ false */
 export function writeExamDraft(
   sessionId: string,
   stepNo: number,
   selections: ReadonlyMap<number, number>,
   storage: StorageLike | null = defaultStorage(),
-): void {
+): boolean {
   try {
+    if (!storage) return false;
     const key = examDraftKey(sessionId, stepNo);
-    if (selections.size === 0) storage?.removeItem(key);
-    else storage?.setItem(key, JSON.stringify(Object.fromEntries(selections)));
+    if (selections.size === 0) storage.removeItem(key);
+    else storage.setItem(key, JSON.stringify(Object.fromEntries(selections)));
+    return true;
   } catch {
     // 容量超過・無効化されたストレージ
+    return false;
   }
 }
 
@@ -97,7 +101,7 @@ export function clearExamDraft(
 /**
  * このセッションの退避をすべて読む（受験画面を開いたとき。11-1 §2.4.5）。設問番号 → 選択。
  * 旧キーの分は新しいキーへ取り込んでから消し（同じ設問は新しいキーの値を優先）、tk_exam_flash: も消す。
- * ほかのセッションのキーは触らない
+ * 新しいキーに書けなかったときは旧キーを残す（次に開いたときに取り込み直す）。ほかのセッションのキーは触らない
  */
 export function loadExamDrafts(
   sessionId: string,
@@ -113,6 +117,7 @@ export function loadExamDrafts(
     for (const [q, v] of legacy) merged.set(q, v);
     for (const key of currentKeys) for (const [q, v] of readKey(storage, key)) merged.set(q, v);
 
+    let migrated = true;
     if (legacy.size > 0) {
       // 取り込んだ旧キーの選択を、新しいキー（ステップごと）に書き直す
       const byStep = new Map<number, Map<number, number>>();
@@ -124,10 +129,11 @@ export function loadExamDrafts(
         byStep.set(stepNo, step);
       }
       for (const [stepNo, selections] of byStep) {
-        writeExamDraft(sessionId, stepNo, selections, storage);
+        if (!writeExamDraft(sessionId, stepNo, selections, storage)) migrated = false;
       }
     }
-    for (const key of legacyKeys) storage.removeItem(key);
+    // 旧キーは、選択を新しいキーへ書けたときだけ消す（書けなければ残し、次に開いたときに取り込み直す）
+    if (migrated) for (const key of legacyKeys) storage.removeItem(key);
     storage.removeItem(`${LEGACY_FLASH_PREFIX}${sessionId}`);
   } catch {
     // 退避は補助的なもの。読めなければ読めた分だけ返す

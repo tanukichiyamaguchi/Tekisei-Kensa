@@ -171,15 +171,17 @@ class MemoryStorage {
 describe("M7-exam-15 exam-draft-storage（11-1 §2.4.5）", () => {
   it("キーは tk_exam_step:{sessionId}:{stepNo}、値は設問番号 → 選択の JSON（空なら消す）", () => {
     const storage = new MemoryStorage();
-    writeExamDraft(
-      "S1",
-      2,
-      new Map([
-        [42, 3],
-        [43, 1],
-      ]),
-      storage,
-    );
+    expect(
+      writeExamDraft(
+        "S1",
+        2,
+        new Map([
+          [42, 3],
+          [43, 1],
+        ]),
+        storage,
+      ),
+    ).toBe(true);
     expect(examDraftKey("S1", 2)).toBe("tk_exam_step:S1:2");
     expect(storage.getItem("tk_exam_step:S1:2")).toBe('{"42":3,"43":1}');
     expect(loadExamDrafts("S1", storage)).toEqual(
@@ -239,6 +241,19 @@ describe("M7-exam-15 exam-draft-storage（11-1 §2.4.5）", () => {
     expect(loadExamDrafts("S1", storage)).toEqual(loaded);
   });
 
+  it("旧キーの選択を新しいキーへ書けなかったときは、旧キーを消さずに残し、次に開いたときに取り込み直す", () => {
+    const storage = new MemoryStorage();
+    storage.setItem("tk_exam_draft:S1:8", '{"51":3}');
+    storage.failWrites = true; // 容量超過など
+    expect(loadExamDrafts("S1", storage)).toEqual(new Map([[51, 3]]));
+    expect(storage.getItem("tk_exam_draft:S1:8")).toBe('{"51":3}');
+    expect(storage.getItem("tk_exam_step:S1:2")).toBeNull();
+    storage.failWrites = false;
+    expect(loadExamDrafts("S1", storage)).toEqual(new Map([[51, 3]]));
+    expect(storage.getItem("tk_exam_draft:S1:8")).toBeNull();
+    expect(JSON.parse(storage.getItem("tk_exam_step:S1:2") ?? "{}")).toEqual({ "51": 3 });
+  });
+
   it("「戻る」用の tk_exam_flash: は読み込みのときに消す", () => {
     const storage = new MemoryStorage();
     storage.setItem("tk_exam_flash:S1", '{"text":"E-02","pageNo":3}');
@@ -271,6 +286,8 @@ describe("M7-exam-15 exam-draft-storage（11-1 §2.4.5）", () => {
     const storage = new MemoryStorage();
     storage.failWrites = true;
     expect(() => writeExamDraft("S1", 3, new Map([[90, 1]]), storage)).not.toThrow();
+    expect(writeExamDraft("S1", 3, new Map([[90, 1]]), storage)).toBe(false);
+    expect(writeExamDraft("S1", 3, new Map([[90, 1]]), null)).toBe(false);
     const throwing = {
       get length(): number {
         throw new DOMException("SecurityError");
