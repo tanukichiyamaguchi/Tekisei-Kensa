@@ -19,6 +19,7 @@ export const assessmentSessionCreateSchema = z.strictObject({
   tokenExpiresAt: timestampSchema,
   answers: z.strictObject({}),
   lastSavedPageNo: z.null(),
+  lastSavedStepNo: z.null(),
   lastAnsweredAt: z.null(),
   startedAt: z.null(),
   submittedAt: z.null(),

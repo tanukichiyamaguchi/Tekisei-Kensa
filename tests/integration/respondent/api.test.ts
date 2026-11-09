@@ -252,7 +252,8 @@ describe("I-11 受検者登録 POST /respondent/sessions", () => {
     ["氏名が 101 文字", { name: "あ".repeat(101) }, "name"],
     ["電話番号が 8 文字未満", { phoneNumber: "12345" }, "phoneNumber"],
     ["電話番号に英字", { phoneNumber: "abc-1234-5678" }, "phoneNumber"],
-    ["職業が 10", { occupationCode: 10 }, "occupationCode"],
+    ["職業が 9（旧データの「その他」。欠番）", { occupationCode: 9 }, "occupationCode"],
+    ["職業が 11", { occupationCode: 11 }, "occupationCode"],
     ["職業が文字列", { occupationCode: "2" }, "occupationCode"],
     ["診断経験が区分外", { diagnosisExperience: "never" }, "diagnosisExperience"],
     ["区分が区分外", { kind: "manager" }, "kind"],
@@ -273,6 +274,20 @@ describe("I-11 受検者登録 POST /respondent/sessions", () => {
       expect(await countDocs(COLLECTIONS.respondents)).toBe(before);
     },
   );
+
+  it("M7-exam-22 の職業の分: 職業 10（責任者。K-21）は 201 で、respondents.occupationCode に 10 が入る", async () => {
+    const res = await respondentApi.register(
+      registrationBody({ organizationId: org.organizationId, occupationCode: 10 }),
+    );
+    expect(res.status).toBe(201);
+    const dto = (await res.json()) as SessionCreatedDto;
+    const session = await sessionDoc(dto.sessionId);
+    const respondent = (await getDocForTest(
+      COLLECTIONS.respondents,
+      session.respondentId as string,
+    ))!;
+    expect(respondent.occupationCode).toBe(10);
+  });
 
   it("Content-Type が JSON でなければ 415、JSON の構文エラーは 400、存在しない組織は 404 ORGANIZATION_NOT_FOUND", async () => {
     const { callRoute } = await import("../helpers/routes");

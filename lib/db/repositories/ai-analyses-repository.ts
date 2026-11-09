@@ -112,6 +112,10 @@ export async function saveAiAnalysis(
       status: "completed",
       reliability: input.reliability,
       generatedBy: input.viewer.uid,
+      // 採用向けの組み合わせ（11-6 §3.2）。3 項目とも null
+      trainingContext: null,
+      previousResultId: null,
+      usedTrainingAction: null,
     },
     "aiAnalyses",
   );

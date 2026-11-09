@@ -46,6 +46,8 @@ describe("registerRespondentInputSchema", () => {
     ["電話番号が数値", { phoneNumber: 9012345678 }, "phoneNumber"],
     ["職業 0", { occupationCode: 0 }, "occupationCode"],
     ["職業 1.5", { occupationCode: 1.5 }, "occupationCode"],
+    ["職業 9（旧データの「その他」。欠番）", { occupationCode: 9 }, "occupationCode"],
+    ["職業 11", { occupationCode: 11 }, "occupationCode"],
     ["診断経験の区分外", { diagnosisExperience: "yes" }, "diagnosisExperience"],
     ["区分の区分外", { kind: "executives" }, "kind"],
     ["組織 ID の形式不正", { organizationId: "" }, "organizationId"],
@@ -53,6 +55,12 @@ describe("registerRespondentInputSchema", () => {
     expect(pathsOf(registerRespondentInputSchema.safeParse({ ...valid, ...patch }))).toContain(
       path,
     );
+  });
+
+  it("職業 10（責任者。K-21）は受理する（M7-exam-08 の職業の分）", () => {
+    expect(
+      registerRespondentInputSchema.parse({ ...valid, occupationCode: 10 }).occupationCode,
+    ).toBe(10);
   });
 
   it("氏名 100 文字（コードポイント）は受理する", () => {

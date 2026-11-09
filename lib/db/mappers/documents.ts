@@ -1,7 +1,9 @@
 // Doc → ドメイン型（02 §5.5）。Timestamp を Date に変換し、必須フィールドの欠落は例外にする。
-import type { DocumentSnapshot } from "firebase-admin/firestore";
+// M7 で足した項目は、項目の無い文書（M7 より前）を既定値で補う（02 §5.5 の補いの表）
+import { Timestamp, type DocumentSnapshot } from "firebase-admin/firestore";
 
 import { MappingError, toDate, toNullableDate } from "./timestamp";
+import { isInviteTokenFormat } from "@/lib/auth/invite-token";
 import type {
   AdminUser,
   AiAnalysis,
@@ -11,15 +13,19 @@ import type {
   Respondent,
   UsageLog,
 } from "@/lib/db/domain";
-import type {
-  AdminUserDoc,
-  AiAnalysisDoc,
-  AssessmentSessionDoc,
-  AuditLogDoc,
-  OrganizationDoc,
-  RespondentDoc,
-  UsageLogDoc,
+import { trainingContextSchema } from "@/lib/db/schemas/training-context";
+import {
+  ANNOUNCEMENT_KEYS,
+  type AdminUserDoc,
+  type AiAnalysisDoc,
+  type AnnouncementKey,
+  type AssessmentSessionDoc,
+  type AuditLogDoc,
+  type OrganizationDoc,
+  type RespondentDoc,
+  type UsageLogDoc,
 } from "@/lib/db/types";
+import type { TrainingContext } from "@/lib/masters/training-context";
 
 function requireFields(doc: object, fields: readonly string[], where: string): void {
   for (const f of fields) {
@@ -29,6 +35,11 @@ function requireFields(doc: object, fields: readonly string[], where: string): v
   }
 }
 
+/** 招待トークンの平文（11-8 §3.2）。無い・文字でない・形が違う（M7 より前の文書など）は null */
+function storedInviteToken(value: unknown): string | null {
+  return typeof value === "string" && isInviteTokenFormat(value) ? value : null;
+}
+
 export function toOrganization(id: string, doc: OrganizationDoc): Organization {
   requireFields(doc, ["name", "code", "customerNumber", "inviteTokenHash"], "organizations");
   return {
@@ -36,12 +47,27 @@ export function toOrganization(id: string, doc: OrganizationDoc): Organization {
     name: doc.name,
     code: doc.code,
     customerNumber: doc.customerNumber,
+    inviteToken: storedInviteToken((doc as Partial<OrganizationDoc>).inviteToken),
     inviteTokenHash: doc.inviteTokenHash,
     inviteTokenIssuedAt: toDate(doc.inviteTokenIssuedAt, "inviteTokenIssuedAt"),
     createdAt: toDate(doc.createdAt, "createdAt"),
     updatedAt: toDate(doc.updatedAt, "updatedAt"),
     deletedAt: toNullableDate(doc.deletedAt, "deletedAt"),
   };
+}
+
+/**
+ * お知らせの既読（11-8 §3.3）。項目が無い（M7 より前の文書）・map でないときは空。
+ * キーが ANNOUNCEMENT_KEYS に無いもの、値が Timestamp でないものは無視する
+ */
+function dismissedAnnouncementsOf(value: unknown): ReadonlyMap<AnnouncementKey, Date> {
+  const out = new Map<AnnouncementKey, Date>();
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return out;
+  for (const key of ANNOUNCEMENT_KEYS) {
+    const at = (value as Record<string, unknown>)[key];
+    if (at instanceof Timestamp) out.set(key, at.toDate());
+  }
+  return out;
 }
 
 export function toAdminUser(id: string, doc: AdminUserDoc): AdminUser {
@@ -52,6 +78,9 @@ export function toAdminUser(id: string, doc: AdminUserDoc): AdminUser {
     role: doc.role,
     displayName: doc.displayName,
     isSuspended: doc.isSuspended,
+    dismissedAnnouncements: dismissedAnnouncementsOf(
+      (doc as Partial<AdminUserDoc>).dismissedAnnouncements,
+    ),
     createdAt: toDate(doc.createdAt, "createdAt"),
     updatedAt: toDate(doc.updatedAt, "updatedAt"),
     deletedAt: toNullableDate(doc.deletedAt, "deletedAt"),
@@ -89,6 +118,7 @@ export function toRespondent(id: string, doc: RespondentDoc): Respondent {
     sessionId: doc.sessionId,
     usageLogId: doc.usageLogId,
     resultId: doc.resultId,
+    previousResultId: (doc as Partial<RespondentDoc>).previousResultId ?? null,
     createdAt: toDate(doc.createdAt, "createdAt"),
     updatedAt: toDate(doc.updatedAt, "updatedAt"),
     deletedAt: toNullableDate(doc.deletedAt, "deletedAt"),
@@ -118,6 +148,7 @@ export function toAssessmentSession(id: string, doc: AssessmentSessionDoc): Asse
     tokenExpiresAt: toDate(doc.tokenExpiresAt, "tokenExpiresAt"),
     answers: { ...doc.answers },
     lastSavedPageNo: doc.lastSavedPageNo,
+    lastSavedStepNo: (doc as Partial<AssessmentSessionDoc>).lastSavedStepNo ?? null,
     lastAnsweredAt: toNullableDate(doc.lastAnsweredAt, "lastAnsweredAt"),
     startedAt: toNullableDate(doc.startedAt, "startedAt"),
     submittedAt: toNullableDate(doc.submittedAt, "submittedAt"),
@@ -126,6 +157,16 @@ export function toAssessmentSession(id: string, doc: AssessmentSessionDoc): Asse
     updatedAt: toDate(doc.updatedAt, "updatedAt"),
     deletedAt: toNullableDate(doc.deletedAt, "deletedAt"),
   };
+}
+
+/**
+ * aiAnalyses.trainingContext（11-6 §3.2・§3.7.4）。無い（M7 より前の文書）・null は null。
+ * 8 項目の形（trainingContextSchema）に合わなければ null とみなす
+ */
+function storedTrainingContext(value: unknown): TrainingContext | null {
+  if (value === undefined || value === null) return null;
+  const parsed = trainingContextSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 }
 
 export function toAiAnalysis(id: string, doc: AiAnalysisDoc): AiAnalysis {
@@ -147,6 +188,7 @@ export function toAiAnalysis(id: string, doc: AiAnalysisDoc): AiAnalysis {
     ],
     "aiAnalyses",
   );
+  const legacyAi: Partial<AiAnalysisDoc> = doc; // M7 の 3 項目は M7 より前の文書には無い（11-6 §3.2）
   return {
     id,
     organizationId: doc.organizationId,
@@ -164,6 +206,9 @@ export function toAiAnalysis(id: string, doc: AiAnalysisDoc): AiAnalysis {
     status: doc.status,
     reliability: doc.reliability,
     generatedBy: doc.generatedBy,
+    trainingContext: storedTrainingContext(legacyAi.trainingContext),
+    previousResultId: legacyAi.previousResultId ?? null,
+    usedTrainingAction: legacyAi.usedTrainingAction ?? null,
     createdAt: toDate(doc.createdAt, "createdAt"),
     updatedAt: toDate(doc.updatedAt, "updatedAt"),
   };

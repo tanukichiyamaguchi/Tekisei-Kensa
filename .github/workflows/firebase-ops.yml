@@ -1,6 +1,8 @@
 # 運用スクリプトを GitHub Actions で実行する（10 K-12。依頼主はローカル環境を使わないため）。手動実行のみ。
 #   task = verify       … pnpm firebase:verify（実装時確認。一時ユーザー・一時文書を作り、終了時に削除する）
 #   task = create-owner … pnpm owner:create（組織と初期オーナーの作成。招待リンクはログに出さない）
+#   task = backfill-m7  … pnpm m7:backfill（M7 で足した項目の補い。何度実行しても同じ。ログは件数だけ。08 §8.2）
+#                         dry_run が入っている間（既定）は --dry-run を付けて、書き込まずに件数だけを出す。外したときだけ書く
 # Firebase プロジェクトは 1 つ（tekisei-kensa-697c4）だけで運用する（10 K-13）。
 # GitHub Environment `production` に次を置き、必須レビュアーを設定する:
 #   Secret   FIREBASE_SERVICE_ACCOUNT_KEY … アプリ用サービスアカウント鍵 JSON（中身をそのまま、または Base64 化して登録。Vercel と同じ鍵）
@@ -12,7 +14,7 @@ on:
       task:
         description: 実行する処理
         type: choice
-        options: [verify, create-owner]
+        options: [verify, create-owner, backfill-m7]
         required: true
       org_name:
         description: "[create-owner] 新しく作る組織名（既存組織に追加する場合は空にして organization_id を入れる）"
@@ -38,6 +40,10 @@ on:
         description: "[create-owner] オーナーの表示名（例: 責任者）"
         type: string
         required: false
+      dry_run:
+        description: "[backfill-m7] 試し（書き込まずに件数だけを出す）。書き込むときだけ外す"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -103,3 +109,14 @@ jobs:
           if [ -n "$ORG_CODE" ]; then args+=(--org-code "$ORG_CODE"); fi
           if [ -n "$CUSTOMER_NUMBER" ]; then args+=(--customer-number "$CUSTOMER_NUMBER"); fi
           pnpm -s owner:create "${args[@]}"
+      - name: M7 で足した項目の補い（pnpm m7:backfill）
+        if: inputs.task == 'backfill-m7'
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+        # 書くのは dry_run を外したとき（値が false のとき）だけ。それ以外は試しにする
+        run: |
+          if [ "$DRY_RUN" = "false" ]; then
+            pnpm -s m7:backfill
+          else
+            pnpm -s m7:backfill --dry-run
+          fi

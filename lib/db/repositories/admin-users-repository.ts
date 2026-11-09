@@ -1,14 +1,18 @@
 // 管理者（02 §3.2、§8.3）。文書 ID = Firebase Auth の uid
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldPath, FieldValue, Timestamp } from "firebase-admin/firestore";
 
-import { adminUsersRef, COLLECTIONS, rawCollection } from "@/lib/db/collections";
+import { adminUsersRef, COLLECTIONS, db, rawCollection } from "@/lib/db/collections";
 import type { AdminUser } from "@/lib/db/domain";
 import { RepositoryError } from "@/lib/db/errors";
 import { fromSnapshot, toAdminUser } from "@/lib/db/mappers/documents";
-import { adminUserCreateSchema, displayNameSchema } from "@/lib/db/schemas/admin-user";
+import {
+  adminUserCreateSchema,
+  announcementKeySchema,
+  displayNameSchema,
+} from "@/lib/db/schemas/admin-user";
 import { validateForWrite } from "@/lib/db/schemas/validate";
 import { docIdSchema } from "@/lib/db/schemas/values";
-import type { AdminRole } from "@/lib/db/types";
+import type { AdminRole, AnnouncementKey } from "@/lib/db/types";
 
 export interface CreateAdminUserInput {
   readonly uid: string;
@@ -23,7 +27,10 @@ export function isAlreadyExistsError(error: unknown): boolean {
   return code === 6 || code === "already-exists" || code === "ALREADY_EXISTS";
 }
 
-/** adminUsers 文書を作成する（create()。既に存在すれば RepositoryError ではなく Firestore の ALREADY_EXISTS で失敗する） */
+/**
+ * adminUsers 文書を作成する（create()。既に存在すれば RepositoryError ではなく Firestore の ALREADY_EXISTS で失敗する）。
+ * お知らせの既読は空の map で作る（11-8 §3.3）
+ */
 export async function createAdminUser(input: CreateAdminUserInput): Promise<void> {
   validateForWrite(docIdSchema, input.uid, "adminUsers.uid");
   const data = validateForWrite(
@@ -33,6 +40,7 @@ export async function createAdminUser(input: CreateAdminUserInput): Promise<void
       role: input.role,
       displayName: input.displayName,
       isSuspended: false,
+      dismissedAnnouncements: {},
       deletedAt: null,
     },
     "adminUsers",
@@ -60,6 +68,46 @@ export async function listAdminUsers(organizationId: string): Promise<readonly A
     .orderBy("createdAt", "asc")
     .get();
   return snapshot.docs.map((d) => toAdminUser(d.id, d.data()));
+}
+
+/**
+ * 組織の有効な責任者（Q-M7-2。11-8 §3.4）: organizationId ==、role == "owner"、deletedAt == null。
+ * 停止中（isSuspended）の責任者も返す（停止の判定は呼び出し元）。結果は保存しない（停止と解除をすぐ反映する）
+ */
+export async function listActiveOwners(organizationId: string): Promise<readonly AdminUser[]> {
+  const snapshot = await adminUsersRef()
+    .where("organizationId", "==", organizationId)
+    .where("role", "==", "owner")
+    .where("deletedAt", "==", null)
+    .get();
+  return snapshot.docs.map((d) => toAdminUser(d.id, d.data()));
+}
+
+/**
+ * お知らせの既読を保存する（11-8 §3.3）。トランザクションで文書を読み、文書が無い・削除済み・そのキーが既読なら
+ * 書かない（最初の日時を保つので、何度呼んでも同じ）。キーが無ければ dismissedAnnouncements.{key} と updatedAt に
+ * サーバの時刻を書く（項目の無い M7 より前の文書でも map ができる）。監査ログは書かない
+ */
+export async function markAnnouncementDismissed(uid: string, key: AnnouncementKey): Promise<void> {
+  if (!docIdSchema.safeParse(uid).success) return;
+  const announcementKey = validateForWrite(
+    announcementKeySchema,
+    key,
+    "adminUsers.dismissedAnnouncements",
+  );
+  await db().runTransaction(async (tx) => {
+    const user = fromSnapshot(await tx.get(adminUsersRef().doc(uid)), toAdminUser);
+    if (!user || user.deletedAt !== null || user.dismissedAnnouncements.has(announcementKey)) {
+      return;
+    }
+    tx.update(
+      rawCollection(COLLECTIONS.adminUsers).doc(uid),
+      new FieldPath("dismissedAnnouncements", announcementKey),
+      FieldValue.serverTimestamp(),
+      "updatedAt",
+      FieldValue.serverTimestamp(),
+    );
+  });
 }
 
 async function requireAdminUser(uid: string): Promise<AdminUser> {

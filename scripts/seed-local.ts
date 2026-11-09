@@ -95,7 +95,7 @@ export async function registerAndSave(
     kind,
     name: `テストテスト ${String(index).padStart(2, "0")}`,
     phoneNumber: `090-0000-${String(index).padStart(4, "0")}`,
-    occupationCode: (index % OCCUPATION_CODES.length) + 1,
+    occupationCode: OCCUPATION_CODES[index % OCCUPATION_CODES.length]!, // マスタのコードを順に選ぶ（9 は欠番）
     diagnosisExperience: index % 3 === 0 ? "experienced" : "first_time",
     sessionTokenHash: token.tokenHash,
     tokenExpiresAt: token.expiresAt,

@@ -1,7 +1,10 @@
 // results 文書 ↔ ScoreResult / PopulationMember（02 §5.5、03 §5.9）。値を変換・丸めしない
 import { MappingError, toDate, toNullableDate } from "./timestamp";
 import type { Result } from "@/lib/db/domain";
+import { initialEmploymentStatus } from "@/lib/db/employment-status";
+import { trainingContextSchema } from "@/lib/db/schemas/training-context";
 import type { ResultDoc } from "@/lib/db/types";
+import type { TrainingContext } from "@/lib/masters/training-context";
 import {
   APTITUDE_KEYS,
   APTITUDE_TYPE_KEYS,
@@ -11,6 +14,7 @@ import {
   TRAIT_KEYS,
 } from "@/lib/scoring/types";
 import type { PopulationMember, ScoreResult } from "@/lib/scoring/types";
+import { logger } from "@/lib/utils/logger";
 
 type ScoreFields = Pick<ResultDoc, keyof ScoreResult>;
 
@@ -86,10 +90,25 @@ export function toResultDocFields(score: ScoreResult): ScoreFields {
   };
 }
 
+/**
+ * results.trainingContext（11-6 §3.1）。無い・null は null。8 項目の形（trainingContextSchema）に合わなければ
+ * null とみなし、warn のログに resultId だけを出す（8 項目の値は出さない）
+ */
+function storedTrainingContext(resultId: string, value: unknown): TrainingContext | null {
+  if (value === undefined || value === null) return null;
+  const parsed = trainingContextSchema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  logger.warn("results.training_context_invalid", { resultId });
+  return null;
+}
+
 export function toResult(id: string, doc: ResultDoc): Result {
   const score = toScoreResult(doc);
   if (typeof doc.organizationId !== "string")
     throw new MappingError("results.organizationId がありません");
+  // M7 で足した項目は M7 より前の文書には無い。無ければ作成時の値で補い、ある値は検証しない
+  // （trainingContext だけは形を確かめる。02 §2・§5.5）
+  const m7: Partial<ResultDoc> = doc;
   return {
     id,
     ...score,
@@ -104,6 +123,23 @@ export function toResult(id: string, doc: ResultDoc): Result {
     aiGenerationStartedAt: toNullableDate(doc.aiGenerationStartedAt, "aiGenerationStartedAt"),
     aiGenerationError: doc.aiGenerationError,
     latestAiAnalysisId: doc.latestAiAnalysisId,
+    employmentStatus: m7.employmentStatus ?? initialEmploymentStatus(doc.respondentKind),
+    hiredOn: m7.hiredOn ?? null,
+    leftOn: m7.leftOn ?? null,
+    staffRole: m7.staffRole ?? null,
+    previousResultId: m7.previousResultId ?? null,
+    trainingAiStatus: m7.trainingAiStatus ?? "not_generated",
+    trainingAiStartedAt: toNullableDate(m7.trainingAiStartedAt ?? null, "trainingAiStartedAt"),
+    trainingAiError: m7.trainingAiError ?? null,
+    latestTrainingAiAnalysisId: m7.latestTrainingAiAnalysisId ?? null,
+    trainingContext: storedTrainingContext(id, m7.trainingContext),
+    longitudinalAiStatus: m7.longitudinalAiStatus ?? "not_generated",
+    longitudinalAiStartedAt: toNullableDate(
+      m7.longitudinalAiStartedAt ?? null,
+      "longitudinalAiStartedAt",
+    ),
+    longitudinalAiError: m7.longitudinalAiError ?? null,
+    latestLongitudinalAiAnalysisId: m7.latestLongitudinalAiAnalysisId ?? null,
     createdAt: toDate(doc.createdAt, "createdAt"),
     updatedAt: toDate(doc.updatedAt, "updatedAt"),
     deletedAt: toNullableDate(doc.deletedAt, "deletedAt"),
