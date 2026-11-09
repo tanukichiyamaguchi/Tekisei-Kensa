@@ -1,4 +1,4 @@
-// 受検者画面の E2E の共通操作（08 §3.4.3）
+// 受験者側の画面の E2E の共通操作（11-1 §5.3）。受験者名は「E2E-{連番}」、電話番号は見本の値（00000000000 など）
 import { expect, type Locator, type Page } from "@playwright/test";
 
 import { EXAM_STEP_TOTAL, questionNosOfStep } from "./questions";
@@ -7,8 +7,12 @@ let seq = 0;
 /** シナリオが作る受検者は名前で区別する（08 §3.4.2） */
 export const e2eName = (): string => `E2E-${Date.now()}-${++seq}`;
 
-export const linkUrl = (organizationId: string, p: "user" | "executives" = "user"): string =>
-  `/exam?q=${organizationId}&p=${p}`;
+/** 見本の電話番号（実在しない値） */
+export const SAMPLE_PHONE = "00000000000";
+
+/** 受験リンク。p を省くと p の無いリンク */
+export const linkUrl = (organizationId: string, p?: string): string =>
+  p === undefined ? `/exam?q=${organizationId}` : `/exam?q=${organizationId}&p=${p}`;
 
 export function sessionIdFromUrl(url: string): string {
   const match = /\/exam\/([A-Za-z0-9]+)/.exec(new URL(url).pathname);
@@ -26,36 +30,64 @@ export function recordApiCalls(page: Page): string[] {
   return calls;
 }
 
+/** PUT …/answers の本文を記録する */
+export function recordAnswerBodies(
+  page: Page,
+): Array<{ stepNo: number; answers: Array<{ questionNo: number; choiceCode: number }> }> {
+  const bodies: Array<{
+    stepNo: number;
+    answers: Array<{ questionNo: number; choiceCode: number }>;
+  }> = [];
+  page.on("request", (req) => {
+    if (req.method() === "PUT" && new URL(req.url()).pathname.endsWith("/answers")) {
+      bodies.push(req.postDataJSON() as (typeof bodies)[number]);
+    }
+  });
+  return bodies;
+}
+
+/** R-01 の入力欄とプルダウン（ラベルが無いので読み上げの名前とプレースホルダーで探す） */
+export const registrationFields = (page: Page) => ({
+  name: page.getByRole("textbox", { name: "お名前", exact: true }),
+  phoneNumber: page.getByRole("textbox", { name: "電話番号", exact: true }),
+  occupation: page.getByRole("combobox", { name: "職業", exact: true }),
+  experience: page.getByRole("combobox", { name: "過去の診断経験", exact: true }),
+});
+
 export interface RegistrationValues {
   readonly name?: string;
   readonly phoneNumber?: string;
-  readonly occupationCode?: string;
+  /** 職業の表示名 */
+  readonly occupation?: string;
   readonly experience?: "初めて診断する" | "過去に診断したことがある";
 }
 
-/** R-01 を画面から入力して「診断に進む」。/exam/{sessionId} へ遷移したら sessionId を返す */
+/** R-01 に入力する（「診断に進む」は押さない） */
+export async function fillRegistration(page: Page, values: RegistrationValues = {}): Promise<void> {
+  const fields = registrationFields(page);
+  await fields.name.fill(values.name ?? e2eName());
+  await fields.phoneNumber.fill(values.phoneNumber ?? SAMPLE_PHONE);
+  await fields.occupation.selectOption({
+    label: values.occupation ?? "アイリスト（アシスタント・見習い）",
+  });
+  await fields.experience.selectOption({ label: values.experience ?? "初めて診断する" });
+}
+
+/** R-01 を画面から入力して「診断に進む」。/exam/{sessionId} へ移ったら sessionId を返す */
 export async function registerViaUi(
   page: Page,
   organizationId: string,
   values: RegistrationValues = {},
+  p: string | undefined = "user",
 ): Promise<string> {
-  await page.goto(linkUrl(organizationId));
-  await page.getByRole("textbox", { name: "お名前", exact: true }).fill(values.name ?? e2eName());
-  await page
-    .getByRole("textbox", { name: "電話番号", exact: true })
-    .fill(values.phoneNumber ?? "090-1111-2222");
-  await page
-    .getByRole("combobox", { name: "職業", exact: true })
-    .selectOption(values.occupationCode ?? "2");
-  await page
-    .getByRole("radio", { name: values.experience ?? "初めて診断する", exact: true })
-    .check();
+  await page.goto(linkUrl(organizationId, p));
+  await fillRegistration(page, values);
   await page.getByTestId("register-submit").click();
   await page.waitForURL(/\/exam\/[A-Za-z0-9]+$/);
   return sessionIdFromUrl(page.url());
 }
 
-/** API で登録する（ブラウザのコンテキストに tk_session が入る） */
+/** API で登録する（ブラウザのコンテキストに受検者の Cookie が入る） */
 export async function registerViaApi(
   page: Page,
   organizationId: string,
@@ -66,7 +98,7 @@ export async function registerViaApi(
       organizationId,
       kind,
       name: e2eName(),
-      phoneNumber: "090-1111-2222",
+      phoneNumber: SAMPLE_PHONE,
       occupationCode: 2,
       diagnosisExperience: "first_time",
     },
@@ -101,25 +133,67 @@ export async function saveStepsViaApi(
   }
 }
 
-/** 表示中のステップの設問に回答する。count を指定すると先頭から count 問だけ */
+/** 登録・開始・Step 1〜lastStepNo の保存を API で済ませて、受験画面を開く */
+export async function openQuestions(
+  page: Page,
+  organizationId: string,
+  savedSteps = 0,
+): Promise<string> {
+  const sessionId = await registerViaApi(page, organizationId);
+  await startViaApi(page, sessionId);
+  if (savedSteps > 0) await saveStepsViaApi(page, sessionId, savedSteps);
+  await page.goto(`/exam/${sessionId}/questions`);
+  await expect(page.getByTestId("question-form")).toBeVisible();
+  return sessionId;
+}
+
+/** 表示中のステップの設問に回答する。count を指定すると先頭から count 問だけ。skip の設問は飛ばす */
 export async function answerCurrentStep(
   page: Page,
   stepNo: number,
-  choice: (questionNo: number) => number = () => 3,
-  count?: number,
+  options: {
+    readonly choice?: (questionNo: number) => number;
+    readonly count?: number;
+    readonly skip?: readonly number[];
+  } = {},
 ): Promise<readonly number[]> {
-  const questions = questionNosOfStep(stepNo).slice(0, count);
+  const choice = options.choice ?? (() => 3);
+  const questions = questionNosOfStep(stepNo)
+    .slice(0, options.count)
+    .filter((q) => !(options.skip ?? []).includes(q));
   for (const q of questions) await page.getByTestId(`choice-${q}-${choice(q)}`).check();
   return questions;
+}
+
+/** 受験画面に出ているステップ */
+export async function expectStep(page: Page, stepNo: number): Promise<void> {
+  await expect(page.getByTestId("question-form")).toHaveAttribute("data-step-no", String(stepNo));
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(`Step ${stepNo}`);
 }
 
 /** 受験画面の URL（ステップ番号は URL に入れない。11-1 §2.1.1） */
 export const questionsUrl = (sessionId: string): RegExp =>
   new RegExp(`/exam/${sessionId}/questions$`);
 
+export const completeUrl = (sessionId: string): RegExp =>
+  new RegExp(`/exam/${sessionId}/complete$`);
+
+/** R-07 エラーの通知（.exam-root の中に描く。11-1 §2.1.5） */
+export const alertDialog = (page: Page): Locator =>
+  page.getByTestId("alert-dialog").getByRole("alertdialog");
+
+/** 描いた要素の計算されたスタイル */
+export function computed(locator: Locator, property: string, pseudo?: string): Promise<string> {
+  return locator.evaluate(
+    (el, [prop, pseudoElement]) =>
+      getComputedStyle(el, pseudoElement ?? null).getPropertyValue(prop ?? ""),
+    [property, pseudo] as const,
+  );
+}
+
 /**
- * aria-disabled のボタンを押す。05 §5.1.5・§5.3.6 のとおり無効表示でも押下を受け付けて未入力・未回答を示すが、
- * Playwright は aria-disabled="true" を操作不可とみなして待ち続けるため、実行可能性の確認を省いて押す
+ * aria-disabled のボタンを押す。押せない状態でも押せて検査する（11-1 §2.2.3）が、
+ * Playwright は aria-disabled="true" を操作できないとみなして待ち続けるため、実行できるかの確かめを省いて押す
  */
 export async function pressAriaDisabled(button: Locator): Promise<void> {
   await expect(button).toHaveAttribute("aria-disabled", "true");

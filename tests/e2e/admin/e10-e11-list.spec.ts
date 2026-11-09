@@ -54,8 +54,8 @@ test("E-11 admin には幹部が一覧・組織内分類・利用履歴に出ず
   await expect(page.getByLabel("区分")).toHaveCount(0);
 
   await page.getByRole("button", { name: "利用履歴" }).click();
-  // 求職者 8 人 + 送信前の下書き 1 人（幹部 2 人は含まない）
-  await expect(openDialog(page).locator(".dialog__title")).toHaveText("利用履歴（全 9 件）");
+  // 求職者 8 人（幹部 2 人は含まない。利用履歴は送信のときに作るので、送信前の下書きの履歴は無い。11-1 §2.7.4）
+  await expect(openDialog(page).locator(".dialog__title")).toHaveText("利用履歴（全 8 件）");
   await page.keyboard.press("Escape");
 
   await page.goto("/admin/classification");

@@ -60,6 +60,28 @@ async function run(task: string | undefined, args: string[]): Promise<unknown> {
         kind: respondent.get("kind") as string,
       };
     }
+    case "result-of-session": {
+      // 受験のデータ（11-1 §2.7.2・§2.7.4）: 結果の受検者区分の複製と区分、利用履歴の件数（M7-exam-41 ほか）
+      const sessionId = args[0] ?? "";
+      const results = await db
+        .collection(COLLECTIONS.results)
+        .where("sessionId", "==", sessionId)
+        .get();
+      const result = results.docs[0];
+      if (!result) return { resultCount: 0 };
+      const respondentId = result.get("respondentId") as string;
+      const usageLogs = await db
+        .collection(COLLECTIONS.usageLogs)
+        .where("respondentId", "==", respondentId)
+        .get();
+      return {
+        resultCount: results.size,
+        respondentKind: result.get("respondentKind") as string,
+        employmentStatus: result.get("employmentStatus") as string,
+        usageLogCount: usageLogs.size,
+        usageLogRespondentKind: (usageLogs.docs[0]?.get("respondentKind") as string) ?? null,
+      };
+    }
     case "count-results-of-session": {
       const snap = await db
         .collection(COLLECTIONS.results)

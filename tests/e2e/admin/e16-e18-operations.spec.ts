@@ -90,8 +90,9 @@ test("E-17 組織内分類の人数合計が一覧と一致し、分類・キャ
   await page.keyboard.press("Escape");
 
   await page.getByRole("button", { name: "利用履歴" }).click();
-  await expect(openDialog(page).locator(".dialog__title")).toHaveText("利用履歴（全 11 件）");
-  await expect(openDialog(page).getByText("未回答")).toHaveCount(1);
+  // 送信済みの 10 人。利用履歴は送信のときに作るので、送信前の下書きの履歴（未回答）は無い（11-1 §2.7.4）
+  await expect(openDialog(page).locator(".dialog__title")).toHaveText("利用履歴（全 10 件）");
+  await expect(openDialog(page).getByText("未回答")).toHaveCount(0);
   await page.keyboard.press("Escape");
 
   await page.goto("/admin/account");

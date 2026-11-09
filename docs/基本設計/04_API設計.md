@@ -3,8 +3,8 @@
 | 項目 | 内容 |
 |---|---|
 | 文書名 | 適性検査システム 基本設計 04 API・サーバ処理設計 |
-| 版 | 2.1 |
-| 作成日 | 2026-09-17（1.1 版: 2026-09-19、1.2 版: 2026-09-21、2.0 版: 2026-09-21。技術構成の変更（Supabase → Firebase。10 K-06）を反映した全面改版。2.1 版: 2026-09-21。Firebase 化後の分冊間整合（02 2.1 版の関数名・型名に統一）。改版履歴は §12） |
+| 版 | 2.3 |
+| 作成日 | 2026-09-17（1.1 版: 2026-09-19、1.2 版: 2026-09-21、2.0 版: 2026-09-21。技術構成の変更（Supabase → Firebase。10 K-06）を反映した全面改版。2.1 版: 2026-09-21。Firebase 化後の分冊間整合（02 2.1 版の関数名・型名に統一）。2.2 版: 2026-09-24。本番デプロイで判明した事項の反映。2.3 版: 2026-11-09。M7 の PR-7.3（受検者画面。11 総論 5.4、11-1 §3.4）。改版履歴は §12） |
 | 対象 | 実装者（Route Handler、`lib/services/`、`lib/auth/`、`lib/db/` の実装担当）、05〜08 分冊の設計者 |
 
 ## 0. 本書の位置づけ
@@ -250,8 +250,8 @@ export const pdfModeSchema = z.enum(["full", "restricted"]);
 | 未知のキー | JSON ボディの未知キーは無視する（`z.object` の既定。`strict()` は使わない）。将来のキー追加でクライアントを壊さないため |
 | 検証失敗 | 422 `VALIDATION_ERROR`。`details.issues` に `{ path: "answers[3].choiceCode", message: "..." }` の配列を入れる。**入力値そのものは `details` に含めない**（個人情報の混入防止。01 のログ方針） |
 | JSON 構文エラー | 400 `INVALID_JSON` |
-| 電話番号 | 既存の形式検証は未確認（要件定義書 §12）。仮置き（設計判断 D04-06）: 前後空白を除去し、全角数字・全角ハイフンを半角に正規化したうえで、`^[0-9+()\-]{8,20}$` を満たすこと。Firestore（`respondents.phoneNumber`、`usageLogs.phoneNumber`）には正規化後の値を保存する。表示・赤枠の条件は 05 分冊 |
-| 氏名 | 1〜100 文字。文字種は制限しない（02 の `respondents.name` の検証スキーマと同じ上限にする） |
+| 電話番号 | 必須。前後の空白を除いて 1〜30 文字（`requiredText(PHONE_MAX_LENGTH)`）。書式・桁数・文字の種類は検査せず、正規化しない（全角の数字・ハイフンもそのまま `respondents.phoneNumber`・`usageLogs.phoneNumber` に保存する。10 K-39 Q-17・K-42、11-1 §2.2.5。設計判断 D04-06（2.3 版で改めた））。上限の値は画面の検査と同じ定数（`lib/presentation/registration-rules.ts`）。表示・赤枠の条件は 05 分冊 |
+| 氏名 | 前後の空白を除いて 1〜100 文字（`requiredText(NAME_MAX_LENGTH)`。10 K-42）。文字種は制限しない（02 の `respondents.name` の検証スキーマと同じ上限にする） |
 
 検証エラー応答の例:
 
@@ -262,7 +262,7 @@ export const pdfModeSchema = z.enum(["full", "restricted"]);
     "message": "入力内容に誤りがあります",
     "details": {
       "issues": [
-        { "path": "phoneNumber", "message": "電話番号の形式が正しくありません" },
+        { "path": "phoneNumber", "message": "30 文字以内で入力してください" },
         { "path": "occupationCode", "message": "職業を選択してください" }
       ]
     }
@@ -512,7 +512,7 @@ export async function requireRespondentSession(request: Request, sessionId: stri
 export async function requireRespondentSessionFromCookies(sessionId: string): Promise<RespondentSessionContext>;
 
 /**
- * 受検リンク（/exam?q&p）を開き直したときの再開判定（05 §6.3 の ResumeBanner）。
+ * 受検リンク（/exam?q&p）を開き直したときの再開判定（1.x 版の 05 §6.3 の ResumeBanner。2.3 版から受験者側の画面は使わない。D04-43）。
  * Cookie のトークンのハッシュだけで assessmentSessions を 1 件引き、
  * 「organizationId と kind が一致」「status == draft」「deletedAt == null」「tokenExpiresAt > now」のときだけ sessionId を返す。
  * それ以外（Cookie なし・文書なし・別組織・別区分・submitted・期限切れ）は null を返し、例外を投げない。個人情報は返さない。
@@ -538,7 +538,7 @@ export async function findResumableSession(
 2. `hashRespondentToken(cookieToken)` で `getSessionByTokenHash({ organizationId, sessionTokenHash: hash, now })`（02 §8.4。`assessmentSessions` を `sessionTokenHash == hash` で 1 件引き（02 Q10。単一フィールドの等価条件のため複合インデックス不要）、`deletedAt != null`・期限切れ・組織不一致は `null` を返す。`sessionTokenHash` は乱数由来で実質一意。00 §2.1）。無ければ `null`。
 3. `status == "draft"` でなければ `null`（削除済み・期限切れ・組織不一致は手順 2 で `null` になっている）。
 4. `getRespondentById({ respondentId, organizationId })`（02 §8.4）で受検者を引き、`kind == kind` でなければ `null`（05 §6.3: 区分の取り違えを防ぐ）。
-5. `answers` map のキー数を数え、`{ sessionId, answeredCount }` を返す（05 の `ResumeBanner` は `sessionId` だけを使う。`answeredCount` は「n 問まで回答済み」の表示用で、氏名などは含めない）。
+5. `answers` map のキー数を数え、`{ sessionId, answeredCount }` を返す（1.x 版の 05 の `ResumeBanner` は `sessionId` だけを使っていた。`answeredCount` は「n 問まで回答済み」の表示用で、氏名などは含めない）。
 
 - 受検者 API は Admin SDK（サービスアカウント。セキュリティルールの対象外）で動くため、**全ての読み書きを `sessionId` 1 件とそれに紐づく `respondentId`・`usageLogs` 1 件に限定** し、`organizationId` はコンテキストの値を使います（00 D-23、D-28）。リクエストで組織 ID を受け取るのは登録 API（§4.2）と受検リンク検証 API（§4.1。`findResumableSession` を呼ぶ）だけです。
 - `findResumableSession` は Cookie の所持者が「自分の」`draft` セッションを見つけるだけの関数で、`sessionId` を返した後の実際の再開は `requireRespondentSession` の通常の検証（トークン一致）を経ます。トークンを持たない第三者は `sessionId` を得られません。
@@ -777,11 +777,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ resu
 
 ## 4. 受検者 API
 
-受検者 API はすべて Admin SDK（`lib/db/`。サービスアカウント）で Firestore にアクセスします（00 D-23、D-28）。セキュリティルールは適用されないため、§2.5.2 のコンテキストが示す `sessionId`・`respondentId`・`organizationId` 以外の文書に触れないことを service の責任とします。複数文書の整合が必要な書き込み（登録・送信）は 02 のリポジトリ関数がバッチ／トランザクションで行い、service はそれを 1 回呼びます（00 §2.2、§6「複製フィールドの同期手順は 02 が定め、04 はそれを `lib/services/` から呼ぶ」）。
+受検者 API はすべて Admin SDK（`lib/db/`。サービスアカウント）で Firestore にアクセスします（00 D-23、D-28）。セキュリティルールは適用されないため、§2.5.2 のコンテキストが示す `sessionId`・`respondentId`・`organizationId` 以外の文書に触れないことを service の責任とします。複数文書の整合が必要な書き込み（登録・送信）は 02 のリポジトリ関数がバッチ／トランザクションで行い、service はそれを 1 回呼びます（00 §2.2、§6「複製フィールドの同期手順は 02 が定め、04 はそれを `lib/services/` から呼ぶ」）。受検者 API が書く文書（2.3 版。11-1 §3.4）: 登録は `respondents`・`assessmentSessions`・`auditLogs` の 3 文書（利用履歴は作らない）。送信は `results` の作成と `assessmentSessions`・`respondents` の更新、利用履歴の作成（M7 より前の登録で文書があればその更新）、`auditLogs`。
 
 ### 4.1 受検リンクの検証 `GET /api/v1/respondent/organizations/{organizationId}`
 
-受検者登録画面（S-02）が無効なリンクの判定（フォームを出さない）と再開可能セッションの検索（`resumable`）に使います（05 §5.1.1、§6.3）。応答の `organizationName` は 05 の画面では表示しません（05 D05-34。値は返すが描画しない）。Server Component は同名の service `getOrganizationForAssessment` を直接呼び、ブラウザからこの API を呼ぶことはありません（05 §7.1）。
+2.2 版までは、受検者登録画面（S-02）が無効なリンクの判定（フォームを出さない）と再開可能セッションの検索（`resumable`）に使っていました。2.3 版から受験者登録の画面は、この API も同名の service `getOrganizationForAssessment` も使いません（画面を開いた時点では組織を確かめず、無効なリンクでもフォームを出して「診断に進む」の登録 API（§4.2）で確かめる。受験リンクを開き直したときの再開の案内も出さない。11-1 §2.2.1・§3.4.4。D04-43）。API の契約は変えずに残します。応答の `organizationName` は画面で表示しません（05 D05-34）。
 
 | 項目 | 内容 |
 |---|---|
@@ -802,7 +802,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ resu
 }
 ```
 
-- `resumable` は再開できるセッションが無いとき `null`。05 §6.3 の `ResumeBanner` はこの値で表示を決めます（Server Component で初期表示するときは同名の service `getOrganizationForAssessment` が `cookies()` からトークンを読んで同じ判定をします。§8.3）。
+- `resumable` は再開できるセッションが無いとき `null`。2.2 版までは 05 の `ResumeBanner` がこの値で表示を決めていました（2.3 版でやめた。11-1 §1.3）。
 - Cookie が無効・別組織・別区分・送信済み・期限切れのいずれでも `resumable: null` を返し、エラーにはしません（受検リンクの検証自体は成功しているため）。
 
 エラー:
@@ -823,8 +823,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ resu
 |---|---|
 | 認可 | なし。レート制限あり（§2.8） |
 | 前提 | 組織が存在し論理削除されていない |
-| 処理 | 1 つの WriteBatch で `respondents`、`assessmentSessions`、`usageLogs`、`auditLogs` に 1 文書ずつ作成（§4.2.2）。応答で Cookie `tk_session` を発行 |
-| 監査ログ | `respondent.register`（actor `respondent`、`details: { kind }`）。同じバッチに積む |
+| 処理 | 1 つの WriteBatch で `respondents`、`assessmentSessions`、`auditLogs` に 1 文書ずつ作成（§4.2.2）。利用履歴（`usageLogs`）は作らない（送信のときに作る。11-1 §2.7.4。2.3 版）。応答で Cookie `tk_session` を発行 |
+| 監査ログ | `respondent.register`（actor `respondent`、`details: { kind, previousCandidate }`。`previousCandidate` は前回の候補を受け付けたら `true`。候補の判定は PR-7.4 で、それまでは常に `false`。11-1 §2.7.5）。同じバッチに積む |
 
 リクエスト:
 
@@ -832,8 +832,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ resu
 {
   "organizationId": "Org7Kq2mN4pR8sT1vW3x",
   "kind": "applicant",
-  "name": "山田 太郎",
-  "phoneNumber": "090-1234-5678",
+  "name": "見本 花子",
+  "phoneNumber": "00000000000",
   "occupationCode": 2,
   "diagnosisExperience": "first_time"
 }
@@ -842,41 +842,28 @@ export async function GET(request: Request, { params }: { params: Promise<{ resu
 zod スキーマ:
 
 ```ts
-// lib/utils/phone-number.ts（I/O なし・依存なし。04 の zod スキーマと 05 の画面側検証が同じ実装を共有する。05 D05-16）
-export const PHONE_PATTERN = /^[0-9+()\-]{8,20}$/;
-
-/** 全角数字・全角ハイフン類を半角に正規化する（設計判断 D04-06） */
-export function normalizePhoneNumber(raw: string): string {
-  return raw
-    .trim()
-    .replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
-    .replace(/[－‐‑–—ー]/g, "-")
-    .replace(/[（]/g, "(")
-    .replace(/[）]/g, ")")
-    .replace(/\s+/g, "");
-}
-```
-
-```ts
 // lib/services/schemas/respondent.ts
 import { z } from "zod";
 import { requiredText, docIdSchema } from "./common";
-import { normalizePhoneNumber, PHONE_PATTERN } from "@/lib/utils/phone-number";   // 1.2 版: 実体を lib/utils/ に移し、05 と共有（D05-16）
-import { occupationCodeSchema } from "@/lib/db/schemas/values";   // 10 K-19
+import { occupationCodeSchema } from "@/lib/db/schemas/values";
+import { DIAGNOSIS_EXPERIENCES, RESPONDENT_KINDS } from "@/lib/db/types";
+import { NAME_MAX_LENGTH, PHONE_MAX_LENGTH } from "@/lib/presentation/registration-rules";   // 画面の検査と同じ定数（値を 2 か所に置かない。11-1 §3.4.1）
+
+export const respondentKindSchema = z.enum(RESPONDENT_KINDS);   // applicant | executive
 
 export const registerRespondentInputSchema = z.object({
   organizationId: docIdSchema,
-  kind: z.enum(["applicant", "executive"]),
-  name: requiredText(100),
-  phoneNumber: z
-    .string()
-    .transform(normalizePhoneNumber)
-    .refine((s) => PHONE_PATTERN.test(s), { message: "電話番号の形式が正しくありません" }),
-  occupationCode: occupationCodeSchema,   // 1〜8（00 §1.10、10 K-19。PR #13・#14）。旧コード 9 は保存済み文書の検証（storedOccupationCodeSchema）だけが読み、新規登録では受け付けない
-  diagnosisExperience: z.enum(["first_time", "experienced"]),
+  kind: respondentKindSchema,                     // applicant | executive（画面が p から決める。11-1 §2.2.1）
+  name: requiredText(NAME_MAX_LENGTH),            // 前後の空白を除いて 1〜100 文字（K-42）
+  phoneNumber: requiredText(PHONE_MAX_LENGTH),    // 前後の空白を除いて 1〜30 文字（K-42）。書式は検査せず、正規化しない（K-39 Q-17）
+  occupationCode: occupationCodeSchema,           // 1〜8、10（K-21）。旧コード 9 は保存済み文書の検証（storedOccupationCodeSchema）だけが読み、新規登録では受け付けない
+  diagnosisExperience: z.enum(DIAGNOSIS_EXPERIENCES),
 });
 export type RegisterRespondentInput = z.infer<typeof registerRespondentInputSchema>;
 ```
+
+- 2.2 版までの電話番号の正規化（`lib/utils/phone-number.ts` の `normalizePhoneNumber` と `PHONE_PATTERN`。05 と共有していた。D05-16）は、2.3 版で登録の検証から外しました（11-1 §2.2.5。ファイルは残す）。
+- 前回の候補 `previousResultId`（再受験リンクの `prev`）は PR-7.4 が足します（11-1 §3.4.1）。
 
 レスポンス（201）と `Set-Cookie`:
 
@@ -899,7 +886,7 @@ Set-Cookie: tk_session=<base64url 43 文字>; Path=/; Expires=<tokenExpiresAt>; 
 
 | HTTP | code | 条件 |
 |---:|---|---|
-| 422 | `VALIDATION_ERROR` | 必須欠落、形式不正 |
+| 422 | `VALIDATION_ERROR` | 必須欠落、お名前 101 文字以上・電話番号 31 文字以上（前後の空白を除いて）、職業・過去の診断経験の値の不正、`organizationId` の形の不正（`path` が `organizationId`） |
 | 404 | `ORGANIZATION_NOT_FOUND` | 組織なし・論理削除済み |
 | 429 | `RATE_LIMITED` | 同一組織・同一 IP で 10 分に 20 件超 |
 
@@ -915,15 +902,15 @@ export async function registerRespondent(input: RegisterRespondentInput, request
 1. `getOrganization(input.organizationId)` で組織を検証（§4.1 と同じ条件）。
 2. レート制限の判定（§2.8）。
 3. `issueRespondentToken(now)` でトークンを発行。
-4. 02 の `registerRespondent(input)`（§4.2.2）を呼び、`respondentId`・`sessionId`・`usageLogId` を得る（service の関数名も `registerRespondent` だが、モジュールが異なる（`lib/services/respondent-registration.ts` と `lib/db/repositories/respondents-repository.ts`）。service 側は import 時に `registerRespondent as registerRespondentDocs` の別名を付ける）。
+4. 02 の `registerRespondent(input)`（§4.2.2）を呼び、`respondentId`・`sessionId` を得る（service の関数名も `registerRespondent` だが、モジュールが異なる（`lib/services/respondent-registration.ts` と `lib/db/repositories/respondents-repository.ts`）。service 側は import 時に `registerRespondent as registerRespondentDocs` の別名を付ける）。
 5. 応答に Cookie を付けて返す。**生のトークンは応答ボディに含めない**（Cookie のみ。00 D-32）。
 
 - 推定: 既存では受検者が登録のたびに User レコードとして作成される（要件定義書 §8.1）ため、同一人物の再登録は別レコードになると推定します（同一人物の再登録の扱いは要件定義書・付録に記載なし）。新システムでも 00 §1.1 の定義「1 文書 = 1 回の受検登録」に従い、同じ人が再度リンクから登録すれば別の受検者文書ができます。
-- 設計判断 D04-16: 重複登録の抑止（同一電話番号の検出など）は要件に無いため行いません。誤って二重に登録された受検者は管理者が一覧から削除できます（要件定義書 §6.2 A-05）。同一ブラウザからの再訪は §4.1 の `resumable` で再開を促します（05 §6.3）。
+- 設計判断 D04-16: 重複登録の抑止（同一電話番号の検出など）は要件に無いため行いません。誤って二重に登録された受検者は管理者が一覧から削除できます（要件定義書 §6.2 A-05）。同じ端末・同じブラウザで受験画面を開き直すと、未回答の設問がある最初のステップから表示します（11-1 §2.4.8。2.3 版で、受験リンクを開き直したときの再開の案内（`resumable`）を画面から使わなくなった）。
 
 #### 4.2.2 登録バッチ `registerRespondent()`（02 §8.4 が確定。本書は契約と書く内容を示す）
 
-受検者・セッション・利用履歴・監査ログの 4 文書を **1 つの WriteBatch** で作ります（00 §2.2「複数文書の整合が必要な書き込み」。設計判断 D04-17 改: 1.x 版の RPC `register_respondent()` の置き換え。バッチは全件成功か全件失敗のどちらかになるため、途中失敗で受検者文書だけが残ることはない）。文書 ID は書き込み前に `collection.doc()` で採番し、相互参照（`respondents.sessionId`・`usageLogId`、`assessmentSessions.respondentId`、`usageLogs.respondentId`）を同じバッチ内で埋めます。
+受検者・セッション・監査ログの 3 文書を **1 つの WriteBatch** で作ります（2.3 版。利用履歴は作らない）（00 §2.2「複数文書の整合が必要な書き込み」。設計判断 D04-17 改: 1.x 版の RPC `register_respondent()` の置き換え。バッチは全件成功か全件失敗のどちらかになるため、途中失敗で受検者文書だけが残ることはない）。文書 ID は書き込み前に `collection.doc()` で採番し、相互参照（`respondents.sessionId`、`assessmentSessions.respondentId`）を同じバッチ内で埋めます。
 
 ```ts
 // lib/db/repositories/respondents-repository.ts（02 §8.4 の契約の写し）
@@ -931,7 +918,7 @@ export interface RegisterRespondentInput {
   readonly organizationId: string;          // 呼び出し元が getOrganization() で存在確認済み
   readonly kind: RespondentKind;
   readonly name: string;                    // 前後空白除去済み
-  readonly phoneNumber: string;             // 正規化後
+  readonly phoneNumber: string;             // 前後の空白を除いた入力のまま（正規化しない。11-1 §2.2.5）
   readonly occupationCode: number;
   readonly diagnosisExperience: DiagnosisExperience;
   readonly sessionTokenHash: string;        // sha256 hex
@@ -941,7 +928,6 @@ export interface RegisterRespondentInput {
 export interface RegisteredRespondent {
   readonly respondentId: string;
   readonly sessionId: string;
-  readonly usageLogId: string;
   readonly registeredAt: Date;
 }
 export function registerRespondent(input: RegisterRespondentInput): Promise<RegisteredRespondent>;
@@ -951,10 +937,9 @@ export function registerRespondent(input: RegisterRespondentInput): Promise<Regi
 
 | コレクション | 文書 ID | 主なフィールド |
 |---|---|---|
-| `respondents` | 採番 | `organizationId`、`kind`、`name`、`phoneNumber`、`occupationCode`、`diagnosisExperience`、`teamCode: null`、`isExcluded: false`、`sessionId`、`usageLogId`（02 D02-36）、`resultId: null`、`deletedAt: null`、`createdAt`／`updatedAt`（`serverTimestamp()`） |
-| `assessmentSessions` | 採番（URL の `{sessionId}`） | `organizationId`、`respondentId`、`status: "draft"`、`sessionTokenHash`、`tokenExpiresAt`、`answers: {}`、`startedAt: null`、`lastSavedPageNo: null`（02 D02-37。1.x 版の `lastSavedStep` / `lastSavedPage` を統合）、`lastAnsweredAt: null`、`submittedAt: null`、`resultId: null`、`deletedAt: null`、監査フィールド |
-| `usageLogs` | 採番 | `organizationId`、`respondentId`、`respondentKind`（`admin` の閲覧制限のためのクエリ条件。D04-62。02 §3.7 で確定）、`name`、`phoneNumber`、`diagnosisExperience`、`registeredAt`（`serverTimestamp()`）、`resultId: null`、`submittedAt: null`、監査フィールド |
-| `auditLogs` | 採番 | §2.6 の `respondent.register`（`actorKind: "respondent"`、`actorUid` = 採番した `respondentId`、`targetCollection: "respondents"`、`targetId` = 同じ、`details: { kind }`） |
+| `respondents` | 採番 | `organizationId`、`kind`、`name`、`phoneNumber`、`occupationCode`、`diagnosisExperience`、`teamCode: null`、`isExcluded: false`、`sessionId`、`usageLogId: null`（送信のときに書く。02 D02-36）、`previousResultId: null`（前回の候補の判定は PR-7.4）、`resultId: null`、`deletedAt: null`、`createdAt`／`updatedAt`（`serverTimestamp()`） |
+| `assessmentSessions` | 採番（URL の `{sessionId}`） | `organizationId`、`respondentId`、`status: "draft"`、`sessionTokenHash`、`tokenExpiresAt`、`answers: {}`、`startedAt: null`、`lastSavedStepNo: null`（02 D02-37。`lastSavedPageNo` は書かない。2.3 版）、`lastAnsweredAt: null`、`submittedAt: null`、`resultId: null`、`deletedAt: null`、監査フィールド |
+| `auditLogs` | 採番 | §2.6 の `respondent.register`（`actorKind: "respondent"`、`actorUid` = 採番した `respondentId`、`targetCollection: "respondents"`、`targetId` = 同じ、`details: { kind, previousCandidate: false }`） |
 
 - `deletedAt: null` を作成時に明示的に書くのは、母集団クエリの `deletedAt == null` 条件に一致させるためです（00 §1.11、§2.1）。
 - `sessionTokenHash` の一意性: 32 バイトの乱数由来のため、存在確認は行いません（00 §2.1）。
@@ -963,7 +948,7 @@ export function registerRespondent(input: RegisterRespondentInput): Promise<Regi
 
 #### `GET /api/v1/respondent/sessions/{sessionId}`
 
-中断・再開（00 D-16、D-32）と、設問ページの初期表示に使います。
+中断・再開（00 D-16、D-32）と、受験画面の初期表示に使います（受験画面の Server Component は同名の service `getSessionProgress` を直接呼ぶ）。
 
 | 項目 | 内容 |
 |---|---|
@@ -980,7 +965,7 @@ export function registerRespondent(input: RegisterRespondentInput): Promise<Regi
   "kind": "applicant",
   "status": "draft",
   "startedAt": "2026-09-17T01:25:00.000Z",
-  "lastSavedPageNo": 8,
+  "lastSavedStepNo": 2,
   "answeredCount": 57,
   "totalCount": 144,
   "answers": [
@@ -992,7 +977,7 @@ export function registerRespondent(input: RegisterRespondentInput): Promise<Regi
 ```
 
 - `answers` は `questionNo` 昇順の **配列** です（05 §7.1 の仮の `Record<QuestionNo, ChoiceCode>` ではない。設計判断 D04-44: JSON のキーが数値文字列になる `Record` より、配列の方が zod での検証と TypeScript の型が素直になる。画面側は `new Map(answers.map(a => [a.questionNo, a.choiceCode]))` で引く）。144 件でも約 4 KB のため分割しません。
-- 再開位置 `resumePageNo`（05 §6.2）は応答に **含めません**。05 D05-08 のとおり画面側が `answers` から導出します（`lastSavedPageNo`（通しページ番号 1〜20。02 D02-37）は参考値。§4.4 D04-18）。
+- 今のステップ（再開位置）は応答に **含めません**。画面側が `answers` から、未回答の設問がある最初のステップを求めます（`resolveCurrentStepNo`。11-1 §2.4.8、05 D05-08）。`lastSavedStepNo`（1〜4 または `null`。M7 より前の文書は `null`。02 D02-37）は参考の値です（2.3 版で `lastSavedPageNo` を置き換えた。11-1 §3.4.4。§4.4 D04-18）。
 - 受検者の氏名・電話番号は返しません（画面で使わない。要件定義書 §7 S-03・S-04 に表示なし）。
 
 エラー:
@@ -1036,23 +1021,22 @@ export function registerRespondent(input: RegisterRespondentInput): Promise<Regi
 
 ### 4.4 回答の保存 `PUT /api/v1/respondent/sessions/{sessionId}/answers`
 
-要件定義書 §6.1 U-07（設問ごとに保持）、§9 可用性（ページ単位で保存）に対応します。**1 ページ分の回答をまとめて上書き保存** します。
+要件定義書 §6.1 U-07（設問ごとに保持）、§9 可用性に対応します。**1 ステップのうち未送信の選択（1〜41 問）をまとめて保存** します（画面は選んだ時点で送る。11-1 §2.4.5・§3.4.2。2.3 版）。
 
 | 項目 | 内容 |
 |---|---|
 | 認可 | セッショントークン、`status == "draft"` |
-| 処理 | トランザクション 1 回（`saveAnswers`。02 参照）: `assessmentSessions/{sessionId}` を `transaction.get` → `status != "draft"` なら 409 → `answers` map を **フィールドパス指定の部分更新**（`answers.51`、`answers.52`、… を `FieldPath` で指定した `update()`。00 D-29。ページ外の回答は触らない）→ `lastSavedPageNo` / `lastAnsweredAt` を更新し、`tokenExpiresAt` を `now + 7 日` に延長。Cookie も同じ期限で再発行 |
+| 処理 | トランザクション 1 回（`saveAnswers`。02 §8.4）: `assessmentSessions/{sessionId}` を `transaction.get` → `status != "draft"` なら 409 → `answers` map を **フィールドパス指定の部分更新**（`answers.42`、`answers.43`、… を `FieldPath` で指定した `update()`。00 D-29。ほかのステップの回答は触らない）→ `lastSavedStepNo` / `lastAnsweredAt` を更新し、`tokenExpiresAt` を `now + 7 日` に延長。Cookie も同じ期限で再発行 |
 | 監査ログ | なし（回答内容は評価情報。保存のたびに記録しない。送信時に `session.submit` が残る） |
 
-リクエスト（`pageNo` は 05 §5.3.1 の **通しページ番号 1〜20**。1.1 版で `step` / `page` から変更）:
+リクエスト（`stepNo` はステップ番号 1〜4。2.3 版で通しページ番号 `pageNo` から変えた。11-1 §3.4.2）:
 
 ```json
 {
-  "pageNo": 8,
+  "stepNo": 2,
   "answers": [
-    { "questionNo": 51, "choiceCode": 1 },
-    { "questionNo": 52, "choiceCode": 3 },
-    { "questionNo": 53, "choiceCode": 5 }
+    { "questionNo": 42, "choiceCode": 1 },
+    { "questionNo": 43, "choiceCode": 3 }
   ]
 }
 ```
@@ -1062,23 +1046,25 @@ zod スキーマ:
 ```ts
 // lib/services/schemas/respondent.ts（続き）
 import { choiceCodeSchema, scoredQuestionNoSchema } from "./common";
+import { EXAM_STEP_COUNT } from "@/lib/masters/exam-steps";
 
-/** 通しページ番号（05 §5.3.1）。4 ステップ × 5 ページ = 20（03 §2.3 QUESTION_PAGE_LAYOUT から導出） */
-export const examPageNoSchema = z.number().int().min(1).max(20);
+/** ステップ番号 1〜4（11-1 §2.4.1） */
+export const examStepNoSchema = z.number().int().min(1).max(EXAM_STEP_COUNT);
 
+/** 1 ステップ分の回答（1〜41 問）。設問がそのステップに属するかは service が確かめる（11-1 §3.4.2） */
 export const saveAnswersInputSchema = z
   .object({
-    pageNo: examPageNoSchema,
+    stepNo: examStepNoSchema,
     answers: z
       .array(z.object({ questionNo: scoredQuestionNoSchema, choiceCode: choiceCodeSchema }))
       .min(1)
-      .max(8),
+      .max(41),
   })
   .superRefine((v, ctx) => {
     const seen = new Set<number>();
     v.answers.forEach((a, i) => {
       if (seen.has(a.questionNo)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["answers", i, "questionNo"], message: "設問番号が重複しています" });
+        ctx.addIssue({ code: "custom", path: ["answers", i, "questionNo"], message: "設問番号が重複しています" });
       }
       seen.add(a.questionNo);
     });
@@ -1086,43 +1072,32 @@ export const saveAnswersInputSchema = z
 export type SaveAnswersInput = z.infer<typeof saveAnswersInputSchema>;
 ```
 
-`pageNo` と `step` / `page` の変換（service が使う純関数。`lib/masters/exam-pages.ts` に置き、05 の `lib/presentation/exam-pages.ts` からも同じ関数を再エクスポートして使う。設計判断 D04-46: service は `lib/presentation/` を import しないため、変換関数は `lib/masters/` 側に置く）:
+`stepNo` と設問番号の対応（service が使う純関数。`lib/masters/exam-steps.ts` に置く。画面のステップの定義（`EXAM_STEPS` など）は 05 の `lib/presentation/exam-steps.ts` が作る。設計判断 D04-46: service は `lib/presentation/` を import しないため、対応の関数は `lib/masters/` 側に置く）:
 
 ```ts
-// lib/masters/exam-pages.ts（純関数。I/O なし）
-import { ACTIVE_QUESTIONS, QUESTION_PAGE_LAYOUT } from "@/lib/masters/questions";
+// lib/masters/exam-steps.ts（純関数。I/O なし。2.3 版で lib/masters/exam-pages.ts を置き換えた）
+import { ACTIVE_QUESTIONS, QUESTION_STEP_SIZES } from "./questions";
 import type { QuestionNo } from "@/lib/scoring/types";
 
-export const EXAM_PAGES_PER_STEP = QUESTION_PAGE_LAYOUT.pageSizes.length;                       // 5
-export const EXAM_PAGE_COUNT = QUESTION_PAGE_LAYOUT.stepCount * EXAM_PAGES_PER_STEP;             // 20
+/** ステップの数（4） */
+export const EXAM_STEP_COUNT = QUESTION_STEP_SIZES.length;
 
-export function toStep(pageNo: number): number {          // ceil(pageNo / 5)
-  return Math.ceil(pageNo / EXAM_PAGES_PER_STEP);
-}
-export function toPageInStep(pageNo: number): number {    // ((pageNo − 1) mod 5) + 1
-  return ((pageNo - 1) % EXAM_PAGES_PER_STEP) + 1;
-}
-export function toPageNo(step: number, pageInStep: number): number {  // (step − 1) × 5 + pageInStep
-  return (step - 1) * EXAM_PAGES_PER_STEP + pageInStep;
-}
-/** pageNo に属する設問番号の集合（QuestionDefinition.step / page で判定。00 §3.5、03 §2.3） */
-export function questionNosOfPage(pageNo: number): ReadonlySet<QuestionNo> {
-  const step = toStep(pageNo);
-  const page = toPageInStep(pageNo);
-  return new Set(ACTIVE_QUESTIONS.filter((q) => q.step === step && q.page === page).map((q) => q.questionNo));
+/** stepNo に属する設問番号の集合（QuestionDefinition.step で判定。範囲外の stepNo は空集合。03 §2.3） */
+export function questionNosOfStep(stepNo: number): ReadonlySet<QuestionNo> {
+  return new Set(ACTIVE_QUESTIONS.filter((q) => q.step === stepNo).map((q) => q.questionNo));
 }
 ```
 
 処理手順（`lib/services/answer-saving.ts`）:
 
 1. `requireRespondentSession`。`status !== "draft"` なら 409 `SESSION_ALREADY_SUBMITTED`（トランザクション前の早期判定。最終判定はトランザクション内で行う）。
-2. `questionNosOfPage(input.pageNo)` を求め、`answers[].questionNo` がすべてその集合に含まれることを確認。含まれない設問があれば 422 `VALIDATION_ERROR`（`details.issues[].path = "answers[i].questionNo"`、`message = "このページの設問ではありません"`）。これにより `isActive = true`（1〜144）の確認も兼ねる。
-3. `saveAnswers({ sessionId, answers, lastSavedPageNo: pageNo, tokenExpiresAt })`（02 §8.4。`answers` は `{ questionNo, choiceCode }` の配列を `Partial<Record<QuestionNo, ChoiceCode>>` に変換して渡す）をトランザクションで実行する。トランザクション内で `assessmentSessions/{sessionId}` を読み、`status != "draft"` または `deletedAt != null` なら中断して 409 `SESSION_ALREADY_SUBMITTED`（送信と保存が同時に走った場合の保護。1.x 版の DB トリガー `trg_answers_reject_after_submit` の代替）。`update()` には `answers.{questionNo}` をフィールドパス（`new FieldPath("answers", "51")`）で 1 問ずつ指定し、`lastSavedPageNo`、`lastAnsweredAt: serverTimestamp()`、`tokenExpiresAt`、`updatedAt` を同じ `update()` に含める（書き込みは 1 文書 1 回。00 §2.2 の理由 (2)）。
+2. `questionNosOfStep(input.stepNo)` を求め、`answers[].questionNo` がすべてその集合に含まれることを確認。含まれない設問があれば 422 `VALIDATION_ERROR`（`details.issues[].path = "answers[i].questionNo"`、`message = "このステップの設問ではありません"`）。これにより `isActive = true`（1〜144）の確認も兼ねる。
+3. `saveAnswers({ sessionId, answers, lastSavedStepNo: stepNo, tokenExpiresAt })`（02 §8.4。`answers` は `{ questionNo, choiceCode }` の配列を `Partial<Record<QuestionNo, ChoiceCode>>` に変換して渡す）をトランザクションで実行する。トランザクション内で `assessmentSessions/{sessionId}` を読み、`status != "draft"` または `deletedAt != null` なら中断して 409 `SESSION_ALREADY_SUBMITTED`（送信と保存が同時に走った場合の保護。1.x 版の DB トリガー `trg_answers_reject_after_submit` の代替）。`update()` には `answers.{questionNo}` をフィールドパス（`new FieldPath("answers", "42")`）で 1 問ずつ指定し、`lastSavedStepNo`、`lastAnsweredAt: serverTimestamp()`、`tokenExpiresAt`、`updatedAt` を同じ `update()` に含める（書き込みは 1 文書 1 回。00 §2.2 の理由 (2)）。`lastSavedPageNo` は書かない。
 4. 更新後の `answers` のキー数（トランザクション内で読んだ文書の `answers` に今回の回答をマージして数える）を `answeredCount` にする。
 5. 200 を返し、Cookie を再発行。
 
-- 設計判断 D04-18（1.1 版で改）: 入力は 05 §5.3.1 の通しページ番号 `pageNo` とし、`step` / `page` への変換は service が行います。設問番号が `pageNo` のページに属することは **サーバで検証** します（05 §7.1 の前提に合わせる）。ページ割り当て（00 D-08）は 03 の `QUESTION_PAGE_LAYOUT` と設問マスタの `step` / `page` に一元化されているため、割り当てを変えても API の契約は変わりません。`lastSavedPageNo` は「再開位置」の参考値として保存するだけで、採点にも 05 の再開判定（D05-08: `answers` から導出）にも使いません。
-- 設計判断 D04-19: 部分保存（ページ内の一部の設問だけ）も受け付けます。未回答チェックは画面（05）と送信 API（§4.5）で行います。
+- 設計判断 D04-18（2.3 版で改）: 入力はステップ番号 `stepNo`（1〜4）とし、設問番号が `stepNo` のステップに属することを **サーバで検証** します（11-1 §3.4.2）。区切り（00 D-08）は 03 の `QUESTION_STEP_SIZES` と設問マスタの `step` に一元化されているため、区切りを変えても API の契約は変わりません。`lastSavedStepNo` は参考の値として保存するだけで、採点にも画面の今のステップの判定（回答から導出。11-1 §2.4.8）にも使いません。通しページ番号 `pageNo` を送る 2.2 版までの形は、`stepNo` が無いので 422 です（M7 の公開の時点で開いたままの古い画面。再読み込みで新しい画面になる。11-1 §3.6）。
+- 設計判断 D04-19（2.3 版で改）: ステップの一部の設問だけの保存（1〜41 問）を受け付けます。画面は選んだ時点で未送信の選択を送ります（同時に 1 本。11-1 §2.4.5）。未回答チェックは画面（05）と送信 API（§4.5）で行います。
 - 設計判断 D04-59（2.0 版）: 状態を条件にする更新（`draft` のときだけ保存・開始・送信する、`not_generated` / `failed` のときだけ AI 生成を開始する）は、すべて Firestore の **トランザクション**（`runTransaction`）で「読み取り → 条件判定 → 書き込み」を行います。Firestore にはフィールド値を条件にする更新（SQL の `UPDATE … WHERE status = …`）が無く、トランザクションの楽観ロック（読んだ文書が変更されていれば自動で再試行）が同時リクエストの片方だけを成功させる唯一の手段だからです。バッチ（`WriteBatch`）は条件判定を伴わない複数文書の書き込み（登録）にだけ使います。
 
 レスポンス（200）:
@@ -1130,16 +1105,16 @@ export function questionNosOfPage(pageNo: number): ReadonlySet<QuestionNo> {
 ```json
 {
   "sessionId": "Ses3aB5cD7eF9gH1jK2m",
-  "pageNo": 8,
-  "savedCount": 3,
-  "answeredCount": 60,
+  "stepNo": 2,
+  "savedCount": 2,
+  "answeredCount": 43,
   "totalCount": 144,
-  "lastSavedPageNo": 8,
+  "lastSavedStepNo": 2,
   "tokenExpiresAt": "2026-09-24T02:00:00.000Z"
 }
 ```
 
-- 05 §7.1 の `SaveAnswersDto.resumePageNo` は含めません（05 D05-08 のとおり画面側が保存済み回答から導出する。§10）。
+- 今のステップ（再開位置）は含めません（画面側が保存済み回答から導出する。11-1 §2.4.8。§10）。
 
 エラー:
 
@@ -1148,8 +1123,8 @@ export function questionNosOfPage(pageNo: number): ReadonlySet<QuestionNo> {
 | 401 | `RESPONDENT_TOKEN_INVALID` / `RESPONDENT_TOKEN_EXPIRED` | Cookie 不正・期限切れ |
 | 404 | `NOT_FOUND` | `sessionId` が文書 ID の形式でない |
 | 409 | `SESSION_ALREADY_SUBMITTED` | 送信済み（トランザクション内の `status` 判定を含む） |
-| 422 | `VALIDATION_ERROR` | `pageNo` が 1〜20 以外、設問番号が 1〜144 以外、選択肢が 1〜5 以外、重複、`pageNo` のページに属さない設問番号、1 リクエスト 9 件以上 |
-| 503 | `SERVICE_UNAVAILABLE` | トランザクションの再試行上限超過など Firestore の一時的な失敗（§2.4）。画面は同じページの保存を再試行する（05 §6.4 の `sessionStorage` 退避が効く） |
+| 422 | `VALIDATION_ERROR` | `stepNo` が無い・1〜4 以外（`pageNo` だけの 2.2 版までの形を含む）、設問番号が 1〜144 以外、選択肢が 1〜5 以外、重複、`stepNo` のステップに属さない設問番号、0 件・42 件以上 |
+| 503 | `SERVICE_UNAVAILABLE` | トランザクションの再試行上限超過など Firestore の一時的な失敗（§2.4）。画面は未送信のまま残し、次の選択と「次へ」「送信する」のときに送り直す（11-1 §2.4.5。05 の `sessionStorage` の退避が効く） |
 
 ### 4.5 送信 `POST /api/v1/respondent/sessions/{sessionId}/submit`
 
@@ -1159,9 +1134,9 @@ export function questionNosOfPage(pageNo: number): ReadonlySet<QuestionNo> {
 |---|---|
 | 認可 | セッショントークン、`status == "draft"` |
 | リクエスト | 本文なし。**最終ページの回答は事前に §4.4 で保存されていること**（送信 API は回答を受け取らない。設計判断 D04-20: 保存と送信を分けることで、送信失敗時も回答が失われない） |
-| 処理 | トランザクション 1 回（02 の `submitSession({ sessionId, meta }, deps)`。02 §8.4）の中で、`assessmentSessions` を読み → `status` 検査 → `assertAnswerMap`（03）→ `scoreAnswers`（03。純関数、数十 ms）→ `results` 作成、`assessmentSessions.status = "submitted"`、`respondents.resultId`、`usageLogs.resultId` / `submittedAt`、`auditLogs`（`session.submit`）の 5 書き込みをコミットする（00 §2.2「送信: `assessmentSessions` + `results` + `respondents` + `usageLogs`」） |
-| 二重送信防止 | (1) service がトランザクション前に `ctx.status` を確認し 409。(2) トランザクション内で読み直した `status != "draft"` なら中断して 409（楽観ロックにより、同時リクエストの片方だけがコミットに成功する。D04-59）。(3) 05 分冊は送信ボタンを押下後に無効化する |
-| 監査ログ | `session.submit`（同じトランザクション。`details: { scoringVersion }`、`targetCollection: "results"`、`targetId` = 採番した `resultId`） |
+| 処理 | トランザクション 1 回（02 の `submitSession({ sessionId, meta }, deps)`。02 §8.4）の中で、`assessmentSessions` を読み → `status` 検査 → `assertAnswerMap`（03）→ `scoreAnswers`（03。純関数、数十 ms）→ `results` 作成、`assessmentSessions.status = "submitted"`、`respondents`（`resultId`・`usageLogId`）、利用履歴の作成（M7 より前の登録で文書があれば `resultId`・`submittedAt` の更新。11-1 §2.7.4。2.3 版）、`auditLogs`（`session.submit`）の 5 書き込みをコミットする（00 §2.2）。前回の結果のつながり（`results.previousResultId` と前回の結果の `updatedAt`）は PR-7.4（11-1 §2.7.3） |
+| 二重送信防止 | (1) service がトランザクション前に `ctx.status` を確認し 409。(2) トランザクション内で読み直した `status != "draft"` なら中断して 409（楽観ロックにより、同時リクエストの片方だけがコミットに成功する。D04-59）。(3) 画面は送信中の印を立て、以後の「送信する」を無視する（11-1 §2.4.7） |
+| 監査ログ | `session.submit`（同じトランザクション。`details: { scoringVersion, linkedPrevious }`、`targetCollection: "results"`、`targetId` = 採番した `resultId`。`linkedPrevious` は前回の結果につないだら `true`。つなぐのは PR-7.4 で、それまでは常に `false`。11-1 §2.7.5） |
 
 処理手順（`lib/services/submission.ts`）:
 
@@ -1172,12 +1147,12 @@ export async function submitSession(ctx: RespondentSessionContext): Promise<{ re
 1. `ctx.status !== "draft"` なら 409 `SESSION_ALREADY_SUBMITTED`。
 2. 02 の `submitSession({ sessionId, meta: ctx.request }, { scoreAnswers, assertAnswerMap })`（02 §8.4。service の `submitSession` とは別モジュール。import 時に別名を付ける）を呼ぶ。採点関数（03）は `deps` として service が渡し、リポジトリはトランザクションの中で次を行う:
    1. `assessmentSessions/{sessionId}` を `transaction.get`。無い、または `deletedAt != null` なら `SESSION_NOT_FOUND`（トークン検証の直後に削除された場合のみ）。`status != "draft"` なら `SESSION_ALREADY_SUBMITTED`。
-   2. `respondents/{respondentId}` を `transaction.get`（`kind`・`teamCode`・`isExcluded` を `results` に複製するため。00 D-34）。`usageLogs/{respondent.usageLogId}` を `transaction.get`（02 D02-36。クエリではなく `get`）。**読み取りはすべて書き込みの前に行う**（Firestore のトランザクションの制約。実装時確認）。
+   2. `respondents/{respondentId}` を `transaction.get`（`kind`・`teamCode`・`isExcluded` を `results` に複製するため。00 D-34）。`respondent.usageLogId` が `null` でなければ `usageLogs/{usageLogId}` を `transaction.get`（M7 より前の登録の利用履歴。02 D02-36。クエリではなく `get`。2.3 版）。**読み取りはすべて書き込みの前に行う**（Firestore のトランザクションの制約。実装時確認）。
    3. `answers` map を `toAnswerMap()`（02 §5.5 の mapper。キーを数値に変換）で `Record<number, number>` にし、`assertAnswerMap(map)`（03 §2.3）。`InvalidAnswerMapError` はトランザクションを中断して 422 `ANSWERS_INCOMPLETE` に変換し、`details.missing` に欠落設問番号（昇順）を入れる。`invalid` が空でなければ同じコードで `details.invalid` に設問番号だけを入れる（値は入れない）。採点前の検証のため、例外による中断では何も書かれない。
    4. `scoreAnswers(map)` → `ScoreResult`。`scoringVersion` は `SCORING_VERSION`。純関数のためトランザクションが再試行されても結果は同じ。
-   5. `results` を採番して `create`: `organizationId`、`respondentId`、`sessionId`、`ScoreResult` の全フィールド（map のまま。`toResultDocFields(score)`。02 §5.5 `lib/db/mappers/`）、`submittedAt`（トランザクション内で採った `Timestamp.now()`。3 文書で同じ値。02 §8.1）、複製フィールド `respondentKind`・`teamCode`・`isExcluded`（`respondents` の値）、`aiGenerationStatus: "not_generated"`、`aiGenerationStartedAt: null`、`aiGenerationError: null`、`latestAiAnalysisId: null`、`deletedAt: null`、監査フィールド。
+   5. `results` を採番して `create`: `organizationId`、`respondentId`、`sessionId`、`ScoreResult` の全フィールド（map のまま。`toResultDocFields(score)`。02 §5.5 `lib/db/mappers/`）、`submittedAt`（トランザクション内で採った `Timestamp.now()`。3 文書で同じ値。02 §8.1）、複製フィールド `respondentKind`・`teamCode`・`isExcluded`（`respondents` の値）、`aiGenerationStatus: "not_generated"`、`aiGenerationStartedAt: null`、`aiGenerationError: null`、`latestAiAnalysisId: null`、`deletedAt: null`、監査フィールド。M7 の項目: 区分 `employmentStatus = initialEmploymentStatus(respondent.kind)`（`applicant` → 求職者、`executive` → 在籍）、`hiredOn`・`leftOn`・`staffRole`・`previousResultId` = `null`、AI の 3 系統の作成時の値（11-1 §2.7.2、02 §8.4）。
    6. `assessmentSessions` を `update`: `status: "submitted"`、`submittedAt: serverTimestamp()`、`resultId`。`answers` はそのまま残す（再採点や検証に使う）。
-   7. `respondents` を `update`: `resultId`。`usageLogs` を `update`: `resultId`、`submittedAt: serverTimestamp()`。
+   7. `respondents` を `update`: `resultId`・`usageLogId`。利用履歴: `usageLogId` の文書があれば `update`（`resultId`、`submittedAt`。M7 より前の登録）、無ければ（`usageLogId` が `null`、または文書が無い）`create`（ID はトランザクションの外で採番。`organizationId`、`respondentId`、`resultId`、`respondentKind = respondent.kind`、`name`・`phoneNumber`・`diagnosisExperience` は受検者から写す、`registeredAt = respondents.createdAt`、`submittedAt`（結果と同じ値）。`usageLogCreateSchema` は `resultId`・`submittedAt` を必須にする。11-1 §2.7.4・§3.2.4。2.3 版）。
    8. `auditLogs` を `create`（`session.submit`）。
 3. リポジトリの例外を変換: `SESSION_ALREADY_SUBMITTED` → 409、`ANSWERS_INCOMPLETE` → 422、`SESSION_NOT_FOUND` → 404。Firestore の一時的な失敗は 503 `SERVICE_UNAVAILABLE`（§2.4）。
 4. 200 を返す。Cookie は削除しない（完了画面が `GET …/sessions/{sessionId}` で状態を確認できるように残す。期限は延長しない）。
@@ -1196,8 +1171,8 @@ export async function submitSession(ctx: RespondentSessionContext): Promise<{ re
 ```
 
 - `resultId` と採点結果は受検者に返しません（要件定義書 §4: 受検者は結果を閲覧しない）。
-- 既存の「2 秒待機後に遷移」（要件定義書 §5）は再現しません。採点は同期で完了してから応答します。
-- `ANSWERS_INCOMPLETE` の欠落設問番号は `details.missing`（05 §7.1 の仮称 `details.missingQuestionNos` ではない）。05 は `pageNoOfQuestion(missing[0])` で未回答ページへ誘導します（§10）。
+- 2 秒の待ちは画面で行います（「ロード中」を出したまま、応答から 2,000 ミリ秒待って完了画面へ。11-1 §2.4.7）。API は採点が終わったらすぐ応答します（2.3 版で「既存の 2 秒待機は再現しない」を改めた。11-1 §3.4.3）。
+- `ANSWERS_INCOMPLETE` の欠落設問番号は `details.missing`（05 §7.1 の仮称 `details.missingQuestionNos` ではない）。05 は `missing[0]`（無ければ `invalid[0]`）の設問があるステップ（`stepOf`）を今のステップにし、未回答に印を付けます（11-1 §2.4.7。§10）。
 
 エラー:
 
@@ -1220,28 +1195,27 @@ sequenceDiagram
     participant S as lib/services
     participant SC as lib/scoring
     participant DB as Firestore（Admin SDK）
-    R->>API: GET organizations/{organizationId}（Server Component が同名 service を直接呼ぶ）
-    API->>DB: organizations（存在確認）、assessmentSessions（sessionTokenHash で再開判定）
-    API-->>R: 組織の有効性と resumable（組織名は画面に出さない。05 D05-34）
+    Note over R: 受験者登録の画面は組織を読まない（「診断に進む」で確かめる。11-1 §2.2.1）
     R->>API: POST sessions（氏名・電話・職業・診断経験）
     API->>S: registerRespondent
-    S->>DB: registerRespondent（respondents, assessmentSessions, usageLogs, auditLogs を 1 バッチ）
+    S->>DB: registerRespondent（respondents, assessmentSessions, auditLogs を 1 バッチ）
     S-->>API: sessionId + トークン
     API-->>R: 201 + Set-Cookie tk_session
     R->>API: POST sessions/{id}/start
     API->>DB: トランザクション: startedAt, tokenExpiresAt 延長, auditLogs session.start
     API-->>R: 200 + Set-Cookie（期限更新）
-    loop 各ページ
-        R->>API: PUT sessions/{id}/answers（1 ページ分）
-        API->>DB: トランザクション: answers.{n} の部分更新, tokenExpiresAt 延長
+    loop 選んだ時点（同時に 1 本。未送信の選択をステップごとに）
+        R->>API: PUT sessions/{id}/answers（{ stepNo, answers }。1〜41 問）
+        API->>DB: トランザクション: answers.{n} の部分更新, lastSavedStepNo, tokenExpiresAt 延長
         API-->>R: 200 + Set-Cookie（期限更新）
     end
-    R->>API: POST sessions/{id}/submit
+    R->>API: POST sessions/{id}/submit（確認なし。画面はロード中）
     API->>S: submitSession
-    S->>DB: トランザクション開始: assessmentSessions, respondents, usageLogs を読む
+    S->>DB: トランザクション開始: assessmentSessions, respondents, usageLogs（usageLogId があれば）を読む
     S->>SC: assertAnswerMap → scoreAnswers
-    S->>DB: results 作成, status=submitted, respondents.resultId, usageLogs.resultId, auditLogs session.submit をコミット
+    S->>DB: results 作成, status=submitted, respondents（resultId・usageLogId）, usageLogs 作成（M7 より前の登録は更新）, auditLogs session.submit をコミット
     API-->>R: 200 nextUrl=/exam/{id}/complete
+    Note over R: ロード中のまま 2,000 ミリ秒待って完了画面へ（11-1 §2.4.7）
 ```
 
 ## 5. 管理者 API
@@ -2260,7 +2234,7 @@ export interface AssessmentLinkDto {
   readonly organizationId: string;
   readonly organizationName: string;
   readonly kind: RespondentKind;
-  /** 同一ブラウザで再開できる draft セッション（§4.1、D04-43）。無ければ null。個人情報は含めない */
+  /** 同一ブラウザで再開できる draft セッション（§4.1、D04-43）。無ければ null。個人情報は含めない。2.3 版から受験者登録の画面は使わない */
   readonly resumable: { readonly sessionId: string; readonly answeredCount: number } | null;
 }
 
@@ -2285,7 +2259,7 @@ export interface SessionProgressDto {
   readonly kind: RespondentKind;
   readonly status: SessionStatus;
   readonly startedAt: string | null;
-  readonly lastSavedPageNo: number | null;   // 通しページ番号 1〜20（02 D02-37）
+  readonly lastSavedStepNo: number | null;   // ステップ 1〜4（参考の値。02 D02-37。11-1 §3.4.4）。M7 より前の文書は null
   readonly answeredCount: number;
   readonly totalCount: 144;
   readonly answers: ReadonlyArray<{ readonly questionNo: QuestionNo; readonly choiceCode: ChoiceCode }>;
@@ -2294,11 +2268,11 @@ export interface SessionProgressDto {
 
 export interface AnswersSavedDto {
   readonly sessionId: string;
-  readonly pageNo: number;           // 1〜20（入力の pageNo をそのまま返す）
+  readonly stepNo: number;           // 1〜4（入力の stepNo をそのまま返す。11-1 §3.4.2）
   readonly savedCount: number;
   readonly answeredCount: number;
   readonly totalCount: 144;
-  readonly lastSavedPageNo: number;
+  readonly lastSavedStepNo: number;
   readonly tokenExpiresAt: string;
 }
 
@@ -2465,11 +2439,11 @@ export interface ComparisonDto extends ComparisonResult {
 
 | 関数 | 入力 | 出力 | 呼ぶアクセス層（02 参照。§8.4） | 監査ログ |
 |---|---|---|---|---|
-| `getOrganizationForAssessment(organizationId, kind, cookieToken)` | 文書 ID、区分（省略時 `applicant`）、Cookie `tk_session` の値（無ければ `null`） | `AssessmentLinkDto`（`resumable` を含む） | `getOrganization`、`findResumableSession`（内部で `getSessionByTokenHash`、`getRespondentById`） | なし |
+| `getOrganizationForAssessment(organizationId, kind, cookieToken)` | 文書 ID、区分（省略時 `applicant`）、Cookie `tk_session` の値（無ければ `null`） | `AssessmentLinkDto`（`resumable` を含む。2.3 版から `GET organizations/{id}` だけが使い、受験者登録の画面は呼ばない。D04-43） | `getOrganization`、`findResumableSession`（内部で `getSessionByTokenHash`、`getRespondentById`） | なし |
 | `registerRespondent(input, request)` | `RegisterRespondentInput` | `SessionCreatedDto` + 発行トークン | `getOrganization`、`countRecentAuditLogs`、02 の `registerRespondent`（バッチ） | 同バッチ（リポジトリが書く） |
 | `getSessionProgress(ctx)` | `RespondentSessionContext` | `SessionProgressDto` | `getSession`、`getOrganization` | なし |
 | `startSession(ctx)` | 同 | `SessionStartedDto` + 新しい期限（Cookie 再発行用） | `markSessionStarted`（トランザクション） | `session.start`（初回のみ。同トランザクション） |
-| `saveAnswers(ctx, input)` | `SaveAnswersInput`（`pageNo` 1〜20） | `AnswersSavedDto` + 新しい期限 | `saveAnswers`（トランザクション。フィールドパス更新） | なし |
+| `saveAnswers(ctx, input)` | `SaveAnswersInput`（`stepNo` 1〜4、1〜41 問。2.3 版） | `AnswersSavedDto` + 新しい期限 | `saveAnswers`（トランザクション。フィールドパス更新） | なし |
 | `submitSession(ctx)` | — | `SessionSubmittedDto` | 02 の `submitSession`（トランザクション。`deps` で 03 の `scoreAnswers` / `assertAnswerMap` を渡す） | `session.submit`（同トランザクション） |
 | `createAdminSession(input, request)` | `CreateSessionInput` | `{ cookie, expiresAt }` | `createAdminSessionCookie`（`lib/auth/session-cookie.ts`） | なし |
 | `destroyAdminSession(cookie)` | Cookie の値（無ければ `null`） | void | `verifySessionCookie`（失効チェックなし）、`revokeAdminSessions` | なし |
@@ -2522,7 +2496,7 @@ updateAdminUserDisplayName({ uid, organizationId, displayName }): Promise<void>
 createAdminUser({ uid, organizationId, role, displayName }): Promise<void>                              // createAdminAccount() 経由でのみ呼ぶ
 
 // 02 §8.4 respondents-repository.ts / assessment-sessions-repository.ts
-registerRespondent(input: RegisterRespondentInput): Promise<RegisteredRespondent>                       // バッチ 4 文書 + respondent.register
+registerRespondent(input: RegisterRespondentInput): Promise<RegisteredRespondent>                       // バッチ 3 文書（respondent.register を含む。usageLogs は作らない）
 getRespondent({ respondentId, viewer }): Promise<Respondent | null>                                     // 幹部の可視性を判定
 getRespondentById({ respondentId, organizationId }): Promise<Respondent | null>                         // 受検者 API 用（可視性判定なし）
 getRespondentsByIds({ organizationId, respondentIds }): Promise<ReadonlyMap<string, Respondent>>        // getAll() 100 件ずつ
@@ -2531,8 +2505,8 @@ softDeleteRespondent({ respondentId, viewer, meta }): Promise<{ deletedAt }>    
 getSession(sessionId): Promise<AssessmentSession | null>
 getSessionByTokenHash({ organizationId, sessionTokenHash, now }): Promise<AssessmentSession | null>     // Q10
 markSessionStarted({ sessionId, tokenExpiresAt, meta }): Promise<{ startedAt, isFirstStart }>           // トランザクション + session.start（初回）
-saveAnswers({ sessionId, answers, lastSavedPageNo, tokenExpiresAt }): Promise<{ answeredCount }>        // トランザクション。answers.{n} をフィールドパスで update
-submitSession({ sessionId, meta }, deps: { scoreAnswers, assertAnswerMap }): Promise<SubmittedSession>  // トランザクション（§4.5）+ session.submit
+saveAnswers({ sessionId, answers, lastSavedStepNo, tokenExpiresAt }): Promise<{ answeredCount }>        // トランザクション。answers.{n} をフィールドパスで update（1 ステップ分 1〜41 問）
+submitSession({ sessionId, meta }, deps: { scoreAnswers, assertAnswerMap }): Promise<SubmittedSession>  // トランザクション（§4.5）。利用履歴の作成か更新 + session.submit
 
 // 02 §8.5 results-repository.ts
 getResult({ resultId, viewer }): Promise<Result | null>
@@ -2708,8 +2682,8 @@ sequenceDiagram
 | 00（共通定義） | 2.0 版で確定した契約のうち 00 §4.2 に反映を依頼したもの（**2.1 版: 00 2.1 版に反映済み**）: (1) `GET /api/v1/admin/me` の「3 種のリンクを含む」は「受検リンク 2 種。管理者追加用リンクの平文は再発行の応答でだけ返す」（D04-56）。(2) `PATCH /api/v1/admin/me` の「氏名・メールアドレス・パスワードの変更」に「メール・パスワード変更は再認証 ID トークン必須、変更後は失効して再ログイン」（D04-47 改、D04-57）。(3) `POST /auth/invite` の本文は `{ inviteToken, name, email }`（パスワードなし。D04-58）。(4) §4.2 の認証処理表「パスワード再設定: 方式は 02・04 が確定」→「ブラウザの `sendPasswordResetEmail`。サーバ API なし」（D04-58）。(5) §3.3 `lib/auth/` に `admin-context.ts`・`respondent-session.ts` を追記（§8.1）。(6) セッション Cookie の有効期間は 7 日・延長なし（D04-53）。(7) `auditLogs` に `actorKind` と `details` を持つ（D04-61）。(8) エラーコード `ID_TOKEN_INVALID`・`SERVICE_UNAVAILABLE` の追加（§2.4）。それ以外の API パスは 00 §4.2 の一覧と一致している（本書 §3 が正） |
 | 01（構成） | **2.1 版: 01 2.1 版に反映済み**。環境変数の追加依頼はない（`SESSION_COOKIE_NAME`・`PDF_TOKEN_SECRET` は 00 §3.2 に掲載済み）。`middleware.ts` は Edge ランタイムで `firebase-admin` を import せず、`SESSION_COOKIE_NAME` を `process.env` から直接読む（§8.5。01 の起動時検証の対象から外す）。Vercel Firewall のルールに `POST /auth/session`（IP あたり 1 分 10 件）と `POST /auth/invite`（IP あたり 1 分 5 件）を追加（§2.8、§6）。Firebase コンソールの設定で本書が前提にするもの: メール＋パスワードのみ有効、自己登録の無効化、パスワードポリシー（8 文字以上・英字と数字。§5.1）、パスワード再設定メールのテンプレートとアクション URL（`/admin/password-reset`。§6.4）、Web API キーの HTTP リファラー制限（サーバからは Auth の REST API を呼ばない前提。D04-47 改）。Preview 環境ではアクション URL を固定できない点の扱い（06 §3.3 の実装時確認と共通） |
 | 02（データモデル） | **2.1 版: すべて 02 2.1 版に反映済み**（本書側は関数名・型名を 02 に統一）。2.0 版で依頼した内容の反映先: (1) リポジトリ関数 → 02 §8.2〜§8.6（`registerRespondent`、`markSessionStarted`、`saveAnswers`、`submitSession`、`updateRespondentFlags`、`softDeleteRespondent`、`rotateInviteToken`、`createAdminUser`、`saveAiAnalysis`、`markAiGenerationFailed`、`markAiGenerationStarted`、`fetchPopulation`、`listResults`、`getRespondentsByIds`、`getRespondentById`、`countRecentAuditLogs`、`countAiAnalysesSince`、`listUsageLogs`）。(2) `auditLogs.actorKind`・`details` → 02 §3.8。(3) `usageLogs.respondentKind` → 02 §3.7。(4) `results.aiGenerationStartedAt`・`aiGenerationError` → 02 §3.5、`aiAnalyses.generatedBy` → 02 §3.6（本書の `generatedByUid` を取り下げ）。(5) 複合インデックス → 02 §7 Q1〜Q14。(6) 招待トークンの形式 → base64url 43 文字（02 §9.7。本書の 16 進 64 文字を取り下げ）。(7) `lib/auth/session-cookie.ts`・`claims.ts` の関数名 → 02 §9.2・§9.11（`createAdminSessionCookie`、`verifyAdminSessionCookie`、`revokeAdminSessions`、`parseAdminClaims`。本書の仮置き名を取り下げ）。(8) 1.x 版の RPC と `rpc-errors.ts` の廃止 → 02 §14。(9) 実装時確認 → 02 §15.2 D02-38・D02-41・D02-42、09 §6.4。02 からの読み替えで本書が改めたもの: `POST /auth/invite` の途中失敗は `deleteUser` ではなく再要求で回復（D02-40。§6.3）、`emailVerified: true`（D04-37 改）、チーム・除外・削除はバッチ（02 §8.1）、AI 滞留時の `failed` 化でも監査ログが残る（§5.9） |
-| 03（採点） | **2.1 版: 03 1.4 版で確認済み**。`InvalidAnswerMapError` → 422 `ANSWERS_INCOMPLETE`、`EmptyPopulationError` → 409 `POPULATION_EMPTY` に変換（§4.5、§5.5）。`ComparisonResult` は丸めずに `ComparisonDto` に載せる。`assessmentSessions.answers` の map（文字列キー）は 02 の `submitSession()` が `toAnswerMap()` で数値キーに変換してから `assertAnswerMap` に渡す（03 §2.1 の「そのまま渡してよい」は文字列キーでも動く前提だが、本書は数値キーに揃える）。`lib/masters/exam-pages.ts`（§4.4 D04-46）は 03 の `QUESTION_PAGE_LAYOUT` と `ACTIVE_QUESTIONS` を import する純関数で、03 の `lib/masters/` に置く（05 の `lib/presentation/exam-pages.ts` は再エクスポート）。変更なし |
-| 05（受検者画面） | **2.1 版: 05 1.4 版で `lastSavedPageNo` を反映済み**。2.0 版で **受検者 API の契約は変更なし**（パス・入出力・エラーコード）。05 1.3 版（D05-38）の読み替え（文書 ID の形式、`sessionTokenHash`、`answers` map の部分更新、`SESSION_NOT_FOUND` の条件）は本書 §2.1・§2.5.2・§4.4・§4.5 と一致していることを確認した。追加: 503 `SERVICE_UNAVAILABLE`（§2.4）は E-03（保存失敗の再試行）と同じ扱いでよい。画面遷移と API の対応、05 §7.1・§9・D05-26 の読み替え（1.1〜1.2 版で確定済み）は変更なし: (1) 401 `RESPONDENT_TOKEN_INVALID` / `RESPONDENT_TOKEN_EXPIRED`（D04-42）、`details.missing`。(2) 404 `SESSION_NOT_FOUND` は送信トランザクション内でのみ。(3) `answers` は昇順配列（D04-44）、`resumePageNo` は含めない。(4) `POST …/start` の応答は `SessionStartedDto`（D04-45）。(5) `PUT …/answers` の `pageNo` とページ所属の検証（D04-18 改）。(6) `SessionCreatedDto`。(7) `SessionSubmittedDto` の `nextUrl`。(8) Server Component は `requireRespondentSessionFromCookies(sessionId)` を呼ぶ |
+| 03（採点） | **2.1 版: 03 1.4 版で確認済み**。`InvalidAnswerMapError` → 422 `ANSWERS_INCOMPLETE`、`EmptyPopulationError` → 409 `POPULATION_EMPTY` に変換（§4.5、§5.5）。`ComparisonResult` は丸めずに `ComparisonDto` に載せる。`assessmentSessions.answers` の map（文字列キー）は 02 の `submitSession()` が `toAnswerMap()` で数値キーに変換してから `assertAnswerMap` に渡す（03 §2.1 の「そのまま渡してよい」は文字列キーでも動く前提だが、本書は数値キーに揃える）。`lib/masters/exam-pages.ts`（§4.4 D04-46）は 03 の `QUESTION_PAGE_LAYOUT` と `ACTIVE_QUESTIONS` を import する純関数で、03 の `lib/masters/` に置く（05 の `lib/presentation/exam-pages.ts` は再エクスポート）。**2.3 版: 03 1.5 版に合わせ、`lib/masters/exam-steps.ts`（`QUESTION_STEP_SIZES` と `ACTIVE_QUESTIONS` から `EXAM_STEP_COUNT`・`questionNosOfStep`）に置き換えた** |
+| 05（受検者画面） | **2.3 版: 05 2.0 版（11-1）に合わせた**: (a) `PUT …/answers` は `{ stepNo, answers }`（1〜41 問。D04-18・D04-19 改）、(b) `SessionProgressDto.lastSavedStepNo`・`AnswersSavedDto.stepNo`、(c) 受験者登録の画面は `GET organizations/{id}` と `resumable` を使わない（D04-43 改）、(d) 送信のあとの 2 秒の待ちは画面（§4.5）、(e) `ANSWERS_INCOMPLETE` は `missing[0]` のステップへ（§4.5）、(f) 電話番号は必須と 30 文字の上限だけ（D04-06 改）。以下は 2.2 版までの記録。**2.1 版: 05 1.4 版で `lastSavedPageNo` を反映済み**。2.0 版で **受検者 API の契約は変更なし**（パス・入出力・エラーコード）。05 1.3 版（D05-38）の読み替え（文書 ID の形式、`sessionTokenHash`、`answers` map の部分更新、`SESSION_NOT_FOUND` の条件）は本書 §2.1・§2.5.2・§4.4・§4.5 と一致していることを確認した。追加: 503 `SERVICE_UNAVAILABLE`（§2.4）は E-03（保存失敗の再試行）と同じ扱いでよい。画面遷移と API の対応、05 §7.1・§9・D05-26 の読み替え（1.1〜1.2 版で確定済み）は変更なし: (1) 401 `RESPONDENT_TOKEN_INVALID` / `RESPONDENT_TOKEN_EXPIRED`（D04-42）、`details.missing`。(2) 404 `SESSION_NOT_FOUND` は送信トランザクション内でのみ。(3) `answers` は昇順配列（D04-44）、`resumePageNo` は含めない。(4) `POST …/start` の応答は `SessionStartedDto`（D04-45）。(5) `PUT …/answers` の `pageNo` とページ所属の検証（D04-18 改）。(6) `SessionCreatedDto`。(7) `SessionSubmittedDto` の `nextUrl`。(8) Server Component は `requireRespondentSessionFromCookies(sessionId)` を呼ぶ |
 | 06（管理者画面） | **2.1 版: 06 1.4 版に反映済み**。06 1.3 版 §8.2 の依頼への回答: (1) `POST /auth/invite` の本文は `{ inviteToken, name, email }` で確定。パスワード再設定メールは **画面（クライアント SDK `sendPasswordResetEmail`）が送る**（06 §3.2 の (1) はそのまま。D04-58）。(2) `POST /auth/session` は有効な ID トークンに対して常に Cookie を発行し、停止中・未所属の判定は `requireAdmin()` に委ねる（D04-54。06 §3.1 の前提どおり。応答は `{ expiresAt }`）。(3) `DELETE /auth/session` は 204。他端末のセッションも失効する（§6.2）。(4) `PATCH /api/v1/admin/me` は **即時反映・`pendingEmail` なし**（D04-57）。現在のパスワードの検証は画面側の再認証（`signInWithEmailAndPassword` → `getIdToken` → `signOut`）で得た `reauthIdToken` を本文に入れる方式（D04-47 改。`currentPassword` は API に送らない）。メール・パスワード変更後は応答の `reloginRequired: true` とともに Cookie が削除されるので、T-36 相当の案内でログイン画面へ遷移する。T-32（確認メール）は不要。(5) `admin.login` は `login-events` のまま（D04-24 改）。**2.0 版の Dto の変更**: `MeDto.links.adminInvite` は常に `null`、`adminInviteIssuedAt` を追加（D04-56。招待リンクは owner が「再発行」した応答の `adminInvite` をその場で表示・コピーさせる。`admin` には表示できない。1.x 版 D04-22 の取り下げ）。`AdminUserItemDto` に `email` を追加（§5.11。管理者一覧に表示してよい）。`MeDto.email` は `string | null`。`PATCH /me` の応答型は `MeUpdatedDto`。§2.4 に 401 `ID_TOKEN_INVALID`（`POST /auth/session` の失敗。T-24 でよい）と 503 `SERVICE_UNAVAILABLE`（`Toast` で再試行を促す）を追加。**1.x 版から継続の読み替え（変更なし）**: 結果詳細 `aiAnalysis.status` / `error` / `latest`、`availableTeamCodes` 不採用（D04-48）、組織内分類 `socialStyle` / `aptitudeType` / `members`、利用履歴 `name`、管理者一覧 `adminUserId`、回答一覧の `aptitudeType` / `socialStyle` / `aiGenerationStatus`（D04-27）、比較の `populationSize` / `includesSubject`（D04-29）、象限は所属分類（D04-33）、削除の 404 時は一覧再取得（D04-30） |
 | 07（AI・PDF） | **2.1 版: 07 1.4 版に反映済み**。`AiProvider.generate()` は `signal`（240 秒）を受け取る（D04-38）。生成の状態遷移・滞留判定は §5.9 のとおり service が担い、provider は生成のみ。`aiGenerationError` は 07 §4.6 の `AiFailureReason` + service 側の `internal_error`（§5.9 手順 7）。`aiAnalyses` の作成と `results` の更新と監査ログは 1 バッチ（07 §7.1 と一致）。`generatedBy` は 07 の名前のまま `aiAnalyses.generatedBy` に保存（02 §3.6。本書の `generatedByUid` は取り下げ）。PDF は `issuePdfToken` / `verifyPdfToken`（§7.2。ペイロードの `adminUserId` → `adminUid`、`role` を追加）を使い、印刷用ページ（`lib/services/print-data.ts`）は Admin SDK でデータ取得し、`assertVisibleToAdmin` と同じ判定関数でトークンの `organizationId`・`role` に対する可視性を再検証する（07 §9.4 と一致）。`middleware.ts` からの `/admin/results/[resultId]/print` の除外は §8.5 で維持（D04-41）。非同期化する場合は POST を 202 に変える（§7.1）。日次上限は `aiAnalyses` の `count()` 集計（成功件数。07 §6.4 の「失敗は上限を消費しない」と一致） |
 | 08（テスト） | **2.1 版: 08 2.1 版に反映済み**（観点 (1)〜(15) は 08 §5・§8 の I-xx / PF-xx に対応）。結合テスト（Firebase Emulator Suite。00 D-33）の観点: (1) `admin` で幹部の結果が一覧・詳細・分類・履歴・比較対象の詳細のいずれでも 404／非表示になり、母集団には含まれる（`fetchPopulation`）。(2) 二重送信で片方が 409（トランザクションの競合）。(3) 比較 API を 2 回呼んでも Firestore に比較値のフィールド・文書が増えない。(4) `POPULATION_EMPTY`。(5) 期限切れ Cookie で 401 `RESPONDENT_TOKEN_EXPIRED`、Cookie なしで 401 `RESPONDENT_TOKEN_INVALID`。(6) `AI_ALREADY_GENERATING` の同時実行。(7) 監査ログの action ごとの記録有無（§2.6 の表。`admin.signup` は `POST /auth/invite` 直後に 1 件、`login-events` を複数回呼んでも増えない、`session.submit` / `respondent.delete` / `organization.rotate_invite_token` が本処理と同じバッチで残る）。(8) `PUT …/answers` でページに属さない設問番号が 422、`answers` map がページ外のキーを保持したまま部分更新される。(9) `GET /api/v1/admin/admin-users` が `admin` で 403 `ROLE_REQUIRED`、owner で削除済みを除く全員を `email` 付きで返す。(10) `PATCH /api/v1/admin/me` のパスワード変更後に旧 Cookie が 401 になり（`revokeRefreshTokens`）、`reauthIdToken` の `uid` 不一致・`auth_time` 超過で 422。(11) 印刷用ページが管理者 Cookie なし + 有効トークンで 200、トークンなしで 404、他組織の `resultId` を含むトークンで 404。(12) `POST /auth/session` が `auth_time` の古い ID トークンを 401 にし、発行された Cookie で `requireAdmin` が通る。`DELETE /auth/session` 後に同じ Cookie が 401。(13) `PATCH /respondents/{id}` 後に `respondents` と `results` の `teamCode` / `isExcluded` が一致（00 D-34）。(14) `admin` の一覧・分類・履歴で `respondentKind == "applicant"` 条件が効く（`usageLogs.respondentKind`）。(15) 未定義の複合インデックスが Emulator の警告で検出されない（§8.4 の一覧）。性能: 1 組織 1,000 件の `results` で一覧・比較・分類の応答時間を測る（D04-55 の目安の検証）。**08 §2.4 PR-3.1・§2.5 PR-4.1 の service ファイル名は本書 §8.1 に合わせて改版済み**（`answers.ts` → `answer-saving.ts`、`results.ts` → `result-list.ts` + `result-detail.ts`、`respondents.ts` → `respondent-management.ts`、`usage-logs.ts` → `usage-log-list.ts`。`organization-lookup.ts`、`session-progress.ts`、`invite-acceptance.ts`、`admin-session.ts`、`visibility.ts`、`firebase-errors.ts` を追加。D04-52）。08 PR-2.2 の `lib/db/{server-client,service-client,browser-client}.ts` は 00 §3.3 の `lib/firebase/{admin,client}.ts` + `lib/db/{collections,repositories,mappers}` に読み替える |
@@ -2729,7 +2703,7 @@ sequenceDiagram
 | D04-03 | 設計判断（2.0 版で改） | 文書 ID の形式（`^[A-Za-z0-9]{1,128}$`）でないパスパラメータは 404 | 400 にしない。1.x 版の UUID から変更（00 §4.1） | 05、06 |
 | D04-04 | 未確認（要件定義書 §6.2 A-02 にページングの記載なし） | 一覧のページング | `pageSize` 既定 50、上限 200。初期表示は 200 でよい | 06 |
 | D04-05 | 設計判断 | zod スキーマの置き場所 | `lib/services/schemas/` に集約。02 の文書スキーマと値の制約を共有する | 02、08 |
-| D04-06 | 未確認（要件定義書 §12） | 電話番号の形式 | 全角→半角正規化のうえ `^[0-9+()\-]{8,20}$`。依頼主確認事項 | 05 |
+| D04-06 | 決定済み（10 K-39 Q-17・K-42。2.3 版で改めた） | 電話番号の形式 | 必須と、前後の空白を除いて 30 文字の上限だけ。書式・桁数を検査せず、正規化しない（11-1 §2.2.5）。2.2 版までは全角→半角正規化のうえ `^[0-9+()\-]{8,20}$` | 05 |
 | D04-07 | 設計判断（2.0 版で補足） | 他組織・削除済み・admin に対する幹部データは 404 | 403 と区別しない。判定は `assertVisibleToAdmin`（service のコード。RLS の代替） | 06、08 |
 | D04-08 | 設計判断 | AI 生成失敗は 502 | 自システム障害（500）と区別 | 07 |
 | D04-09 | 設計判断（2.0 版で改） | 停止・未登録の判定 | `requireAdmin` が毎回 `adminUsers/{uid}` を 1 件読み、`isSuspended` / `deletedAt` / `organizationId`・`role` の一致を見る。クレーム不正・不一致は 403 `ADMIN_NOT_REGISTERED`（02 §9.5 も 2.1 版で 403 に統一）。1.x 版の「サービスロールを使う」は不要になった | 02、06 |
@@ -2740,9 +2714,9 @@ sequenceDiagram
 | D04-14 | 設計判断 | Route Handler の共通ラッパー `handle()` | 採番・ログ・エラー変換（Firebase 由来を含む）を一元化 | 08 |
 | D04-15 | 設計判断 | 受付停止のためのフィールドは設けない | `deletedAt == null` のみで判定（受付停止は組織の論理削除） | 02 |
 | D04-16 | 設計判断（推定を含む） | 同一人物の重複登録を抑止しない | 要件に無い。「既存では登録のたびに User レコードが作られる（要件定義書 §8.1）ため再登録は別レコードになる」は推定（要件定義書・付録に再登録時の扱いの記載なし）。同一ブラウザからの再訪は `resumable`（§4.1）で再開を促す | 05 |
-| D04-17 | 設計判断（2.0 版で改。2.1 版で関数名を 02 に統一） | 受検者登録の 4 文書を 1 バッチで作る 02 の `registerRespondent()`（§4.2.2） | 1.x 版の RPC `register_respondent()` を Admin SDK の WriteBatch に置き換え。関数の実体は 02 §8.4 | 02 |
-| D04-18 | 設計判断（1.1 版で改） | 回答保存の入力は通しページ番号 `pageNo`（1〜20。05 §5.3.1）。設問番号が `pageNo` のページに属することをサーバで検証する（422） | `step` / `page` への変換は `lib/masters/exam-pages.ts`（D04-46）。`lastSavedPageNo`（02 D02-37）は参考値 | 03、05 |
-| D04-19 | 設計判断 | ページ内の部分保存を許可 | 未回答チェックは画面と送信 API | 05 |
+| D04-17 | 設計判断（2.0 版で改。2.1 版で関数名を 02 に統一。2.3 版で 3 文書に） | 受検者登録の 3 文書（受検者・セッション・監査ログ）を 1 バッチで作る 02 の `registerRespondent()`（§4.2.2）。利用履歴は送信の確定で作る | 1.x 版の RPC `register_respondent()` を Admin SDK の WriteBatch に置き換え。関数の実体は 02 §8.4 | 02 |
+| D04-18 | 設計判断（1.1 版で改。2.3 版で改） | 回答保存の入力はステップ番号 `stepNo`（1〜4。11-1 §3.4.2）。設問番号が `stepNo` のステップに属することをサーバで検証する（422） | 対応は `lib/masters/exam-steps.ts`（D04-46）。`lastSavedStepNo`（02 D02-37）は参考値。2.2 版までは通しページ番号 `pageNo`（1〜20）と `lastSavedPageNo` | 03、05 |
+| D04-19 | 設計判断（2.3 版で改） | ステップ内の部分保存を許可（1 回 1〜41 問） | 画面は選んだ時点で未送信の選択を送る（11-1 §2.4.5）。未回答チェックは画面と送信 API | 05 |
 | D04-20 | 設計判断 | 送信 API は回答を受け取らない | 最終ページも `PUT …/answers` で保存してから `POST …/submit` | 05 |
 | D04-21 | 設計判断（2.0 版で改） | 管理者 API の認可はすべて service のコードで行う（§5 冒頭の 3 点） | 1.x 版の「RLS を第 4 層として効かせる」は Firebase に無い。`organizationId` の等価条件・取得後の照合・幹部可視性を全 service で必ず行い、08 で検証する | 02、08 |
 | D04-22 | 取り下げ（2.0 版。D04-56 に置き換え） | 管理者追加用リンクを `admin` にも表示 | ハッシュしか保存しないため `GET /me` で平文を返せず、再発行は owner 限定のため `admin` には表示できない | 06 |
@@ -2766,10 +2740,10 @@ sequenceDiagram
 | D04-40 | 設計判断 | 環境変数 `PDF_TOKEN_SECRET`（PDF 印刷トークンの HMAC 鍵。サーバ専用・秘匿） | 32 バイト以上の乱数。00 §3.2 に掲載済み。Firebase のサービスアカウント鍵から派生させない | 00、01 |
 | D04-41 | 設計判断（07 §9.4 との整合） | `middleware.ts` の未認証遮断から `/admin/results/[resultId]/print` を除外する（§8.5） | 印刷用ページは管理者 Cookie を持たない Chromium が開くため。認可は `verifyPdfToken`（§7.2）。除外はパス形状のみで判定し、01 の `PUBLIC_ADMIN_PATHS` と一致させる | 01、07、08 |
 | D04-42 | 設計判断（05 D05-26 の確定） | 受検者 API の 401 は `RESPONDENT_TOKEN_INVALID` と `RESPONDENT_TOKEN_EXPIRED` の 2 つ | 期限切れだけ「登録し直し」の案内に分けられるようにする。`SESSION_NOT_FOUND` は送信トランザクション内のみ（§2.4） | 05、08 |
-| D04-43 | 設計判断（05 §6.3 の要求） | 受検リンク再訪時の再開判定 `findResumableSession`（§2.5.2）を追加し、`GET organizations/{organizationId}` の応答 `resumable` で返す | Cookie のトークンハッシュだけで `draft` セッションを 1 件引く（`sessionTokenHash` の等価クエリ）。組織・区分・期限・状態が合わないときは `null`。個人情報は返さない | 02、05 |
+| D04-43 | 設計判断（05 §6.3 の要求） | 受検リンク再訪時の再開判定 `findResumableSession`（§2.5.2）を追加し、`GET organizations/{organizationId}` の応答 `resumable` で返す | Cookie のトークンハッシュだけで `draft` セッションを 1 件引く（`sessionTokenHash` の等価クエリ）。組織・区分・期限・状態が合わないときは `null`。個人情報は返さない。2.3 版から受験者登録の画面はこの API と `resumable` を使わない（画面を開いた時点では組織を確かめず、再開の案内も出さない。11-1 §2.2.1・§3.4.4）。API と `findResumableSession` は残す | 02、05 |
 | D04-44 | 設計判断（05 §7.1 との差） | `SessionProgressDto.answers` は `{ questionNo, choiceCode }` の昇順配列（`Record` ではない）。`resumePageNo` は応答に含めない | `answers` map（00 D-29）は API 境界で配列に変換する。再開位置は 05 D05-08 のとおり画面側が導出 | 05 |
 | D04-45 | 設計判断（05 §6.1・§7.1 との整合） | `POST …/start` は `tokenExpiresAt` を 7 日延長して Cookie を再発行し、応答は `SessionStartedDto` | 直後の設問ページは Server Component が `getSessionProgress` で初期表示するため、回答を応答に含める必要がない | 01、05 |
-| D04-46 | 設計判断 | `pageNo` ⇄ `step` / `page` の変換と `questionNosOfPage` は `lib/masters/exam-pages.ts`（03 側）に置き、05 の `lib/presentation/exam-pages.ts` は再エクスポート | service は `lib/presentation/` を import しない（層の依存方向） | 03、05 |
+| D04-46 | 設計判断（2.3 版で改） | `stepNo` と設問番号の対応（`EXAM_STEP_COUNT`・`questionNosOfStep`）は `lib/masters/exam-steps.ts`（03 側）に置き、画面のステップの定義は 05 の `lib/presentation/exam-steps.ts` が作る | service は `lib/presentation/` を import しない（層の依存方向）。2.2 版までは `lib/masters/exam-pages.ts`（`pageNo` ⇄ `step` / `page` と `questionNosOfPage`） | 03、05 |
 | D04-47 | 設計判断（2.0 版で改） | 現在のパスワードの検証はブラウザの再認証で得た ID トークン（`reauthIdToken`）をサーバで `verifyIdToken` し、`uid` 一致と `auth_time` 5 分以内を確認する（§5.1） | Admin SDK にパスワード照合が無く、Auth の REST API をサーバから呼ぶ方式は Web API キーの利用制限と衝突する。セッション Cookie は書き換えない。`currentPassword` は API に送らない | 06、08 |
 | D04-48 | 設計判断（06 D06-09 の任意項目） | 結果詳細の `availableTeamCodes` は採用しない | 閲覧者の可視範囲で数えたチーム人数は `fetchPopulation()` の母集団（幹部を含む）と食い違い、比較の `populationSize` と異なる値を画面に出すことになる。06 は全チームを同じ表記で表示 | 06 |
 | D04-49 | 設計判断（06 D06-20 の依頼を採用。要件定義書 §6.2 A-12 に管理者一覧の記載なし。未確認。2.0 版で改） | `GET /api/v1/admin/admin-users`（§5.11）を追加 | owner／super_admin 限定、読み取り専用。2.0 版でメールアドレスを含める（Admin SDK `getUsers` で引ける。00 §2.2） | 06、08 |
@@ -2785,7 +2759,7 @@ sequenceDiagram
 | D04-59 | 設計判断（2.0 版。2.1 版で 02 §8.1 に合わせて範囲を限定） | 状態を条件にする更新（保存・開始・送信の `draft` 検査、AI 生成開始の `not_generated` / `failed` 検査）は Firestore のトランザクション（`runTransaction`）で「読み取り → 判定 → 書き込み」を行う。チーム・除外・削除は可視性を `get` で確認したうえでバッチ（02 §8.4） | Firestore にフィールド値を条件にする更新が無く、楽観ロックが同時リクエストの片方だけを成功させる唯一の手段。チーム・除外・削除は同時更新が後勝ちでも実害が無いため 02 の規約どおりバッチにする | 02、08 |
 | D04-60 | 設計判断（2.0 版） | Firebase 由来の例外は `translateFirebaseError`（§2.4 の対応表）で §2.4 のコードに変換し、元のコードは応答に含めない | `ID_TOKEN_INVALID`（401）と `SERVICE_UNAVAILABLE`（503）を追加。1.x 版の `translateRpcError` を置き換え。コード名は実装時確認 | 05、06、08 |
 | D04-61 | 設計判断（2.0 版。02 §3.8 に反映済み） | `auditLogs` に `actorKind`（`admin` / `respondent` / `system`）と `details`（map）を持つ | 00 §2.2 の `actorUid`・`actorRole` だけでは受検者とシステムの操作を区別できない。`details` は 1.x 版から継続（07 のトークン数など） | 02 |
-| D04-62 | 設計判断（2.0 版。02 §3.7 に反映済み） | `usageLogs.respondentKind` を持つ | `admin` の利用履歴から幹部を除くクエリ条件に使う（結合ができないため `respondents.kind` を参照できない）。登録時に 02 の `registerRespondent()` が書く | 02、06 |
+| D04-62 | 設計判断（2.0 版。02 §3.7 に反映済み） | `usageLogs.respondentKind` を持つ | `admin` の利用履歴から幹部を除くクエリ条件に使う（結合ができないため `respondents.kind` を参照できない）。登録時に 02 の `registerRespondent()` が書く。M7 では利用履歴を作る送信のときに `respondents.kind` を写す（11-1 §2.7.4。2.3 版） | 02、06 |
 
 ## 12. 改版履歴
 
@@ -2797,5 +2771,6 @@ sequenceDiagram
 | 1.2 | 2026-09-21 | 最終点検（09）。01 D01-35 に従い §6.3 の `resetPasswordForEmail` の `redirectTo` を `window.location.origin` に改版。§5.1 `GET /me` のリンク生成を `appBaseUrl()` に明記。05 D05-16 に従い `normalizePhoneNumber`／`PHONE_PATTERN` の実体を `lib/utils/phone-number.ts` に移し §4.2 のスキーマはそこから import。05 D05-32 に従い §4.3・D04-12 の「失敗しても画面は進める」を取り下げ（成功時のみ遷移）。05 D05-34 に従い §4.1・§4.6 の「組織名を表示」を改版。02 D02-27 に従い §4.1・D04-15 の `is_active` の保留を解消。§4.2.2 を「02 §11.16 が正」に改め D04-17 を採用済みに。§5.9 の監査ログ `details` に `inputTokens`／`outputTokens`（07 §4.8）を追加。§7.2・D04-40・§10 の「00 §3.2 未掲載」を掲載済みに更新 |
 | 1.1 | 2026-09-19 | レビュー指摘への対応。must: (1) `middleware.ts` の認証不要パスに `/admin/results/[resultId]/print` を追加（§7.2、§8.5、D04-41）。(2) `login-events` の `admin.signup` 補完を取り下げ、招待受理がサービスロールで書く（§2.6、§5.1、§6.2、§8.3、D04-36 改）。(3) 回答保存の入力を `pageNo`（1〜20）に変更し、ページ所属をサーバで検証（§4.4、§8.2、D04-18 改、D04-46）。(4) `GET /api/v1/admin/admin-users` を追加（§3.2、§5.11、§8.1〜§8.3、D04-49）。should: 管理者追加方式の整合確認（§6.2、D04-51）、エラー表の追加と表内 JSON のコードブロック化（§4.1、§4.3、§5.1、§5.2、§5.6〜§5.9）、05・06・08 への読み替えを §10 に列挙（D04-42、D04-44、D04-45、D04-48、D04-52）、再開判定 `findResumableSession` と Server Component からの認可ヘルパーの呼び方（§2.5.2、§4.1、§8.3、D04-43）、`PDF_TOKEN_SECRET` の 00 §3.2 追記依頼（§7.2、§10、D04-40）、役割変更 API の不提供（§3.3、§5.12、D04-50）、パスワード検証の一時クライアント（§5.1、D04-47）、`AuditDetails` に配列を許容（§2.6）、比較応答例の `scope` を `organization` に・結果詳細例に `reliability` を追加（§5.4、§5.5）、D04-16 の既存挙動を推定に改める（§4.2.1）。あわせて `ai_generation_error` の語彙を 07 §4.6 に合わせ（§5.9）、§0.2 の節番号を訂正 |
 | 2.2 | 2026-09-24 | 本番デプロイで判明した事項の反映（職業コードを 1〜8 に。旧コード 9 は保存済み文書の検証だけが読む。§4.2 の `occupationCode`、§5.3・§7.1 の職業名の例。10 K-19、PR #13・#14） |
+| 2.3 | 2026-11-09 | M7 の PR-7.3（受検者画面。11 総論 5.4・6.1、11-1 §3.4・§4.1。冒頭の版の欄を 2.3 にそろえた。2.2 版の改版の記録は冒頭の版の欄に入っていなかった）。§2.3 の電話番号を必須と 30 文字の上限だけに（書式・正規化をやめた。D04-06）、氏名を前後の空白を除いて 1〜100 文字に。§4 の冒頭に受検者 API が書く文書（登録は 3 文書、送信で利用履歴を作るか M7 より前の文書を更新）を足した。§4.1 を受験者登録の画面から使わないことに（D04-43）。§4.2 の処理を 3 文書のバッチに、監査ログの `details` に `previousCandidate` を足し、リクエストの例を見本の値に、`lib/utils/phone-number.ts` のコードを消して `name`・`phoneNumber` を `requiredText(NAME_MAX_LENGTH)`・`requiredText(PHONE_MAX_LENGTH)` に、`occupationCodeSchema` のコメントを 1〜8・10 に、§4.2.1・§4.2.2 から `usageLogId` と利用履歴の文書を外した（前回の候補は PR-7.4）。§4.3 の応答を `lastSavedStepNo` に。§4.4 を 1 ステップ分の保存（`{ stepNo, answers }`、1〜41 問、`questionNosOfStep`、`lib/masters/exam-steps.ts`。`pageNo` の古い形は 422）に改めた。§4.5 に利用履歴の作成か更新、`linkedPrevious`、区分の作成時の値、2 秒の待ちは画面で行うことを足した（つながりは PR-7.4）。§4.6 のシーケンス、§8.2 の Dto（`SessionProgressDto.lastSavedStepNo`、`AnswersSavedDto.stepNo`・`lastSavedStepNo`）、§8.3・§8.4 の表、§10 の 03・05 宛て、§11 の D04-06・D04-18・D04-19・D04-43・D04-46・D04-62 を改めた |
 
 以上。
