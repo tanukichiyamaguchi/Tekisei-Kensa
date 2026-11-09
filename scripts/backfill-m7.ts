@@ -9,7 +9,8 @@
 // respondents・assessmentSessions・usageLogs は変えず（11-1 §3.6）、aiAnalyses は読み取りで補う（11-6 §3.2）。
 // organizations の招待トークンの手順（11-8 §3.5）はまだ入れていない（11 総論 8.3 の 9）。
 // 公開の順はインデックス → コード → 本スクリプト（08 §8.2）。本番は GitHub Actions の firebase-ops
-// （task = backfill-m7）から実行する（10 K-12）。実装者は Emulator に対してのみ実行する（01）。
+// （task = backfill-m7）から実行する（10 K-12）。firebase-ops の入力 dry_run の既定は --dry-run を付けた試しで、
+// 書くのは dry_run を外したときだけ。実装者は Emulator に対してのみ実行する（01）。
 import { parseArgs } from "node:util";
 
 import { FieldPath, FieldValue } from "firebase-admin/firestore";
