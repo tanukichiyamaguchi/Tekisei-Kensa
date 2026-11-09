@@ -13,9 +13,7 @@ import {
 } from "@/lib/masters/training-context";
 
 const SPEC_AI = readFileSync(
-  fileURLToPath(
-    new URL("../../../docs/基本設計/11_参照元の更新/11-6_AI解説.md", import.meta.url),
-  ),
+  fileURLToPath(new URL("../../../docs/基本設計/11_参照元の更新/11-6_AI解説.md", import.meta.url)),
   "utf8",
 );
 

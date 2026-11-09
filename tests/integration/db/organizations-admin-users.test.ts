@@ -41,7 +41,11 @@ const adminDoc = async (uid: string) => (await getDocForTest<Doc>(COLLECTIONS.ad
 
 describe("M7-misc-19 組織の作成と招待トークンの作り直し（11-8 §3.2）", () => {
   it("createOrganization が inviteToken（平文）・inviteTokenHash（平文の sha256）・inviteTokenIssuedAt を書く", async () => {
-    const created = await createOrganization({ name: "招待サロン", code: null, customerNumber: null });
+    const created = await createOrganization({
+      name: "招待サロン",
+      code: null,
+      customerNumber: null,
+    });
     const doc = (await getDocForTest<Doc>(COLLECTIONS.organizations, created.organizationId))!;
     expect(created.inviteToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(doc.inviteToken).toBe(created.inviteToken);
@@ -145,7 +149,10 @@ describe("markAnnouncementDismissed（11-8 §3.3）", () => {
       "employment_analysis",
     ]);
     const user = await getAdminUser(uid);
-    expect([...user!.dismissedAnnouncements.keys()]).toEqual(["employment_analysis", "ai_training"]);
+    expect([...user!.dismissedAnnouncements.keys()]).toEqual([
+      "employment_analysis",
+      "ai_training",
+    ]);
     expect(user!.dismissedAnnouncements.get("ai_training")).toEqual(firstAt.toDate());
   });
 
@@ -179,9 +186,9 @@ describe("markAnnouncementDismissed（11-8 §3.3）", () => {
     await markAnnouncementDismissed(deleted, "ai_training");
     const deletedAfter = await adminDoc(deleted);
     expect(deletedAfter.dismissedAnnouncements).toEqual({});
-    expect((deletedAfter.updatedAt as Timestamp).isEqual(deletedBefore.updatedAt as Timestamp)).toBe(
-      true,
-    );
+    expect(
+      (deletedAfter.updatedAt as Timestamp).isEqual(deletedBefore.updatedAt as Timestamp),
+    ).toBe(true);
 
     await markAnnouncementDismissed(target, "employment_analysis");
     expect(Object.keys((await adminDoc(target)).dismissedAnnouncements as Doc)).toEqual([

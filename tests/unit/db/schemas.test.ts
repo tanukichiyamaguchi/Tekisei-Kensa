@@ -170,9 +170,9 @@ describe("resultCreateSchema の previousResultId（11-7 §3.1）と AI の 3 �
     expect(
       resultCreateSchema.safeParse(resultCreation({ previousResultId: "Res0000000001" })).success,
     ).toBe(true);
-    expect(pathsOf(resultCreateSchema.safeParse(resultCreation({ previousResultId: "a/b" })))).toContain(
-      "previousResultId",
-    );
+    expect(
+      pathsOf(resultCreateSchema.safeParse(resultCreation({ previousResultId: "a/b" }))),
+    ).toContain("previousResultId");
     expect(
       resultCreateSchema.safeParse(without(resultCreation(), "previousResultId")).success,
     ).toBe(false);
@@ -330,7 +330,13 @@ describe("M7-misc-08 作成の検証（11-8 §3.2・§3.3）", () => {
     expect(
       pathsOf(organizationCreateSchema.safeParse(without(organization(), "inviteToken"))),
     ).toContain("inviteToken");
-    for (const bad of [TOKEN.slice(1), `${TOKEN}a`, `${TOKEN.slice(1)}+`, `${TOKEN.slice(1)}=`, null]) {
+    for (const bad of [
+      TOKEN.slice(1),
+      `${TOKEN}a`,
+      `${TOKEN.slice(1)}+`,
+      `${TOKEN.slice(1)}=`,
+      null,
+    ]) {
       expect(
         pathsOf(organizationCreateSchema.safeParse(organization({ inviteToken: bad }))),
         String(bad),

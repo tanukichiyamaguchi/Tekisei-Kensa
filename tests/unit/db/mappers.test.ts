@@ -287,7 +287,11 @@ describe("results の M7 の項目の読み取り（toResult。11-2 §3.1、11-7
   it("区分がある文書は、ほかの 3 つが無くても区分を補わない（ある値は検証しない）", () => {
     const r = toResult(
       "r1",
-      withoutFields(resultDoc({ employmentStatus: "employed" }), ["hiredOn", "leftOn", "staffRole"]),
+      withoutFields(resultDoc({ employmentStatus: "employed" }), [
+        "hiredOn",
+        "leftOn",
+        "staffRole",
+      ]),
     );
     expect(r).toMatchObject({
       employmentStatus: "employed",
@@ -349,8 +353,13 @@ describe("respondents・assessmentSessions・aiAnalyses の M7 の項目の読�
       updatedAt: now,
       deletedAt: null,
     };
-    expect(toRespondent("resp1", doc)).toMatchObject({ previousResultId: "prev1", occupationCode: 10 });
-    expect(toRespondent("resp1", withoutFields(doc, ["previousResultId"])).previousResultId).toBeNull();
+    expect(toRespondent("resp1", doc)).toMatchObject({
+      previousResultId: "prev1",
+      occupationCode: 10,
+    });
+    expect(
+      toRespondent("resp1", withoutFields(doc, ["previousResultId"])).previousResultId,
+    ).toBeNull();
     expect(toRespondent("resp1", { ...doc, usageLogId: null }).usageLogId).toBeNull();
     // usageLogId は今のまま必須（無い文書はデータ不整合）
     expect(() => toRespondent("resp1", withoutFields(doc, ["usageLogId"]))).toThrow(MappingError);

@@ -58,9 +58,9 @@ describe("registerRespondentInputSchema", () => {
   });
 
   it("職業 10（責任者。K-21）は受理する（M7-exam-08 の職業の分）", () => {
-    expect(registerRespondentInputSchema.parse({ ...valid, occupationCode: 10 }).occupationCode).toBe(
-      10,
-    );
+    expect(
+      registerRespondentInputSchema.parse({ ...valid, occupationCode: 10 }).occupationCode,
+    ).toBe(10);
   });
 
   it("氏名 100 文字（コードポイント）は受理する", () => {

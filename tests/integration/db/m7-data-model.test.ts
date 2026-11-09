@@ -194,12 +194,12 @@ describe("作成時の値（M7 の項目を書く）", () => {
   });
 
   it("createAdminAccount で作った adminUsers.dismissedAnnouncements は {}、organizations は inviteToken を持つ", async () => {
-    expect((await getDocForTest<Doc>(COLLECTIONS.adminUsers, owner.uid))!.dismissedAnnouncements).toEqual(
-      {},
-    );
-    expect((await getDocForTest<Doc>(COLLECTIONS.organizations, org.organizationId))!.inviteToken).toBe(
-      org.inviteToken,
-    );
+    expect(
+      (await getDocForTest<Doc>(COLLECTIONS.adminUsers, owner.uid))!.dismissedAnnouncements,
+    ).toEqual({});
+    expect(
+      (await getDocForTest<Doc>(COLLECTIONS.organizations, org.organizationId))!.inviteToken,
+    ).toBe(org.inviteToken);
   });
 });
 
@@ -301,7 +301,11 @@ describe("M7 より前の形の文書を読んでも壊れない（例外的な�
   });
 
   it("リポジトリが補いの値を返す（getResult・getRespondent・getSession・getAdminUser・getOrganization・getAiAnalysis）", async () => {
-    const legacyViewer: Viewer = { ...viewer, uid: legacyOwner.uid, organizationId: legacyOrg.organizationId };
+    const legacyViewer: Viewer = {
+      ...viewer,
+      uid: legacyOwner.uid,
+      organizationId: legacyOrg.organizationId,
+    };
     expect(await getResult({ resultId: target.resultId, viewer: legacyViewer })).toMatchObject({
       employmentStatus: "candidate",
       hiredOn: null,

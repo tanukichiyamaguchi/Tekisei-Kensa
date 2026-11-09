@@ -61,20 +61,17 @@ const RESULT_AI_INITIAL_FIELDS = {
 
 /**
  * コレクションを文書 ID の順に pageSize 件ずつ読み、ページごとに visit を呼ぶ。
- * 読むフィールドは fields に絞る（項目の有無の判定に要るものだけ）
+ * 項目の有無を見るため、select() で絞らずに文書を丸ごと読む（空の map・null の項目の射影に頼らない。
+ * 読み取りの回数は絞っても同じ）
  */
 async function forEachPage(
   collection: CollectionName,
-  fields: readonly string[],
   pageSize: number,
   visit: (docs: readonly QueryDocumentSnapshot[]) => Promise<void>,
 ): Promise<void> {
   let last: QueryDocumentSnapshot | null = null;
   for (;;) {
-    let query: Query = rawCollection(collection)
-      .orderBy(FieldPath.documentId())
-      .select(...fields)
-      .limit(pageSize);
+    let query: Query = rawCollection(collection).orderBy(FieldPath.documentId()).limit(pageSize);
     if (last !== null) query = query.startAfter(last);
     const snapshot = await query.get();
     await visit(snapshot.docs);
@@ -126,47 +123,37 @@ export async function backfillM7(
   };
 
   // results: 区分・入社日・退職日・役職、previousResultId、AI の 3 系統（論理削除済みを含む）
-  await forEachPage(
-    COLLECTIONS.results,
-    ["respondentKind", "employmentStatus", "previousResultId", "trainingAiStatus"],
-    pageSize,
-    async (docs) => {
-      const batch = adminFirestore().batch();
-      let writes = 0;
-      for (const doc of docs) {
-        const patch = resultPatch(doc.data());
-        if (patch.employment) counts.resultsEmployment += 1;
-        if (patch.previousResult) counts.resultsPreviousResult += 1;
-        if (patch.ai) counts.resultsAi += 1;
-        if (Object.keys(patch.fields).length === 0) continue;
-        counts.resultsWritten += 1;
-        batch.update(doc.ref, { ...patch.fields, updatedAt: FieldValue.serverTimestamp() });
-        writes += 1;
-      }
-      if (!options.dryRun && writes > 0) await batch.commit();
-    },
-  );
+  await forEachPage(COLLECTIONS.results, pageSize, async (docs) => {
+    const batch = adminFirestore().batch();
+    let writes = 0;
+    for (const doc of docs) {
+      const patch = resultPatch(doc.data());
+      if (patch.employment) counts.resultsEmployment += 1;
+      if (patch.previousResult) counts.resultsPreviousResult += 1;
+      if (patch.ai) counts.resultsAi += 1;
+      if (Object.keys(patch.fields).length === 0) continue;
+      counts.resultsWritten += 1;
+      batch.update(doc.ref, { ...patch.fields, updatedAt: FieldValue.serverTimestamp() });
+      writes += 1;
+    }
+    if (!options.dryRun && writes > 0) await batch.commit();
+  });
 
   // adminUsers: お知らせの既読の空の map（論理削除済みを含む）
-  await forEachPage(
-    COLLECTIONS.adminUsers,
-    ["dismissedAnnouncements"],
-    pageSize,
-    async (docs) => {
-      const batch = adminFirestore().batch();
-      let writes = 0;
-      for (const doc of docs) {
-        if (doc.data().dismissedAnnouncements !== undefined) continue; // 既読のキーを持つ文書は触らない
-        counts.adminUsersAnnouncements += 1;
-        batch.update(doc.ref, {
-          dismissedAnnouncements: {},
-          updatedAt: FieldValue.serverTimestamp(),
-        });
-        writes += 1;
-      }
-      if (!options.dryRun && writes > 0) await batch.commit();
-    },
-  );
+  await forEachPage(COLLECTIONS.adminUsers, pageSize, async (docs) => {
+    const batch = adminFirestore().batch();
+    let writes = 0;
+    for (const doc of docs) {
+      if (doc.data().dismissedAnnouncements !== undefined) continue; // 既読のキーを持つ文書は触らない
+      counts.adminUsersAnnouncements += 1;
+      batch.update(doc.ref, {
+        dismissedAnnouncements: {},
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      writes += 1;
+    }
+    if (!options.dryRun && writes > 0) await batch.commit();
+  });
 
   const verb = options.dryRun ? "書く予定の" : "書いた";
   if (options.dryRun) deps.print("--dry-run: 書き込まずに件数だけを出します");

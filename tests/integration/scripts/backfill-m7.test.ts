@@ -129,19 +129,16 @@ beforeAll(async () => {
     meta,
   });
   // 例外的な直接書き込み: 退職・前回の結果・生成済みなどの値を持つ結果にする
-  await adminFirestore()
-    .collection(COLLECTIONS.results)
-    .doc(withValues.resultId)
-    .update({
-      employmentStatus: "left",
-      hiredOn: "2024-04-01",
-      leftOn: "2026-03-31",
-      staffRole: "leader",
-      previousResultId: legacyApplicant.resultId,
-      trainingAiStatus: "completed",
-      longitudinalAiStatus: "failed",
-      longitudinalAiError: "timeout",
-    });
+  await adminFirestore().collection(COLLECTIONS.results).doc(withValues.resultId).update({
+    employmentStatus: "left",
+    hiredOn: "2024-04-01",
+    leftOn: "2026-03-31",
+    staffRole: "leader",
+    previousResultId: legacyApplicant.resultId,
+    trainingAiStatus: "completed",
+    longitudinalAiStatus: "failed",
+    longitudinalAiError: "timeout",
+  });
   await stripFields(
     COLLECTIONS.results,
     employmentOnly.resultId,
