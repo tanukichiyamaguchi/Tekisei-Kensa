@@ -112,9 +112,12 @@ export function getSession(sessionId: string, extra: Extra = {}): Promise<Sessio
   return request(sessionPath(sessionId), { method: "GET", ...extra });
 }
 
+/** PUT …/answers の本文 { stepNo, answers }（11-1 §3.4.2）。自動保存の 1 本（answer-queue の AnswerBatch）をそのまま渡せる */
+type SaveAnswersBody = { readonly [K in keyof SaveAnswersInput]: Readonly<SaveAnswersInput[K]> };
+
 export function saveAnswers(
   sessionId: string,
-  input: SaveAnswersInput,
+  input: SaveAnswersBody,
   extra: Extra = {},
 ): Promise<AnswersSavedDto> {
   return request(`${sessionPath(sessionId)}/answers`, { method: "PUT", body: input, ...extra });

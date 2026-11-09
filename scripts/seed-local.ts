@@ -19,7 +19,7 @@ import {
 import type { RespondentKind, TeamCode } from "../lib/db/types";
 import { adminAuth } from "../lib/firebase/admin";
 import { OCCUPATION_CODES } from "../lib/masters/occupations";
-import { getExamPage } from "../lib/presentation/exam-pages";
+import { getExamStep, type ExamStepNo } from "../lib/presentation/exam-steps";
 import type { AnswerMap } from "../lib/scoring/types";
 import { appBaseUrl, firebaseAdminEnv } from "../lib/utils/env";
 import { isEntryPoint, runMain, UsageError } from "./lib/cli";
@@ -81,13 +81,16 @@ export function assertEmulator(): void {
   }
 }
 
-/** 登録して lastPage まで回答を保存する（E2E の tests/e2e/support/emulator-task.ts も使う） */
+/**
+ * 登録して Step 1〜lastStep の回答をステップごとに保存する（E2E の tests/e2e/support/emulator-task.ts も使う）。
+ * 利用履歴は送信のときに作られる（11-1 §2.7.4）
+ */
 export async function registerAndSave(
   organizationId: string,
   index: number,
   kind: RespondentKind,
   answers: AnswerMap,
-  lastPage: number,
+  lastStep: ExamStepNo,
 ) {
   const token = issueRespondentToken(new Date());
   const registered = await registerRespondent({
@@ -101,17 +104,17 @@ export async function registerAndSave(
     tokenExpiresAt: token.expiresAt,
     meta,
   });
-  for (let pageNo = 1; pageNo <= lastPage; pageNo += 1) {
-    const page: Record<number, AnswerMap[number]> = {};
-    for (const q of getExamPage(pageNo).questions) {
+  for (let stepNo = 1; stepNo <= lastStep; stepNo += 1) {
+    const step: Record<number, AnswerMap[number]> = {};
+    for (const q of getExamStep(stepNo as ExamStepNo).questions) {
       const v = answers[q.questionNo];
-      if (v !== undefined) page[q.questionNo] = v;
+      if (v !== undefined) step[q.questionNo] = v;
     }
-    if (Object.keys(page).length === 0) continue;
+    if (Object.keys(step).length === 0) continue;
     await saveAnswers({
       sessionId: registered.sessionId,
-      answers: page,
-      lastSavedPageNo: pageNo,
+      answers: step,
+      lastSavedStepNo: stepNo,
       tokenExpiresAt: token.expiresAt,
     });
   }
@@ -155,7 +158,7 @@ export async function seedLocal(
   const submitted: Array<{ respondentId: string; resultId: string; kind: RespondentKind }> = [];
   let index = 1;
   for (const r of RESPONDENTS) {
-    const registered = await registerAndSave(org.organizationId, index, r.kind, r.answers, 20);
+    const registered = await registerAndSave(org.organizationId, index, r.kind, r.answers, 4);
     const { resultId } = await submitSession({ sessionId: registered.sessionId, meta });
     if (r.teamCode !== null || r.isExcluded) {
       await updateRespondentFlags({
@@ -168,13 +171,13 @@ export async function seedLocal(
     submitted.push({ respondentId: registered.respondentId, resultId, kind: r.kind });
     index += 1;
   }
-  // 送信前の下書き 1 人（5 ページまで回答）
+  // 送信前の下書き 1 人（Step 1 まで回答。利用履歴は無い）
   const draft = await registerAndSave(
     org.organizationId,
     index,
     "applicant",
     randomAnswers(301),
-    5,
+    1,
   );
 
   deps.print(`組織: ${org.organizationId}（ローカル歯科医院）`);

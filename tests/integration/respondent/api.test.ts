@@ -1,4 +1,5 @@
-// 受検者 API（04 §4）: I-10〜I-18、PF-03 と、レート制限・進行状態・開始・再開判定
+// 受検者 API（04 §4、11-1 §3.4）: I-10、M7-exam-20〜25・31（API の分）・32、I-14・I-16・I-17、PF-03 と、
+// レート制限・進行状態・開始・再開判定。I-11〜I-13・I-15・I-18 は M7-exam-20〜25・32 に置き換えた（11-1 §5.5）
 import { createHash, randomBytes } from "node:crypto";
 
 import { Timestamp } from "firebase-admin/firestore";
@@ -7,7 +8,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { RESPONDENT_COOKIE_NAME } from "@/lib/auth/respondent-token";
 import { COLLECTIONS } from "@/lib/db/collections";
 import { toResultDocFields } from "@/lib/db/mappers/result";
-import { getExamPage } from "@/lib/presentation/exam-pages";
+import { getExamStep, type ExamStepNo } from "@/lib/presentation/exam-steps";
 import type {
   AnswersSavedDto,
   AssessmentLinkDto,
@@ -41,7 +42,7 @@ import {
   registerViaApi,
   registrationBody,
   respondentApi,
-  saveAllPagesViaApi,
+  saveAllStepsViaApi,
 } from "../helpers/respondent-api";
 import { cookieHeaderFrom, errorCode, setCookieLine } from "../helpers/routes";
 
@@ -57,16 +58,19 @@ async function issuesOf(res: Response): Promise<Array<{ path: string; message: s
   return body.error.details.issues ?? [];
 }
 
-/** ページ pageNo の全設問に choice を付けた本文 */
-function pageBody(pageNo: number, choice = 3) {
+/** ステップ stepNo の全設問に choice を付けた本文 { stepNo, answers }（11-1 §3.4.2） */
+function stepBody(stepNo: ExamStepNo, choice = 3) {
   return {
-    pageNo,
-    answers: getExamPage(pageNo).questions.map((q) => ({
+    stepNo,
+    answers: getExamStep(stepNo).questions.map((q) => ({
       questionNo: q.questionNo,
       choiceCode: choice,
     })),
   };
 }
+
+const range = (from: number, to: number): number[] =>
+  Array.from({ length: to - from + 1 }, (_, i) => from + i);
 
 async function sessionDoc(sessionId: string): Promise<Doc> {
   const doc = await getDocForTest(COLLECTIONS.assessmentSessions, sessionId);
@@ -118,14 +122,11 @@ describe("I-10 受検リンクの検証 GET /respondent/organizations/{id}", () 
 
   it("resumable は同じ組織・同じ区分の draft だけ（別区分・別組織・送信済み・不正な Cookie は null。エラーにしない）", async () => {
     const r = await registerViaApi({ organizationId: org.organizationId });
-    await respondentApi.saveAnswers(r.sessionId, r.cookieHeader, pageBody(1));
+    await respondentApi.saveAnswers(r.sessionId, r.cookieHeader, stepBody(1));
     const same = (await (
       await respondentApi.organization(org.organizationId, { cookieHeader: r.cookieHeader })
     ).json()) as AssessmentLinkDto;
-    expect(same.resumable).toEqual({
-      sessionId: r.sessionId,
-      answeredCount: getExamPage(1).questions.length,
-    });
+    expect(same.resumable).toEqual({ sessionId: r.sessionId, answeredCount: 41 });
 
     const otherKind = (await (
       await respondentApi.organization(org.organizationId, {
@@ -155,13 +156,14 @@ describe("I-10 受検リンクの検証 GET /respondent/organizations/{id}", () 
   });
 });
 
-describe("I-11 受検者登録 POST /respondent/sessions", () => {
-  it("201 と HttpOnly の tk_session。4 文書が 1 バッチで相互参照し、平文トークンは Firestore のどこにも無い", async () => {
+describe("M7-exam-20 受験者登録（求職者）POST /respondent/sessions", () => {
+  it("201 と HttpOnly の tk_session。respondents・assessmentSessions・auditLogs が 1 文書ずつ相互参照し、usageLogs は作らない。平文トークンは Firestore のどこにも無い", async () => {
+    const usageLogsBefore = await countDocs(COLLECTIONS.usageLogs);
     const res = await respondentApi.register(
       registrationBody({
         organizationId: org.organizationId,
-        name: "　山田 太郎　",
-        phoneNumber: "０９０－１２３４－５６７８",
+        name: "　見本 花子　",
+        phoneNumber: "00000000000",
         occupationCode: 5,
         diagnosisExperience: "experienced",
       }),
@@ -194,39 +196,35 @@ describe("I-11 受検者登録 POST /respondent/sessions", () => {
       status: "draft",
       sessionTokenHash: sha256(token),
       answers: {},
-      lastSavedPageNo: null,
+      lastSavedStepNo: null,
       startedAt: null,
       submittedAt: null,
       resultId: null,
       deletedAt: null,
     });
+    expect(Object.hasOwn(session, "lastSavedPageNo")).toBe(false); // 書かない（11-1 §3.2.2）
     expect((session.tokenExpiresAt as Timestamp).toDate().toISOString()).toBe(dto.tokenExpiresAt);
     const respondentId = session.respondentId as string;
     const respondent = (await getDocForTest(COLLECTIONS.respondents, respondentId))!;
     expect(respondent).toMatchObject({
       organizationId: org.organizationId,
       kind: "applicant",
-      name: "山田 太郎",
-      phoneNumber: "090-1234-5678",
+      name: "見本 花子",
+      phoneNumber: "00000000000",
       occupationCode: 5,
       diagnosisExperience: "experienced",
       teamCode: null,
       isExcluded: false,
       sessionId: dto.sessionId,
+      usageLogId: null,
+      previousResultId: null,
       resultId: null,
       deletedAt: null,
     });
     expect(Object.hasOwn(respondent, "deletedAt")).toBe(true);
-    const usage = (await getDocForTest(COLLECTIONS.usageLogs, respondent.usageLogId as string))!;
-    expect(usage).toMatchObject({
-      organizationId: org.organizationId,
-      respondentId,
-      respondentKind: "applicant",
-      name: "山田 太郎",
-      phoneNumber: "090-1234-5678",
-      resultId: null,
-      submittedAt: null,
-    });
+    // 利用履歴は送信のときに作る（11-1 §2.7.4）
+    expect(await countDocs(COLLECTIONS.usageLogs)).toBe(usageLogsBefore);
+    expect(await countDocs(COLLECTIONS.usageLogs, [["respondentId", "==", respondentId]])).toBe(0);
     const audits = await listDocs(COLLECTIONS.auditLogs);
     const register = audits.filter(
       (a) => a.data.action === "respondent.register" && a.data.targetId === respondentId,
@@ -238,79 +236,14 @@ describe("I-11 受検者登録 POST /respondent/sessions", () => {
       actorUid: respondentId,
       actorRole: null,
       targetCollection: COLLECTIONS.respondents,
-      details: { kind: "applicant" },
+      details: { kind: "applicant", previousCandidate: false },
     });
+    expect(JSON.stringify(register[0]!.data)).not.toContain("見本");
 
     // 平文トークンは 8 コレクションのどの文書にも無い（00 D-32）
     for (const name of Object.values(COLLECTIONS)) {
       expect(JSON.stringify(await listDocs(name))).not.toContain(token);
     }
-  });
-
-  it.each<[string, Record<string, unknown>, string]>([
-    ["氏名が空白のみ", { name: "　 " }, "name"],
-    ["氏名が 101 文字", { name: "あ".repeat(101) }, "name"],
-    ["電話番号が 8 文字未満", { phoneNumber: "12345" }, "phoneNumber"],
-    ["電話番号に英字", { phoneNumber: "abc-1234-5678" }, "phoneNumber"],
-    ["職業が 9（旧データの「その他」。欠番）", { occupationCode: 9 }, "occupationCode"],
-    ["職業が 11", { occupationCode: 11 }, "occupationCode"],
-    ["職業が文字列", { occupationCode: "2" }, "occupationCode"],
-    ["診断経験が区分外", { diagnosisExperience: "never" }, "diagnosisExperience"],
-    ["区分が区分外", { kind: "manager" }, "kind"],
-    ["組織 ID の形式不正", { organizationId: "a/b" }, "organizationId"],
-  ])(
-    "%s は 422 VALIDATION_ERROR（issues の path、値は返さない）で何も書かない",
-    async (_, patch, path) => {
-      const before = await countDocs(COLLECTIONS.respondents);
-      const res = await respondentApi.register({
-        ...registrationBody({ organizationId: org.organizationId }),
-        ...patch,
-      });
-      expect(res.status).toBe(422);
-      expect(await errorCode(res)).toBe("VALIDATION_ERROR");
-      expect((await issuesOf(res)).map((i) => i.path)).toContain(path);
-      expect(JSON.stringify(await res.clone().json())).not.toContain("abc-1234-5678");
-      expect(setCookieLine(res, RESPONDENT_COOKIE_NAME)).toBeNull();
-      expect(await countDocs(COLLECTIONS.respondents)).toBe(before);
-    },
-  );
-
-  it("M7-exam-22 の職業の分: 職業 10（責任者。K-21）は 201 で、respondents.occupationCode に 10 が入る", async () => {
-    const res = await respondentApi.register(
-      registrationBody({ organizationId: org.organizationId, occupationCode: 10 }),
-    );
-    expect(res.status).toBe(201);
-    const dto = (await res.json()) as SessionCreatedDto;
-    const session = await sessionDoc(dto.sessionId);
-    const respondent = (await getDocForTest(
-      COLLECTIONS.respondents,
-      session.respondentId as string,
-    ))!;
-    expect(respondent.occupationCode).toBe(10);
-  });
-
-  it("Content-Type が JSON でなければ 415、JSON の構文エラーは 400、存在しない組織は 404 ORGANIZATION_NOT_FOUND", async () => {
-    const { callRoute } = await import("../helpers/routes");
-    const { POST } = await import("@/app/api/v1/respondent/sessions/route");
-    const text = await callRoute(POST, {
-      method: "POST",
-      url: "/api/v1/respondent/sessions",
-      rawBody: "{}",
-      contentType: "text/plain",
-    });
-    expect(text.status).toBe(415);
-    const broken = await callRoute(POST, {
-      method: "POST",
-      url: "/api/v1/respondent/sessions",
-      rawBody: "{",
-    });
-    expect(broken.status).toBe(400);
-    expect(await errorCode(broken)).toBe("INVALID_JSON");
-    const missing = await respondentApi.register(
-      registrationBody({ organizationId: "NoSuchOrganization00" }),
-    );
-    expect(missing.status).toBe(404);
-    expect(await errorCode(missing)).toBe("ORGANIZATION_NOT_FOUND");
   });
 
   it("同じ組織・同じ IP の 21 件目は 429 RATE_LIMITED（Retry-After: 600）。別 IP・別組織は数えない（04 §2.8、09 §6.4 の 27）", async () => {
@@ -347,8 +280,138 @@ describe("I-11 受検者登録 POST /respondent/sessions", () => {
   });
 });
 
-describe("進行状態の取得と開始（04 §4.3）", () => {
-  it("GET は保存済み回答を questionNo 昇順の配列で返し、氏名・電話番号は返さない", async () => {
+describe("M7-exam-21 登録の組織", () => {
+  /** 登録で増える 4 コレクションの件数 */
+  const counts = async () =>
+    Promise.all(
+      [
+        COLLECTIONS.respondents,
+        COLLECTIONS.assessmentSessions,
+        COLLECTIONS.usageLogs,
+        COLLECTIONS.auditLogs,
+      ].map((name) => countDocs(name)),
+    );
+
+  it("存在しない組織・論理削除した組織は 404 ORGANIZATION_NOT_FOUND、形の違う organizationId は 422（path が organizationId）。どれも文書が増えず Cookie も出さない", async () => {
+    const doomed = await createTestOrganization("削除済み歯科");
+    await writeDocForTest(COLLECTIONS.organizations, doomed.organizationId, {
+      deletedAt: Timestamp.now(),
+    });
+    const before = await counts();
+    const missing = await respondentApi.register(
+      registrationBody({ organizationId: "NoSuchOrganization00" }),
+    );
+    expect(missing.status).toBe(404);
+    expect(await errorCode(missing)).toBe("ORGANIZATION_NOT_FOUND");
+
+    const deleted = await respondentApi.register(
+      registrationBody({ organizationId: doomed.organizationId }),
+    );
+    expect(deleted.status).toBe(404);
+    expect(await errorCode(deleted)).toBe("ORGANIZATION_NOT_FOUND");
+
+    for (const organizationId of ["a/b", "", "bad-id"]) {
+      const malformed = await respondentApi.register(registrationBody({ organizationId }));
+      expect(malformed.status, organizationId).toBe(422);
+      expect(await errorCode(malformed)).toBe("VALIDATION_ERROR");
+      expect((await issuesOf(malformed)).map((i) => i.path)).toEqual(["organizationId"]);
+    }
+    for (const res of [missing, deleted]) {
+      expect(setCookieLine(res, RESPONDENT_COOKIE_NAME)).toBeNull();
+    }
+    expect(await counts()).toEqual(before);
+  });
+
+  it("Content-Type が JSON でなければ 415、JSON の構文エラーは 400", async () => {
+    const { callRoute } = await import("../helpers/routes");
+    const { POST } = await import("@/app/api/v1/respondent/sessions/route");
+    const text = await callRoute(POST, {
+      method: "POST",
+      url: "/api/v1/respondent/sessions",
+      rawBody: "{}",
+      contentType: "text/plain",
+    });
+    expect(text.status).toBe(415);
+    const broken = await callRoute(POST, {
+      method: "POST",
+      url: "/api/v1/respondent/sessions",
+      rawBody: "{",
+    });
+    expect(broken.status).toBe(400);
+    expect(await errorCode(broken)).toBe("INVALID_JSON");
+  });
+});
+
+describe("M7-exam-22 登録の入力", () => {
+  it("電話番号「 ０９０ーabc 」は「０９０ーabc」で保存される（前後の空白だけ除き、書式を見ず正規化しない）", async () => {
+    const res = await respondentApi.register(
+      registrationBody({ organizationId: org.organizationId, phoneNumber: " ０９０ーabc " }),
+    );
+    expect(res.status).toBe(201);
+    const dto = (await res.json()) as SessionCreatedDto;
+    const session = await sessionDoc(dto.sessionId);
+    const respondent = (await getDocForTest(
+      COLLECTIONS.respondents,
+      session.respondentId as string,
+    ))!;
+    expect(respondent.phoneNumber).toBe("０９０ーabc");
+  });
+
+  it("電話番号 30 文字・お名前 100 文字は 201", async () => {
+    const res = await respondentApi.register(
+      registrationBody({
+        organizationId: org.organizationId,
+        name: "あ".repeat(100),
+        phoneNumber: "0".repeat(30),
+      }),
+    );
+    expect(res.status).toBe(201);
+  });
+
+  it("職業 10（責任者。K-21）は 201 で、respondents.occupationCode に 10 が入る", async () => {
+    const res = await respondentApi.register(
+      registrationBody({ organizationId: org.organizationId, occupationCode: 10 }),
+    );
+    expect(res.status).toBe(201);
+    const dto = (await res.json()) as SessionCreatedDto;
+    const session = await sessionDoc(dto.sessionId);
+    const respondent = (await getDocForTest(
+      COLLECTIONS.respondents,
+      session.respondentId as string,
+    ))!;
+    expect(respondent.occupationCode).toBe(10);
+  });
+
+  it.each<[string, Record<string, unknown>, string]>([
+    ["お名前が空白のみ", { name: "　 " }, "name"],
+    ["お名前が 101 文字", { name: "あ".repeat(101) }, "name"],
+    ["電話番号が空白のみ", { phoneNumber: " 　" }, "phoneNumber"],
+    ["電話番号が 31 文字", { phoneNumber: "0".repeat(31) }, "phoneNumber"],
+    ["職業が 9（旧データの「その他」。欠番）", { occupationCode: 9 }, "occupationCode"],
+    ["職業が 11", { occupationCode: 11 }, "occupationCode"],
+    ["職業が文字列", { occupationCode: "2" }, "occupationCode"],
+    ["診断経験が区分外", { diagnosisExperience: "never" }, "diagnosisExperience"],
+    ["区分が区分外", { kind: "manager" }, "kind"],
+  ])(
+    "%s は 422 VALIDATION_ERROR（issues の path、値は返さない）で何も書かない",
+    async (_, patch, path) => {
+      const before = await countDocs(COLLECTIONS.respondents);
+      const res = await respondentApi.register({
+        ...registrationBody({ organizationId: org.organizationId }),
+        ...patch,
+      });
+      expect(res.status).toBe(422);
+      expect(await errorCode(res)).toBe("VALIDATION_ERROR");
+      expect((await issuesOf(res)).map((i) => i.path)).toContain(path);
+      expect(JSON.stringify(await res.clone().json())).not.toContain("0".repeat(31));
+      expect(setCookieLine(res, RESPONDENT_COOKIE_NAME)).toBeNull();
+      expect(await countDocs(COLLECTIONS.respondents)).toBe(before);
+    },
+  );
+});
+
+describe("進行状態の取得と開始（04 §4.3、11-1 §3.4.4）", () => {
+  it("GET は保存済み回答を questionNo 昇順の配列と lastSavedStepNo（M7-exam-31）で返し、氏名・電話番号は返さない", async () => {
     const r = await registerViaApi({ organizationId: org.organizationId, name: "非表示 太郎" });
     const initial = await respondentApi.progress(r.sessionId, r.cookieHeader);
     expect(initial.status).toBe(200);
@@ -358,7 +421,7 @@ describe("進行状態の取得と開始（04 §4.3）", () => {
       kind: "applicant",
       status: "draft",
       startedAt: null,
-      lastSavedPageNo: null,
+      lastSavedStepNo: null,
       answeredCount: 0,
       totalCount: 144,
       answers: [],
@@ -366,18 +429,15 @@ describe("進行状態の取得と開始（04 §4.3）", () => {
     });
     expect(setCookieLine(initial, RESPONDENT_COOKIE_NAME)).toBeNull(); // GET は期限を延長しない
 
-    await respondentApi.saveAnswers(r.sessionId, r.cookieHeader, pageBody(2, 4));
-    await respondentApi.saveAnswers(r.sessionId, r.cookieHeader, pageBody(1, 5));
+    await respondentApi.saveAnswers(r.sessionId, r.cookieHeader, stepBody(2, 4));
+    await respondentApi.saveAnswers(r.sessionId, r.cookieHeader, stepBody(1, 5));
     const body = (await (
       await respondentApi.progress(r.sessionId, r.cookieHeader)
     ).json()) as SessionProgressDto;
-    expect(body.answeredCount).toBe(
-      getExamPage(1).questions.length + getExamPage(2).questions.length,
-    );
-    expect(body.lastSavedPageNo).toBe(1);
-    expect(body.answers.map((a) => a.questionNo)).toEqual(
-      [...getExamPage(1).questions, ...getExamPage(2).questions].map((q) => q.questionNo),
-    );
+    expect(body.answeredCount).toBe(82);
+    expect(body.lastSavedStepNo).toBe(1);
+    expect(body).not.toHaveProperty("lastSavedPageNo");
+    expect(body.answers.map((a) => a.questionNo)).toEqual(range(1, 82));
     expect(body.answers[0]).toEqual({ questionNo: 1, choiceCode: 5 });
     expect(JSON.stringify(body)).not.toContain("非表示");
     expect(JSON.stringify(body)).not.toContain("090");
@@ -417,7 +477,7 @@ describe("進行状態の取得と開始（04 §4.3）", () => {
     for (const res of [
       await respondentApi.progress(r.sessionId),
       await respondentApi.start(r.sessionId),
-      await respondentApi.saveAnswers(r.sessionId, undefined, pageBody(1)),
+      await respondentApi.saveAnswers(r.sessionId, undefined, stepBody(1)),
       await respondentApi.submit(r.sessionId),
       await respondentApi.progress("NoSuchSession0000000", r.cookieHeader),
     ]) {
@@ -440,31 +500,32 @@ describe("進行状態の取得と開始（04 §4.3）", () => {
   });
 });
 
-describe("I-12 回答の保存 PUT …/answers", () => {
-  it('20 ページを保存すると answers は "1"〜"144" のキーだけで値は 1〜5。ページ保存は部分更新で、期限と lastSavedPageNo が毎回更新される', async () => {
+describe("M7-exam-23 回答の保存 PUT …/answers", () => {
+  it('stepNo: 1 で Q1〜Q41 の 41 問を 1 回で保存できる。4 ステップを保存すると answers は "1"〜"144" のキーだけで、lastSavedStepNo が保存したステップになり期限が毎回延びる', async () => {
     const r = await registerViaApi({ organizationId: org.organizationId });
     let previousExpiry = new Date(r.dto.tokenExpiresAt).getTime();
-    for (let pageNo = 1; pageNo <= 20; pageNo += 1) {
-      const res = await respondentApi.saveAnswers(r.sessionId, r.cookieHeader, pageBody(pageNo, 4));
+    for (const stepNo of [1, 2, 3, 4] as const) {
+      const res = await respondentApi.saveAnswers(r.sessionId, r.cookieHeader, stepBody(stepNo, 4));
       expect(res.status).toBe(200);
       const dto = (await res.json()) as AnswersSavedDto;
-      const size = getExamPage(pageNo).questions.length;
       expect(dto).toMatchObject({
         sessionId: r.sessionId,
-        pageNo,
-        savedCount: size,
+        stepNo,
+        savedCount: getExamStep(stepNo).questions.length,
         totalCount: 144,
-        lastSavedPageNo: pageNo,
+        lastSavedStepNo: stepNo,
       });
       const expiry = new Date(dto.tokenExpiresAt).getTime();
       expect(expiry).toBeGreaterThanOrEqual(previousExpiry);
       previousExpiry = expiry;
       expect(cookieHeaderFrom(res, RESPONDENT_COOKIE_NAME)).toBe(r.cookieHeader);
       const session = await sessionDoc(r.sessionId);
-      expect(session.lastSavedPageNo).toBe(pageNo);
+      expect(session.lastSavedStepNo).toBe(stepNo);
+      expect(Object.hasOwn(session, "lastSavedPageNo")).toBe(false);
       expect((session.tokenExpiresAt as Timestamp).toMillis()).toBe(expiry);
       expect(dto.answeredCount).toBe(Object.keys(session.answers as Doc).length);
     }
+    expect(getExamStep(1).questions.map((q) => q.questionNo)).toEqual(range(1, 41));
     const answers = (await sessionDoc(r.sessionId)).answers as Record<string, number>;
     expect(Object.keys(answers).sort((a, b) => Number(a) - Number(b))).toEqual(
       Array.from({ length: 144 }, (_, i) => String(i + 1)),
@@ -473,17 +534,22 @@ describe("I-12 回答の保存 PUT …/answers", () => {
     // 文書サイズの目安（09 §6.4 の 13。1 MiB の上限に対して十分小さいこと）
     expect(JSON.stringify(await sessionDoc(r.sessionId)).length).toBeLessThan(10_000);
 
-    // ページ 2 を上書きしてもページ 1 の値は残る
-    await respondentApi.saveAnswers(r.sessionId, r.cookieHeader, pageBody(2, 1));
-    const after = (await sessionDoc(r.sessionId)).answers as Record<string, number>;
-    for (const q of getExamPage(1).questions) expect(after[String(q.questionNo)]).toBe(4);
-    for (const q of getExamPage(2).questions) expect(after[String(q.questionNo)]).toBe(1);
+    // Step 2 を上書きしても、保存したステップ以外の回答は消えない
+    await respondentApi.saveAnswers(r.sessionId, r.cookieHeader, stepBody(2, 1));
+    const after = await sessionDoc(r.sessionId);
+    const afterAnswers = after.answers as Record<string, number>;
+    for (const stepNo of [1, 3, 4] as const) {
+      for (const q of getExamStep(stepNo).questions)
+        expect(afterAnswers[String(q.questionNo)]).toBe(4);
+    }
+    for (const q of getExamStep(2).questions) expect(afterAnswers[String(q.questionNo)]).toBe(1);
+    expect(after.lastSavedStepNo).toBe(2);
   });
 
-  it("ページ内の一部だけの保存も受け付ける（D04-19）", async () => {
+  it("ステップの一部だけの保存も受け付ける（選んだ時点の保存。D04-19）", async () => {
     const r = await registerViaApi({ organizationId: org.organizationId });
     const res = await respondentApi.saveAnswers(r.sessionId, r.cookieHeader, {
-      pageNo: 1,
+      stepNo: 1,
       answers: [{ questionNo: 3, choiceCode: 2 }],
     });
     expect(res.status).toBe(200);
@@ -493,44 +559,44 @@ describe("I-12 回答の保存 PUT …/answers", () => {
   it.each<[string, unknown, string]>([
     [
       "questionNo = 145",
-      { pageNo: 20, answers: [{ questionNo: 145, choiceCode: 1 }] },
+      { stepNo: 4, answers: [{ questionNo: 145, choiceCode: 1 }] },
       "answers[0].questionNo",
     ],
     [
       "choiceCode = 6",
-      { pageNo: 1, answers: [{ questionNo: 1, choiceCode: 6 }] },
+      { stepNo: 1, answers: [{ questionNo: 1, choiceCode: 6 }] },
       "answers[0].choiceCode",
     ],
     [
       "choiceCode = 0",
-      { pageNo: 1, answers: [{ questionNo: 1, choiceCode: 0 }] },
+      { stepNo: 1, answers: [{ questionNo: 1, choiceCode: 0 }] },
       "answers[0].choiceCode",
     ],
     [
       "questionNo が数字でない",
-      { pageNo: 1, answers: [{ questionNo: "abc", choiceCode: 1 }] },
+      { stepNo: 1, answers: [{ questionNo: "abc", choiceCode: 1 }] },
       "answers[0].questionNo",
     ],
     [
       "questionNo が数字文字列",
-      { pageNo: 1, answers: [{ questionNo: "1", choiceCode: 1 }] },
+      { stepNo: 1, answers: [{ questionNo: "1", choiceCode: 1 }] },
       "answers[0].questionNo",
     ],
-    ["pageNo = 0", { pageNo: 0, answers: [{ questionNo: 1, choiceCode: 1 }] }, "pageNo"],
-    ["pageNo = 21", { pageNo: 21, answers: [{ questionNo: 1, choiceCode: 1 }] }, "pageNo"],
-    ["answers が空", { pageNo: 1, answers: [] }, "answers"],
+    ["stepNo = 0", { stepNo: 0, answers: [{ questionNo: 1, choiceCode: 1 }] }, "stepNo"],
+    ["stepNo = 5", { stepNo: 5, answers: [{ questionNo: 1, choiceCode: 1 }] }, "stepNo"],
+    ["answers が空", { stepNo: 1, answers: [] }, "answers"],
     [
-      "9 件以上",
+      "42 件",
       {
-        pageNo: 1,
-        answers: Array.from({ length: 9 }, (_, i) => ({ questionNo: i + 1, choiceCode: 1 })),
+        stepNo: 1,
+        answers: range(1, 42).map((questionNo) => ({ questionNo, choiceCode: 1 })),
       },
       "answers",
     ],
     [
       "設問番号の重複",
       {
-        pageNo: 1,
+        stepNo: 1,
         answers: [
           { questionNo: 1, choiceCode: 1 },
           { questionNo: 1, choiceCode: 2 },
@@ -539,13 +605,24 @@ describe("I-12 回答の保存 PUT …/answers", () => {
       "answers[1].questionNo",
     ],
     [
-      "ページに属さない設問",
-      { pageNo: 2, answers: [{ questionNo: 1, choiceCode: 1 }] },
-      "answers[0].questionNo",
+      "stepNo: 1 に Q42 を含める（ステップに属さない設問）",
+      {
+        stepNo: 1,
+        answers: [
+          { questionNo: 41, choiceCode: 1 },
+          { questionNo: 42, choiceCode: 1 },
+        ],
+      },
+      "answers[1].questionNo",
+    ],
+    [
+      "pageNo だけの本文（M7 より前の画面の形）",
+      { pageNo: 1, answers: [{ questionNo: 1, choiceCode: 1 }] },
+      "stepNo",
     ],
   ])("%s は 422 VALIDATION_ERROR で何も書かない", async (_, body, path) => {
     const r = await registerViaApi({ organizationId: org.organizationId });
-    await respondentApi.saveAnswers(r.sessionId, r.cookieHeader, pageBody(1, 3));
+    await respondentApi.saveAnswers(r.sessionId, r.cookieHeader, stepBody(1, 3));
     const before = await sessionDoc(r.sessionId);
     const res = await respondentApi.saveAnswers(r.sessionId, r.cookieHeader, body);
     expect(res.status).toBe(422);
@@ -554,27 +631,29 @@ describe("I-12 回答の保存 PUT …/answers", () => {
     expect(setCookieLine(res, RESPONDENT_COOKIE_NAME)).toBeNull();
     const after = await sessionDoc(r.sessionId);
     expect(after.answers).toEqual(before.answers);
+    expect(after.lastSavedStepNo).toBe(1);
     expect((after.updatedAt as Timestamp).isEqual(before.updatedAt as Timestamp)).toBe(true);
   });
 
-  it("ページに属さない設問の文言は「このページの設問ではありません」", async () => {
+  it("ステップに属さない設問の文言は「このステップの設問ではありません」", async () => {
     const r = await registerViaApi({ organizationId: org.organizationId });
     const res = await respondentApi.saveAnswers(r.sessionId, r.cookieHeader, {
-      pageNo: 2,
+      stepNo: 2,
       answers: [{ questionNo: 1, choiceCode: 1 }],
     });
     expect(await issuesOf(res)).toEqual([
-      { path: "answers[0].questionNo", message: "このページの設問ではありません" },
+      { path: "answers[0].questionNo", message: "このステップの設問ではありません" },
     ]);
   });
 });
 
-describe("I-13 送信 POST …/submit", () => {
-  it("results 1 文書が scoreAnswers と完全一致し、5 書き込みが同じ submittedAt で反映される。応答に採点結果を含めない", async () => {
+describe("M7-exam-24 送信（求職者）POST …/submit", () => {
+  it("results 1 文書が scoreAnswers と完全一致し、区分は求職者・入社日などは null・前回は null。利用履歴を 1 文書作り受検者の usageLogId がそれを指す。5 書き込みが同じ submittedAt で反映され、応答に採点結果を含めない", async () => {
     const answers: AnswerMap = cyclicAnswers();
+    const usageLogsBefore = await countDocs(COLLECTIONS.usageLogs);
     const r = await registerViaApi({ organizationId: org.organizationId });
     await respondentApi.start(r.sessionId, r.cookieHeader);
-    await saveAllPagesViaApi(r.sessionId, r.cookieHeader, answers);
+    await saveAllStepsViaApi(r.sessionId, r.cookieHeader, answers);
     const res = await respondentApi.submit(r.sessionId, r.cookieHeader);
     expect(res.status).toBe(200);
     const dto = (await res.json()) as SessionSubmittedDto;
@@ -622,25 +701,47 @@ describe("I-13 送信 POST …/submit", () => {
       isExcluded: false,
       deletedAt: null,
       aiGenerationStatus: "not_generated",
+      // 区分は受験のときの値（K-28）。入社日・退職日・役職は null、前回の結果につながない（11-1 §2.7.2）
+      employmentStatus: "candidate",
+      hiredOn: null,
+      leftOn: null,
+      staffRole: null,
+      previousResultId: null,
     });
 
+    // 利用履歴は送信のときに作る（11-1 §2.7.4）。I-M7-4: 受検者の usageLogId が指し、受検者区分と一致する
     const respondent = (await getDocForTest(
       COLLECTIONS.respondents,
       result.respondentId as string,
     ))!;
-    const usage = (await getDocForTest(COLLECTIONS.usageLogs, respondent.usageLogId as string))!;
     expect(respondent.resultId).toBe(resultId);
-    expect(usage.resultId).toBe(resultId);
+    expect(respondent.usageLogId).toEqual(expect.any(String));
+    expect(await countDocs(COLLECTIONS.usageLogs)).toBe(usageLogsBefore + 1);
+    const usageLogs = (await listDocs(COLLECTIONS.usageLogs)).filter(
+      (d) => d.data.respondentId === result.respondentId,
+    );
+    expect(usageLogs.map((d) => d.id)).toEqual([respondent.usageLogId]);
+    const usage = usageLogs[0]!.data;
+    expect(usage).toMatchObject({
+      organizationId: org.organizationId,
+      respondentId: result.respondentId,
+      resultId,
+      respondentKind: respondent.kind,
+      name: respondent.name,
+      phoneNumber: respondent.phoneNumber,
+      diagnosisExperience: respondent.diagnosisExperience,
+    });
+    expect(usage.respondentKind).toBe("applicant");
+    expect((usage.registeredAt as Timestamp).isEqual(respondent.createdAt as Timestamp)).toBe(true);
     const submittedAt = result.submittedAt as Timestamp;
     expect((session.submittedAt as Timestamp).isEqual(submittedAt)).toBe(true);
     expect((usage.submittedAt as Timestamp).isEqual(submittedAt)).toBe(true);
     expect(submittedAt.toDate().toISOString()).toBe(dto.submittedAt);
-    expect(
-      await countDocs(COLLECTIONS.auditLogs, [
-        ["action", "==", "session.submit"],
-        ["targetId", "==", resultId],
-      ]),
-    ).toBe(1);
+    const submits = (await listDocs(COLLECTIONS.auditLogs)).filter(
+      (a) => a.data.action === "session.submit" && a.data.targetId === resultId,
+    );
+    expect(submits).toHaveLength(1);
+    expect(submits[0]!.data.details).toEqual({ scoringVersion: "1.0.0", linkedPrevious: false });
 
     // 送信後も GET は 200（完了画面の確認用）。開始・保存・送信は 409
     const progress = await respondentApi.progress(r.sessionId, r.cookieHeader);
@@ -648,36 +749,46 @@ describe("I-13 送信 POST …/submit", () => {
     expect(((await progress.json()) as SessionProgressDto).status).toBe("submitted");
     for (const again of [
       await respondentApi.start(r.sessionId, r.cookieHeader),
-      await respondentApi.saveAnswers(r.sessionId, r.cookieHeader, pageBody(1)),
+      await respondentApi.saveAnswers(r.sessionId, r.cookieHeader, stepBody(1)),
       await respondentApi.submit(r.sessionId, r.cookieHeader),
     ]) {
       expect(again.status).toBe(409);
       expect(await errorCode(again)).toBe("SESSION_ALREADY_SUBMITTED");
     }
     expect(await countDocs(COLLECTIONS.results, [["sessionId", "==", r.sessionId]])).toBe(1);
+    expect(
+      await countDocs(COLLECTIONS.usageLogs, [["respondentId", "==", result.respondentId]]),
+    ).toBe(1);
   });
 });
 
 describe("I-14 未回答で送信", () => {
-  it("Q100 欠落は 422 ANSWERS_INCOMPLETE（details.missing = [100]）。results は作られず draft のまま", async () => {
+  it("Q100 欠落は 422 ANSWERS_INCOMPLETE（details.missing = [100]）。results・利用履歴は作られず draft のまま", async () => {
     const answers: Record<number, number> = { ...uniformAnswers(3) };
     delete answers[100];
     const r = await registerViaApi({ organizationId: org.organizationId });
-    await saveAllPagesViaApi(r.sessionId, r.cookieHeader, answers);
+    await saveAllStepsViaApi(r.sessionId, r.cookieHeader, answers);
     const res = await respondentApi.submit(r.sessionId, r.cookieHeader);
     expect(res.status).toBe(422);
     const body = (await res.json()) as { error: { code: string; details: Doc } };
     expect(body.error.code).toBe("ANSWERS_INCOMPLETE");
     expect(body.error.details).toEqual({ missing: [100] });
     expect(await countDocs(COLLECTIONS.results, [["sessionId", "==", r.sessionId]])).toBe(0);
-    expect((await sessionDoc(r.sessionId)).status).toBe("draft");
+    const session = await sessionDoc(r.sessionId);
+    expect(session.status).toBe("draft");
+    expect(
+      await countDocs(COLLECTIONS.usageLogs, [["respondentId", "==", session.respondentId]]),
+    ).toBe(0);
+    expect(
+      (await getDocForTest(COLLECTIONS.respondents, session.respondentId as string))!.usageLogId,
+    ).toBeNull();
   });
 });
 
-describe("I-15 二重送信", () => {
-  it("同じセッションに submit を並行して 2 回 → 片方 200、他方 409。results は 1 文書で usageLogs.resultId はその 1 件", async () => {
+describe("M7-exam-32 二重送信（I-15 を引き継ぐ）", () => {
+  it("同じセッションに submit を同時に 2 回 → 片方 200、他方 409。results と usageLogs は 1 文書ずつで、受検者の usageLogId がその利用履歴を指す", async () => {
     const r = await registerViaApi({ organizationId: org.organizationId });
-    await saveAllPagesViaApi(r.sessionId, r.cookieHeader, uniformAnswers(2));
+    await saveAllStepsViaApi(r.sessionId, r.cookieHeader, uniformAnswers(2));
     const responses = await Promise.all([
       respondentApi.submit(r.sessionId, r.cookieHeader),
       respondentApi.submit(r.sessionId, r.cookieHeader),
@@ -689,12 +800,15 @@ describe("I-15 二重送信", () => {
       (d) => d.data.sessionId === r.sessionId,
     );
     expect(results).toHaveLength(1);
-    const respondent = (await getDocForTest(
-      COLLECTIONS.respondents,
-      (await sessionDoc(r.sessionId)).respondentId as string,
-    ))!;
-    const usage = (await getDocForTest(COLLECTIONS.usageLogs, respondent.usageLogId as string))!;
-    expect(usage.resultId).toBe(results[0]!.id);
+    const respondentId = (await sessionDoc(r.sessionId)).respondentId as string;
+    const respondent = (await getDocForTest(COLLECTIONS.respondents, respondentId))!;
+    const usageLogs = (await listDocs(COLLECTIONS.usageLogs)).filter(
+      (d) => d.data.respondentId === respondentId,
+    );
+    expect(usageLogs).toHaveLength(1);
+    expect(usageLogs[0]!.id).toBe(respondent.usageLogId);
+    expect(usageLogs[0]!.data.resultId).toBe(results[0]!.id);
+    expect(respondent.resultId).toBe(results[0]!.id);
   });
 });
 
@@ -711,7 +825,7 @@ describe("I-16 期限切れ", () => {
     );
     const cookieHeader = `${RESPONDENT_COOKIE_NAME}=${issued.token}`;
     for (const res of [
-      await respondentApi.saveAnswers(dto.sessionId, cookieHeader, pageBody(1)),
+      await respondentApi.saveAnswers(dto.sessionId, cookieHeader, stepBody(1)),
       await respondentApi.progress(dto.sessionId, cookieHeader),
       await respondentApi.start(dto.sessionId, cookieHeader),
       await respondentApi.submit(dto.sessionId, cookieHeader),
@@ -733,7 +847,7 @@ describe("I-17 他人のトークン", () => {
     const b = await registerViaApi({ organizationId: org.organizationId });
     const forged = `${RESPONDENT_COOKIE_NAME}=${randomBytes(32).toString("base64url")}`;
     for (const cookie of [b.cookieHeader, forged, `${RESPONDENT_COOKIE_NAME}=%E0%A4%A`]) {
-      const res = await respondentApi.saveAnswers(a.sessionId, cookie, pageBody(1));
+      const res = await respondentApi.saveAnswers(a.sessionId, cookie, stepBody(1));
       expect(res.status).toBe(401);
       expect(await errorCode(res)).toBe("RESPONDENT_TOKEN_INVALID");
     }
@@ -741,8 +855,8 @@ describe("I-17 他人のトークン", () => {
   });
 });
 
-describe("I-18 幹部の送信", () => {
-  it("kind = executive の結果は results.respondentKind・usageLogs.respondentKind が executive（サーバコードで複製）", async () => {
+describe("M7-exam-25 送信（既存スタッフ）", () => {
+  it("kind = executive の受験は区分が在籍（employed）。results.respondentKind・usageLogs.respondentKind が executive（サーバコードで複製）", async () => {
     const r = await completeViaApi(org.organizationId, uniformAnswers(4), { kind: "executive" });
     expect(r.dto.kind).toBe("executive");
     const session = await sessionDoc(r.sessionId);
@@ -753,8 +867,18 @@ describe("I-18 幹部の送信", () => {
     ))!;
     const usage = (await getDocForTest(COLLECTIONS.usageLogs, respondent.usageLogId as string))!;
     expect(respondent.kind).toBe("executive");
-    expect(result.respondentKind).toBe("executive");
-    expect(usage.respondentKind).toBe("executive");
+    expect(result).toMatchObject({
+      respondentKind: "executive",
+      employmentStatus: "employed",
+      hiredOn: null,
+      leftOn: null,
+      staffRole: null,
+      previousResultId: null,
+    });
+    expect(usage).toMatchObject({ respondentKind: "executive", resultId: session.resultId });
+    expect(
+      await countDocs(COLLECTIONS.usageLogs, [["respondentId", "==", session.respondentId]]),
+    ).toBe(1);
   });
 });
 
@@ -766,7 +890,7 @@ describe("PF-03 送信 API の応答時間（ローカル Emulator）", () => {
       const started = performance.now();
       const r = await registerViaApi({ organizationId: org.organizationId });
       await respondentApi.start(r.sessionId, r.cookieHeader);
-      await saveAllPagesViaApi(r.sessionId, r.cookieHeader, cyclicAnswers());
+      await saveAllStepsViaApi(r.sessionId, r.cookieHeader, cyclicAnswers());
       const submitStarted = performance.now();
       const res = await respondentApi.submit(r.sessionId, r.cookieHeader);
       const ended = performance.now();
@@ -780,7 +904,7 @@ describe("PF-03 送信 API の応答時間（ローカル Emulator）", () => {
       `PF-03 submit: median ${median(submitMs).toFixed(0)} ms, max ${Math.max(...submitMs).toFixed(0)} ms / 登録〜送信: median ${median(totalMs).toFixed(0)} ms, max ${Math.max(...totalMs).toFixed(0)} ms`,
     );
     expect(Math.max(...submitMs)).toBeLessThan(2000);
-    // 08 §2.4 の完了条件（登録から送信応答まで）。20 回の保存を含むため中央値で判定する
+    // 08 §2.4 の完了条件（登録から送信応答まで）。4 回の保存を含むため中央値で判定する
     expect(median(totalMs)).toBeLessThan(2000);
   });
 });

@@ -88,7 +88,7 @@ beforeAll(async () => {
     name: "幹部 太郎",
     phoneNumber: "090-9999-9999",
   });
-  // 送信前の受検者（利用履歴にだけ出る）
+  // 送信前の受検者（回答一覧にも利用履歴にも出ない。利用履歴は送信のときに作る。11-1 §2.7.4）
   pendingSessionId = (
     await registerViaApi({ organizationId: org.organizationId, name: "未送信 者" })
   ).sessionId;
@@ -255,7 +255,7 @@ describe("I-22 組織内分類・利用履歴の幹部の可視性", () => {
     }
   });
 
-  it("利用履歴: admin は幹部を含まず、total が count() と一致。応答は { items, total, page, pageSize }", async () => {
+  it("利用履歴: admin は幹部を含まず、total が count() と一致。送信前の受検者は出ない（11-1 §2.7.4）。応答は { items, total, page, pageSize }", async () => {
     const byAdmin = await getJson<PagedDto<UsageLogItemDto>>(
       listUsageLogsRoute,
       "/api/v1/admin/usage-logs",
@@ -266,28 +266,27 @@ describe("I-22 組織内分類・利用履歴の幹部の可視性", () => {
       "/api/v1/admin/usage-logs",
       owner,
     );
-    // 求職者 3 件 + 未送信 1 件、owner はさらに幹部 1 件
+    // 求職者 3 件、owner はさらに幹部 1 件（送信前の受検者の利用履歴は無い）
     expect(byAdmin.total).toBe(
       await countDocs(COLLECTIONS.usageLogs, [
         ["organizationId", "==", org.organizationId],
         ["respondentKind", "==", "applicant"],
       ]),
     );
-    expect(byAdmin.total).toBe(4);
+    expect(byAdmin.total).toBe(3);
     expect(byOwner.total).toBe(
       await countDocs(COLLECTIONS.usageLogs, [["organizationId", "==", org.organizationId]]),
     );
-    expect(byOwner.total).toBe(5);
+    expect(byOwner.total).toBe(4);
     expect(Object.keys(byAdmin).sort()).toEqual(["items", "page", "pageSize", "total"]);
     expect(byAdmin.items.every((i) => i.kind === "applicant")).toBe(true);
     expect(byOwner.items.some((i) => i.kind === "executive")).toBe(true);
 
-    // 既定は registeredAt 降順。未送信は submittedAt / resultId が null
-    const pending = byAdmin.items[0]!;
-    expect(pending.name).toBe("未送信 者");
-    expect(pending.submittedAt).toBeNull();
-    expect(pending.resultId).toBeNull();
+    // 既定は registeredAt 降順。どの行も送信済み（submittedAt・resultId がある）
     expect(pendingSessionId).toBeTruthy();
+    expect(byOwner.items.some((i) => i.name === "未送信 者")).toBe(false);
+    expect(byOwner.items.every((i) => i.submittedAt !== null && i.resultId !== null)).toBe(true);
+    expect(byAdmin.items.map((i) => i.name)).toEqual(["阿部 次郎", "鈴木 花子", "佐藤 一郎"]);
     const registered = byOwner.items.map((i) => Date.parse(i.registeredAt));
     expect(registered).toEqual([...registered].sort((a, b) => b - a));
 
@@ -297,7 +296,7 @@ describe("I-22 組織内分類・利用履歴の幹部の可視性", () => {
       "/api/v1/admin/usage-logs?page=2&pageSize=2&order=asc",
       owner,
     );
-    expect(paged.total).toBe(5);
+    expect(paged.total).toBe(4);
     expect(paged.page).toBe(2);
     expect(paged.pageSize).toBe(2);
     expect(paged.items.map((i) => i.usageLogId)).toEqual(

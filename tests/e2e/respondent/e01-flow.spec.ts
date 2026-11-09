@@ -1,11 +1,11 @@
 // E-01 受検リンク → 登録 → 開始 → 20 ページ回答 → 送信確認 → 完了（05/T-02、T-07、T-11、T-18、決定事項 3）
 import { expect, test } from "../support/fixtures";
 
-import { INACTIVE_QUESTION_TEXTS, questionNosOfPage } from "../support/questions";
+import { INACTIVE_QUESTION_TEXTS, questionNosOfStep } from "../support/questions";
 import {
-  answerCurrentPage,
+  answerCurrentStep,
   e2eName,
-  questionUrl,
+  questionsUrl,
   recordApiCalls,
   registerViaUi,
 } from "../support/respondent";
@@ -26,12 +26,12 @@ test("E-01 受検リンクから 144 問に回答して送信し、完了画面�
 
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("診断を開始する");
   await page.getByTestId("start-button").click();
-  await page.waitForURL(questionUrl(sessionId, 1));
+  await page.waitForURL(questionsUrl(sessionId));
   expect(calls.at(-1)).toBe(`POST /api/v1/respondent/sessions/${sessionId}/start`);
 
   for (let pageNo = 1; pageNo <= 20; pageNo += 1) {
     await expect(page.getByTestId("question-page")).toHaveAttribute("data-page-no", String(pageNo));
-    const expected = questionNosOfPage(pageNo).length;
+    const expected = questionNosOfStep(pageNo).length;
     // 05/T-02: fieldset が 7 または 8 個、ラジオが 35 または 40 個
     await expect(page.locator("fieldset.exam-question")).toHaveCount(expected);
     await expect(page.locator("fieldset.exam-question input[type=radio]")).toHaveCount(
@@ -41,11 +41,11 @@ test("E-01 受検リンクから 144 問に回答して送信し、完了画面�
     // 出題しない Q145〜Q204 の設問文が一度も現れない（決定事項 3）
     for (const text of INACTIVE_QUESTION_TEXTS) expect(body).not.toContain(text);
 
-    await answerCurrentPage(page, pageNo, (q) => ((q - 1) % 5) + 1);
+    await answerCurrentStep(page, pageNo, (q) => ((q - 1) % 5) + 1);
     const before = calls.length;
     if (pageNo < 20) {
       await page.getByTestId("next-button").click();
-      await page.waitForURL(questionUrl(sessionId, pageNo + 1));
+      await page.waitForURL(questionsUrl(sessionId));
       // 05/T-07: 「次へ」で呼ぶ API は PUT answers の 1 本だけ
       expect(calls.slice(before)).toEqual([`PUT /api/v1/respondent/sessions/${sessionId}/answers`]);
     } else {

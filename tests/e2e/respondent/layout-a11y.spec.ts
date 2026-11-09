@@ -5,12 +5,12 @@ import type { Page } from "@playwright/test";
 import { expect, test } from "../support/fixtures";
 
 import {
-  answerCurrentPage,
+  answerCurrentStep,
   linkUrl,
   pressAriaDisabled,
-  questionUrl,
+  questionsUrl,
   registerViaApi,
-  savePagesViaApi,
+  saveStepsViaApi,
   startViaApi,
 } from "../support/respondent";
 
@@ -58,10 +58,10 @@ test.describe("受検者画面のレイアウトとアクセシビリティ", ()
     await page.goto(`/exam/${sessionId}`);
     await expectNoHorizontalScroll(page, "R-02");
     await startViaApi(page, sessionId);
-    await savePagesViaApi(page, sessionId, 4);
+    await saveStepsViaApi(page, sessionId, 4);
     // 8 問のページ（最長の設問を含むページも折り返す）
     await page.goto(`/exam/${sessionId}/questions/5`);
-    await expect(page).toHaveURL(questionUrl(sessionId, 5));
+    await expect(page).toHaveURL(questionsUrl(sessionId));
     await expectNoHorizontalScroll(page, "R-03");
     await expectMinHeight(page, ".exam-choice", 48);
     await expectMinHeight(page, ".exam-nav .exam-button", 48);
@@ -82,13 +82,13 @@ test.describe("受検者画面のレイアウトとアクセシビリティ", ()
     await expectAccessible(page, "R-02");
 
     await startViaApi(page, sessionId);
-    await savePagesViaApi(page, sessionId, 19);
+    await saveStepsViaApi(page, sessionId, 19);
     await page.goto(`/exam/${sessionId}/questions/20`);
     const legends = await page.locator("fieldset.exam-question > legend").allInnerTexts();
     expect(legends).toHaveLength(8);
     for (const text of legends) expect(text).toMatch(/^Q\d+/);
     await expectAccessible(page, "R-03");
-    await answerCurrentPage(page, 20);
+    await answerCurrentStep(page, 20);
     await page.getByTestId("submit-button").click();
     await expect(page.getByTestId("submit-dialog")).toBeVisible();
     await expectAccessible(page, "R-04");

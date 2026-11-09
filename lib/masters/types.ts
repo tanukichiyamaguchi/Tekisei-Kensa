@@ -18,8 +18,7 @@ export interface QuestionDefinition {
   readonly text: string;
   readonly isActive: boolean; // 出題する（Q1〜Q144 のみ true）
   readonly isScored: boolean; // 採点に使う（Q1〜Q144 のみ true）
-  readonly step: 1 | 2 | 3 | 4 | null; // 非出題は null
-  readonly page: 1 | 2 | 3 | 4 | 5 | null;
+  readonly step: 1 | 2 | 3 | 4 | null; // ステップ（Q1〜41・Q42〜82・Q83〜123・Q124〜144。11-1 §2.4.1）。非出題は null
 }
 
 /** 指標 1 つ分の加減算定義（付録B の式をデータ化したもの） */

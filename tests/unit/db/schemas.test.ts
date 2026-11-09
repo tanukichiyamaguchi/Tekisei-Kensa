@@ -1,17 +1,25 @@
 // 作成の検証（02 §2・§3）のうち M7 で足した値と項目: M7-exam-01（職業コード）、M7-list-18（暦日）、
 // results の区分・入社日・退職日・役職（11-2 §3.1）と AI の 3 系統（11-6 §3.1）、aiAnalyses の種類ごとの組み合わせ
-// （11-6 §3.2）、M7-misc-08（組織の招待トークンと管理者の既読。11-8 §3.2・§3.3）
+// （11-6 §3.2）、M7-misc-08（組織の招待トークンと管理者の既読。11-8 §3.2・§3.3）、
+// 受検セッションの lastSavedStepNo と利用履歴の作成（11-1 §3.2.2・§3.2.4）
 import { Timestamp } from "firebase-admin/firestore";
 import { describe, expect, it } from "vitest";
 
 import { toResultDocFields } from "@/lib/db/mappers/result";
 import { adminUserCreateSchema, announcementKeySchema } from "@/lib/db/schemas/admin-user";
 import { aiAnalysisCreateSchema } from "@/lib/db/schemas/ai-analysis";
+import {
+  answersPatchSchema,
+  assessmentSessionCreateSchema,
+  saveAnswersInputSchema,
+} from "@/lib/db/schemas/assessment-session";
 import { organizationCreateSchema } from "@/lib/db/schemas/organization";
 import { resultCreateSchema } from "@/lib/db/schemas/result";
+import { usageLogCreateSchema } from "@/lib/db/schemas/usage-log";
 import {
   calendarDateSchema,
   occupationCodeSchema,
+  stepNoSchema,
   storedOccupationCodeSchema,
 } from "@/lib/db/schemas/values";
 import { isValidCalendarDate } from "@/lib/presentation/employment";
@@ -375,5 +383,96 @@ describe("M7-misc-08 作成の検証（11-8 §3.2・§3.3）", () => {
     ]);
     expect(announcementKeySchema.safeParse("ai_recruitment").success).toBe(true);
     expect(announcementKeySchema.safeParse("other").success).toBe(false);
+  });
+});
+
+describe("受検セッションの作成と保存の検証（11-1 §3.2.2）", () => {
+  const session = (overrides: Record<string, unknown> = {}) => ({
+    organizationId: "org1",
+    respondentId: "resp1",
+    status: "draft",
+    sessionTokenHash: "a".repeat(64),
+    tokenExpiresAt: Timestamp.now(),
+    answers: {},
+    lastSavedStepNo: null,
+    lastAnsweredAt: null,
+    startedAt: null,
+    submittedAt: null,
+    resultId: null,
+    deletedAt: null,
+    ...overrides,
+  });
+
+  it("assessmentSessionCreateSchema は lastSavedStepNo: null で通し、lastSavedPageNo を受け付けない（書かない。strict）", () => {
+    expect(assessmentSessionCreateSchema.safeParse(session()).success).toBe(true);
+    expect(
+      assessmentSessionCreateSchema.safeParse(session({ lastSavedPageNo: null })).success,
+    ).toBe(false);
+    expect(
+      pathsOf(assessmentSessionCreateSchema.safeParse(without(session(), "lastSavedStepNo"))),
+    ).toContain("lastSavedStepNo");
+    expect(assessmentSessionCreateSchema.safeParse(session({ lastSavedStepNo: 1 })).success).toBe(
+      false,
+    );
+  });
+
+  it("stepNoSchema と保存の lastSavedStepNo は 1〜4", () => {
+    for (const n of [1, 2, 3, 4]) {
+      expect(stepNoSchema.safeParse(n).success).toBe(true);
+      expect(saveAnswersInputSchema.safeParse({ lastSavedStepNo: n }).success).toBe(true);
+    }
+    for (const n of [0, 5, 1.5, null]) {
+      expect(stepNoSchema.safeParse(n).success).toBe(false);
+      expect(saveAnswersInputSchema.safeParse({ lastSavedStepNo: n }).success).toBe(false);
+    }
+    expect(saveAnswersInputSchema.safeParse({ lastSavedPageNo: 1 }).success).toBe(false);
+  });
+
+  it("answersPatchSchema は 1 回の保存で 1〜41 問（42 問は拒む）", () => {
+    const patch = (n: number) =>
+      Object.fromEntries(Array.from({ length: n }, (_, i) => [String(i + 1), 3]));
+    expect(answersPatchSchema.safeParse(patch(41)).success).toBe(true);
+    const tooMany = answersPatchSchema.safeParse(patch(42));
+    expect(tooMany.success).toBe(false);
+    expect(tooMany.error?.issues[0]?.message).toBe("1 回の保存の回答は 1〜41 問です");
+  });
+});
+
+describe("usageLogCreateSchema（11-1 §3.2.4。利用履歴は送信のときに作る）", () => {
+  const usageLog = (overrides: Record<string, unknown> = {}) => ({
+    organizationId: "org1",
+    respondentId: "resp1",
+    resultId: "res1",
+    respondentKind: "applicant",
+    name: "見本 花子",
+    phoneNumber: "０９０ーabc",
+    diagnosisExperience: "first_time",
+    registeredAt: Timestamp.now(),
+    submittedAt: Timestamp.now(),
+    ...overrides,
+  });
+
+  it("resultId・submittedAt を書いた作成データを通す（電話番号は前後の空白を除いた入力のまま）", () => {
+    expect(usageLogCreateSchema.safeParse(usageLog()).success).toBe(true);
+    expect(usageLogCreateSchema.safeParse(usageLog({ respondentKind: "executive" })).success).toBe(
+      true,
+    );
+  });
+
+  it("resultId・submittedAt の null と欠けを拒む", () => {
+    for (const field of ["resultId", "submittedAt"]) {
+      expect(pathsOf(usageLogCreateSchema.safeParse(usageLog({ [field]: null }))), field).toContain(
+        field,
+      );
+      expect(pathsOf(usageLogCreateSchema.safeParse(without(usageLog(), field))), field).toContain(
+        field,
+      );
+    }
+    expect(pathsOf(usageLogCreateSchema.safeParse(usageLog({ resultId: "a/b" })))).toContain(
+      "resultId",
+    );
+    expect(
+      pathsOf(usageLogCreateSchema.safeParse(usageLog({ submittedAt: new Date() }))),
+    ).toContain("submittedAt");
   });
 });

@@ -1,93 +1,52 @@
-// 受検者 API のエラー → 画面の動作（05 §5.1.6、§5.2.2、§5.3.7、§5.4.2、§7.1。05/T-06・T-15・T-15a・T-15b の単体部分）
+// M7-exam-10 受検者 API のエラー → 画面の動作（11-1 §2.1.5・§2.2.6・§2.3・§2.4.5〜§2.4.7・§3.5）
 import { describe, expect, it } from "vitest";
 
-import { examPageNoOf } from "@/lib/masters/question-layout";
-import { examErrorAction, issuePaths, type ExamApiOperation } from "@/lib/presentation/exam-errors";
-import { pageNoOfQuestion } from "@/lib/presentation/exam-pages";
-import { EXAM_TEXTS } from "@/lib/presentation/exam-texts";
+import { examErrorAction, issuePaths } from "@/lib/presentation/exam-errors";
 
 const fail = (code: string, status = 400, details: Record<string, unknown> = {}) => ({
   status,
   code,
   details,
 });
+const issues = (...paths: string[]) => ({ issues: paths.map((path) => ({ path, message: "x" })) });
 
-const sessionOps: ExamApiOperation[] = ["start", "save", "submit"];
+/** 通信の失敗・タイムアウト（status 0）と 5xx・そのほかの 4xx */
+const OTHER_FAILURES = [
+  fail("NETWORK_ERROR", 0),
+  fail("TIMEOUT", 0),
+  fail("INTERNAL_ERROR", 500),
+  fail("SERVICE_UNAVAILABLE", 503),
+  fail("INVALID_JSON", 400),
+  fail("UNSUPPORTED_MEDIA_TYPE", 415),
+];
 
-describe("examErrorAction", () => {
-  it.each(sessionOps)(
-    "%s: 401 両コード・404 NOT_FOUND・SESSION_NOT_FOUND は E-04 全面、409 は完了画面へ",
-    (op) => {
-      for (const code of [
-        "RESPONDENT_TOKEN_INVALID",
-        "RESPONDENT_TOKEN_EXPIRED",
-        "NOT_FOUND",
-        "SESSION_NOT_FOUND",
-      ]) {
-        expect(examErrorAction(op, fail(code))).toEqual({ kind: "session_unavailable" });
-      }
-      expect(examErrorAction(op, fail("SESSION_ALREADY_SUBMITTED", 409))).toEqual({
-        kind: "complete",
-      });
-    },
-  );
+const SESSION_UNAVAILABLE = [
+  fail("RESPONDENT_TOKEN_INVALID", 401),
+  fail("RESPONDENT_TOKEN_EXPIRED", 401),
+  fail("NOT_FOUND", 404),
+  fail("SESSION_NOT_FOUND", 404),
+];
 
-  it("429 は E-06、オフラインは E-07（いずれも再試行あり）", () => {
-    for (const op of ["register", ...sessionOps] as ExamApiOperation[]) {
-      expect(examErrorAction(op, fail("RATE_LIMITED", 429))).toEqual({
-        kind: "banner",
-        text: "E-06",
-        retry: true,
-      });
-      expect(examErrorAction(op, fail("OFFLINE", 0))).toEqual({
-        kind: "banner",
-        text: "E-07",
-        retry: true,
-      });
-    }
-  });
-
-  it("保存の失敗（5xx・通信断・422）は E-02 と再試行、開始・送信は E-01 と再試行", () => {
-    for (const code of ["INTERNAL_ERROR", "NETWORK_ERROR", "TIMEOUT", "VALIDATION_ERROR"]) {
-      expect(examErrorAction("save", fail(code))).toEqual({
-        kind: "banner",
-        text: "E-02",
-        retry: true,
-      });
-      expect(examErrorAction("start", fail(code))).toEqual({
-        kind: "banner",
-        text: "E-01",
-        retry: true,
-      });
-    }
-    expect(examErrorAction("submit", fail("SERVICE_UNAVAILABLE", 503))).toEqual({
-      kind: "banner",
-      text: "E-01",
-      retry: true,
-    });
-  });
-
-  it("05/T-15b: 送信の ANSWERS_INCOMPLETE は missing[0]（無ければ invalid[0]）の設問へ", () => {
-    expect(
-      examErrorAction("submit", fail("ANSWERS_INCOMPLETE", 422, { missing: [141, 142] })),
-    ).toEqual({ kind: "unanswered", questionNo: 141 });
-    expect(
-      examErrorAction("submit", fail("ANSWERS_INCOMPLETE", 422, { missing: [], invalid: [7] })),
-    ).toEqual({ kind: "unanswered", questionNo: 7 });
-    expect(examErrorAction("submit", fail("ANSWERS_INCOMPLETE", 422, {}))).toEqual({
-      kind: "banner",
-      text: "E-01",
-      retry: true,
-    });
-    expect(examPageNoOf(141)).toBe(20);
-  });
-
-  it("登録: 404 は E-05（再試行なし）、422 は項目の path、それ以外は E-01", () => {
+describe("M7-exam-10 登録（「診断に進む」）", () => {
+  it("404 ORGANIZATION_NOT_FOUND・404 NOT_FOUND・422（path が organizationId）は R-07 の R7-02", () => {
     expect(examErrorAction("register", fail("ORGANIZATION_NOT_FOUND", 404))).toEqual({
-      kind: "banner",
-      text: "E-05",
-      retry: false,
+      kind: "alert",
+      textId: "R7-02",
     });
+    expect(examErrorAction("register", fail("NOT_FOUND", 404))).toEqual({
+      kind: "alert",
+      textId: "R7-02",
+    });
+    expect(
+      examErrorAction("register", fail("VALIDATION_ERROR", 422, issues("organizationId"))),
+    ).toEqual({ kind: "alert", textId: "R7-02" });
+    // organizationId と項目の両方が不正でも、リンクの誤りを先に知らせる
+    expect(
+      examErrorAction("register", fail("VALIDATION_ERROR", 422, issues("name", "organizationId"))),
+    ).toEqual({ kind: "alert", textId: "R7-02" });
+  });
+
+  it("422 で path の先頭が登録の項目なら、その path で赤枠（ほかの path は落とす）", () => {
     expect(
       examErrorAction(
         "register",
@@ -96,51 +55,149 @@ describe("examErrorAction", () => {
         }),
       ),
     ).toEqual({ kind: "registration_issues", paths: ["phoneNumber", "name"] });
-    for (const code of ["INTERNAL_ERROR", "NETWORK_ERROR", "TIMEOUT", "INVALID_JSON"]) {
-      expect(examErrorAction("register", fail(code))).toEqual({
-        kind: "banner",
-        text: "E-01",
-        retry: true,
+    expect(
+      examErrorAction(
+        "register",
+        fail("VALIDATION_ERROR", 422, issues("occupationCode", "kind", "diagnosisExperience")),
+      ),
+    ).toEqual({ kind: "registration_issues", paths: ["occupationCode", "diagnosisExperience"] });
+  });
+
+  it("そのほかの 422・400・415・5xx・通信の失敗・タイムアウトは E-01、429 は E-06、オフラインは E-07", () => {
+    expect(examErrorAction("register", fail("VALIDATION_ERROR", 422, issues("kind")))).toEqual({
+      kind: "alert",
+      textId: "E-01",
+    });
+    expect(examErrorAction("register", fail("VALIDATION_ERROR", 422))).toEqual({
+      kind: "alert",
+      textId: "E-01",
+    });
+    for (const failure of OTHER_FAILURES) {
+      expect(examErrorAction("register", failure), failure.code).toEqual({
+        kind: "alert",
+        textId: "E-01",
       });
     }
+    expect(examErrorAction("register", fail("RATE_LIMITED", 429))).toEqual({
+      kind: "alert",
+      textId: "E-06",
+    });
+    expect(examErrorAction("register", fail("OFFLINE", 0))).toEqual({
+      kind: "alert",
+      textId: "E-07",
+    });
   });
+});
 
-  it("issuePaths は形の違う details を空配列にする", () => {
+describe("M7-exam-10 開始（「開始する」）", () => {
+  it("409 は完了画面、401・404 は R-06、429 は E-06、オフラインは E-07、そのほかは E-01", () => {
+    expect(examErrorAction("start", fail("SESSION_ALREADY_SUBMITTED", 409))).toEqual({
+      kind: "complete",
+    });
+    for (const failure of SESSION_UNAVAILABLE) {
+      expect(examErrorAction("start", failure)).toEqual({ kind: "session_unavailable" });
+    }
+    expect(examErrorAction("start", fail("RATE_LIMITED", 429))).toEqual({
+      kind: "alert",
+      textId: "E-06",
+    });
+    expect(examErrorAction("start", fail("OFFLINE", 0))).toEqual({
+      kind: "alert",
+      textId: "E-07",
+    });
+    for (const failure of OTHER_FAILURES) {
+      expect(examErrorAction("start", failure)).toEqual({ kind: "alert", textId: "E-01" });
+    }
+  });
+});
+
+describe("M7-exam-10 保存（選んだ時点の自動保存）", () => {
+  it("401・404 は R-06、409 は完了画面、そのほか（通信の失敗・5xx・429・オフライン）は通知せず未送信のまま", () => {
+    for (const failure of SESSION_UNAVAILABLE) {
+      expect(examErrorAction("save", failure)).toEqual({ kind: "session_unavailable" });
+    }
+    expect(examErrorAction("save", fail("SESSION_ALREADY_SUBMITTED", 409))).toEqual({
+      kind: "complete",
+    });
+    for (const failure of [
+      ...OTHER_FAILURES,
+      fail("RATE_LIMITED", 429),
+      fail("OFFLINE", 0),
+      fail("VALIDATION_ERROR", 422),
+    ]) {
+      expect(examErrorAction("save", failure), failure.code).toEqual({ kind: "retry_later" });
+    }
+  });
+});
+
+describe("M7-exam-10 「次へ」「送信する」の前の保存（flush）", () => {
+  it("401・404 は R-06、409 は完了画面、429 は E-06、オフラインは E-07、そのほかは E-02", () => {
+    for (const failure of SESSION_UNAVAILABLE) {
+      expect(examErrorAction("flush", failure)).toEqual({ kind: "session_unavailable" });
+    }
+    expect(examErrorAction("flush", fail("SESSION_ALREADY_SUBMITTED", 409))).toEqual({
+      kind: "complete",
+    });
+    expect(examErrorAction("flush", fail("RATE_LIMITED", 429))).toEqual({
+      kind: "alert",
+      textId: "E-06",
+    });
+    expect(examErrorAction("flush", fail("OFFLINE", 0))).toEqual({
+      kind: "alert",
+      textId: "E-07",
+    });
+    for (const failure of [...OTHER_FAILURES, fail("VALIDATION_ERROR", 422)]) {
+      expect(examErrorAction("flush", failure)).toEqual({ kind: "alert", textId: "E-02" });
+    }
+  });
+});
+
+describe("M7-exam-10 送信", () => {
+  it("409 は完了画面（成功と同じ）", () => {
+    expect(examErrorAction("submit", fail("SESSION_ALREADY_SUBMITTED", 409))).toEqual({
+      kind: "complete",
+    });
+  });
+  it("422 ANSWERS_INCOMPLETE は missing[0]（無ければ invalid[0]）の設問へ", () => {
+    expect(
+      examErrorAction("submit", fail("ANSWERS_INCOMPLETE", 422, { missing: [141, 142] })),
+    ).toEqual({ kind: "unanswered", questionNo: 141 });
+    expect(
+      examErrorAction("submit", fail("ANSWERS_INCOMPLETE", 422, { missing: [], invalid: [7] })),
+    ).toEqual({ kind: "unanswered", questionNo: 7 });
+    expect(examErrorAction("submit", fail("ANSWERS_INCOMPLETE", 422, {}))).toEqual({
+      kind: "alert",
+      textId: "E-01",
+    });
+  });
+  it("401・404 NOT_FOUND・404 SESSION_NOT_FOUND は R-06、429 は E-06、オフラインは E-07、5xx・通信の失敗・タイムアウトは E-01", () => {
+    for (const failure of SESSION_UNAVAILABLE) {
+      expect(examErrorAction("submit", failure)).toEqual({ kind: "session_unavailable" });
+    }
+    expect(examErrorAction("submit", fail("RATE_LIMITED", 429))).toEqual({
+      kind: "alert",
+      textId: "E-06",
+    });
+    expect(examErrorAction("submit", fail("OFFLINE", 0))).toEqual({
+      kind: "alert",
+      textId: "E-07",
+    });
+    for (const failure of OTHER_FAILURES) {
+      expect(examErrorAction("submit", failure)).toEqual({ kind: "alert", textId: "E-01" });
+    }
+  });
+});
+
+describe("issuePaths", () => {
+  it("details.issues[].path の文字列だけを返し、形の違う details は空配列にする", () => {
+    expect(issuePaths(issues("name", "answers[0].questionNo"))).toEqual([
+      "name",
+      "answers[0].questionNo",
+    ]);
     expect(issuePaths({})).toEqual([]);
     expect(issuePaths({ issues: "x" })).toEqual([]);
-  });
-});
-
-describe("examPageNoOf（ブラウザ用。設問文を読み込まない）", () => {
-  it("1〜144 のすべてで pageNoOfQuestion と一致し、範囲外は RangeError", () => {
-    for (let q = 1; q <= 144; q += 1) expect(examPageNoOf(q)).toBe(pageNoOfQuestion(q));
-    expect(() => examPageNoOf(145)).toThrow(RangeError);
-    expect(() => examPageNoOf(0)).toThrow(RangeError);
-  });
-});
-
-describe("exam-texts（05 §9）", () => {
-  it("§9 の ID がそろい、文言が空でない", () => {
-    const ids = [
-      ...["H-01", "L-01", "L-02", "L-03"],
-      ...Array.from({ length: 10 }, (_, i) => `B-${String(i + 1).padStart(2, "0")}`),
-      ...Array.from({ length: 11 }, (_, i) => `R1-${String(i + 1).padStart(2, "0")}`),
-      "R3-01",
-      "R3-02",
-      ...Array.from({ length: 7 }, (_, i) => `V-0${i}`),
-      ...Array.from({ length: 5 }, (_, i) => `R2-0${i + 1}`),
-      "Q-00",
-      "Q-02",
-      "Q-05",
-      "S-01",
-      "S-02",
-      "C-01",
-      "C-02",
-      ...Array.from({ length: 9 }, (_, i) => `X-0${i + 1}`),
-      ...Array.from({ length: 7 }, (_, i) => `E-0${i + 1}`),
-    ];
-    for (const id of ids) {
-      expect(EXAM_TEXTS[id as keyof typeof EXAM_TEXTS], id).toMatch(/\S/);
-    }
+    expect(issuePaths({ issues: [null, { path: 1 }, { path: "phoneNumber" }] })).toEqual([
+      "phoneNumber",
+    ]);
   });
 });

@@ -1,7 +1,7 @@
 // 受検者画面の E2E の共通操作（08 §3.4.3）
 import { expect, type Locator, type Page } from "@playwright/test";
 
-import { questionNosOfPage } from "./questions";
+import { EXAM_STEP_TOTAL, questionNosOfStep } from "./questions";
 
 let seq = 0;
 /** シナリオが作る受検者は名前で区別する（08 §3.4.2） */
@@ -80,18 +80,18 @@ export async function startViaApi(page: Page, sessionId: string): Promise<void> 
   expect(res.status()).toBe(200);
 }
 
-/** ページ 1〜lastPageNo の全設問に choice を API で保存する */
-export async function savePagesViaApi(
+/** Step 1〜lastStepNo の全設問に choice を API で保存する（ステップごとの PUT { stepNo, answers }） */
+export async function saveStepsViaApi(
   page: Page,
   sessionId: string,
-  lastPageNo: number,
+  lastStepNo: number,
   choice = 3,
 ): Promise<void> {
-  for (let pageNo = 1; pageNo <= lastPageNo; pageNo += 1) {
+  for (let stepNo = 1; stepNo <= Math.min(lastStepNo, EXAM_STEP_TOTAL); stepNo += 1) {
     const res = await page.request.put(`/api/v1/respondent/sessions/${sessionId}/answers`, {
       data: {
-        pageNo,
-        answers: questionNosOfPage(pageNo).map((questionNo) => ({
+        stepNo,
+        answers: questionNosOfStep(stepNo).map((questionNo) => ({
           questionNo,
           choiceCode: choice,
         })),
@@ -101,20 +101,21 @@ export async function savePagesViaApi(
   }
 }
 
-/** 表示中のページの設問に回答する。count を指定すると先頭から count 問だけ */
-export async function answerCurrentPage(
+/** 表示中のステップの設問に回答する。count を指定すると先頭から count 問だけ */
+export async function answerCurrentStep(
   page: Page,
-  pageNo: number,
+  stepNo: number,
   choice: (questionNo: number) => number = () => 3,
   count?: number,
 ): Promise<readonly number[]> {
-  const questions = questionNosOfPage(pageNo).slice(0, count);
+  const questions = questionNosOfStep(stepNo).slice(0, count);
   for (const q of questions) await page.getByTestId(`choice-${q}-${choice(q)}`).check();
   return questions;
 }
 
-export const questionUrl = (sessionId: string, pageNo: number): RegExp =>
-  new RegExp(`/exam/${sessionId}/questions/${pageNo}$`);
+/** 受験画面の URL（ステップ番号は URL に入れない。11-1 §2.1.1） */
+export const questionsUrl = (sessionId: string): RegExp =>
+  new RegExp(`/exam/${sessionId}/questions$`);
 
 /**
  * aria-disabled のボタンを押す。05 §5.1.5・§5.3.6 のとおり無効表示でも押下を受け付けて未入力・未回答を示すが、

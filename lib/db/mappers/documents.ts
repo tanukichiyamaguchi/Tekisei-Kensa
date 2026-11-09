@@ -128,15 +128,7 @@ export function toRespondent(id: string, doc: RespondentDoc): Respondent {
 export function toAssessmentSession(id: string, doc: AssessmentSessionDoc): AssessmentSession {
   requireFields(
     doc,
-    [
-      "organizationId",
-      "respondentId",
-      "status",
-      "sessionTokenHash",
-      "answers",
-      "lastSavedPageNo",
-      "resultId",
-    ],
+    ["organizationId", "respondentId", "status", "sessionTokenHash", "answers", "resultId"],
     "assessmentSessions",
   );
   return {
@@ -147,7 +139,7 @@ export function toAssessmentSession(id: string, doc: AssessmentSessionDoc): Asse
     sessionTokenHash: doc.sessionTokenHash,
     tokenExpiresAt: toDate(doc.tokenExpiresAt, "tokenExpiresAt"),
     answers: { ...doc.answers },
-    lastSavedPageNo: doc.lastSavedPageNo,
+    // M7 より前の文書には無い（null とみなす）。M7 より前の文書に残る lastSavedPageNo は読まない（11-1 §3.2.2）
     lastSavedStepNo: (doc as Partial<AssessmentSessionDoc>).lastSavedStepNo ?? null,
     lastAnsweredAt: toNullableDate(doc.lastAnsweredAt, "lastAnsweredAt"),
     startedAt: toNullableDate(doc.startedAt, "startedAt"),

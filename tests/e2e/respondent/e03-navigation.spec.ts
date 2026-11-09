@@ -3,15 +3,15 @@ import type { Page } from "@playwright/test";
 
 import { createOrganization, expect, test } from "../support/fixtures";
 
-import { questionNosOfPage } from "../support/questions";
+import { questionNosOfStep } from "../support/questions";
 import {
-  answerCurrentPage,
+  answerCurrentStep,
   linkUrl,
   pressAriaDisabled,
-  questionUrl,
+  questionsUrl,
   recordApiCalls,
   registerViaApi,
-  savePagesViaApi,
+  saveStepsViaApi,
   startViaApi,
 } from "../support/respondent";
 
@@ -20,7 +20,7 @@ async function openFirstPage(page: Page, organizationId: string): Promise<string
   const sessionId = await registerViaApi(page, organizationId);
   await startViaApi(page, sessionId);
   await page.goto(`/exam/${sessionId}`);
-  await page.waitForURL(questionUrl(sessionId, 1));
+  await page.waitForURL(questionsUrl(sessionId));
   return sessionId;
 }
 
@@ -41,12 +41,12 @@ test.describe("E-03 設問ページの操作と再開", () => {
   }) => {
     const sessionId = await openFirstPage(page, organizationId);
     const calls = recordApiCalls(page);
-    const questions = questionNosOfPage(1);
-    await answerCurrentPage(page, 1, () => 2, questions.length - 2);
+    const questions = questionNosOfStep(1);
+    await answerCurrentStep(page, 1, () => 2, questions.length - 2);
     const next = page.getByTestId("next-button");
     await expect(page.getByTestId("unanswered-count")).toHaveText("未回答 2 問");
     await pressAriaDisabled(next);
-    await expect(page).toHaveURL(questionUrl(sessionId, 1));
+    await expect(page).toHaveURL(questionsUrl(sessionId));
     const [firstMissing, secondMissing] = questions.slice(-2);
     for (const q of [firstMissing, secondMissing]) {
       const card = page.getByTestId(`question-${q}`);
@@ -66,7 +66,7 @@ test.describe("E-03 設問ページの操作と再開", () => {
     await page.getByTestId(`choice-${secondMissing}-4`).check();
     await expect(page.getByTestId("unanswered-count")).toHaveCount(0);
     await next.click();
-    await page.waitForURL(questionUrl(sessionId, 2));
+    await page.waitForURL(questionsUrl(sessionId));
     expect(calls).toEqual([`PUT /api/v1/respondent/sessions/${sessionId}/answers`]);
     await expect(page.getByTestId("answered-count")).toHaveText(`${questions.length} / 144`);
   });
@@ -76,22 +76,22 @@ test.describe("E-03 設問ページの操作と再開", () => {
     organizationId,
   }) => {
     const sessionId = await openFirstPage(page, organizationId);
-    await answerCurrentPage(page, 1);
+    await answerCurrentStep(page, 1);
     await page.getByTestId("next-button").click();
-    await page.waitForURL(questionUrl(sessionId, 2));
+    await page.waitForURL(questionsUrl(sessionId));
 
     const bodies = putBodies(page);
-    const chosen = await answerCurrentPage(page, 2, () => 5, 3);
+    const chosen = await answerCurrentStep(page, 2, () => 5, 3);
     await page.getByTestId("back-button").click();
-    await page.waitForURL(questionUrl(sessionId, 1));
+    await page.waitForURL(questionsUrl(sessionId));
     expect(bodies).toEqual([
       { pageNo: 2, answers: chosen.map((questionNo) => ({ questionNo, choiceCode: 5 })) },
     ]);
 
     await page.getByTestId("next-button").click();
-    await page.waitForURL(questionUrl(sessionId, 2));
+    await page.waitForURL(questionsUrl(sessionId));
     for (const q of chosen) await expect(page.getByTestId(`choice-${q}-5`)).toBeChecked();
-    const rest = questionNosOfPage(2).slice(3);
+    const rest = questionNosOfStep(2).slice(3);
     for (const q of rest) {
       await expect(page.getByTestId(`question-${q}`).locator("input:checked")).toHaveCount(0);
     }
@@ -102,16 +102,16 @@ test.describe("E-03 設問ページの操作と再開", () => {
     organizationId,
   }) => {
     const sessionId = await openFirstPage(page, organizationId);
-    await answerCurrentPage(page, 1);
+    await answerCurrentStep(page, 1);
     await page.getByTestId("next-button").click();
-    await page.waitForURL(questionUrl(sessionId, 2));
-    const chosen = await answerCurrentPage(page, 2, () => 1, 2);
+    await page.waitForURL(questionsUrl(sessionId));
+    const chosen = await answerCurrentStep(page, 2, () => 1, 2);
 
     await page.route("**/answers", (route) =>
       route.fulfill({ status: 503, contentType: "application/json", body: "{}" }),
     );
     await page.getByTestId("back-button").click();
-    await page.waitForURL(questionUrl(sessionId, 1));
+    await page.waitForURL(questionsUrl(sessionId));
     await expect(page.getByTestId("error-banner")).toHaveAttribute("data-text-id", "E-02");
 
     await page.unroute("**/answers");
@@ -128,9 +128,9 @@ test.describe("E-03 設問ページの操作と再開", () => {
     organizationId,
   }) => {
     const sessionId = await openFirstPage(page, organizationId);
-    const chosen = await answerCurrentPage(page, 1, () => 4, 4);
+    const chosen = await answerCurrentStep(page, 1, () => 4, 4);
     await page.reload();
-    await expect(page).toHaveURL(questionUrl(sessionId, 1));
+    await expect(page).toHaveURL(questionsUrl(sessionId));
     for (const q of chosen) await expect(page.getByTestId(`choice-${q}-4`)).toBeChecked();
     await expect(page.getByTestId("answered-count")).toHaveText("4 / 144");
   });
@@ -141,14 +141,14 @@ test.describe("E-03 設問ページの操作と再開", () => {
   }) => {
     const sessionId = await registerViaApi(page, organizationId);
     await startViaApi(page, sessionId);
-    await savePagesViaApi(page, sessionId, 3, 2);
+    await saveStepsViaApi(page, sessionId, 3, 2);
     await page.goto(`/exam/${sessionId}`);
-    await expect(page).toHaveURL(questionUrl(sessionId, 4));
+    await expect(page).toHaveURL(questionsUrl(sessionId));
     await page.goto(`/exam/${sessionId}/questions/10`);
-    await expect(page).toHaveURL(questionUrl(sessionId, 4));
+    await expect(page).toHaveURL(questionsUrl(sessionId));
     await page.goto(`/exam/${sessionId}/questions/2`);
-    await expect(page).toHaveURL(questionUrl(sessionId, 2));
-    for (const q of questionNosOfPage(2)) {
+    await expect(page).toHaveURL(questionsUrl(sessionId));
+    for (const q of questionNosOfStep(2)) {
       await expect(page.getByTestId(`choice-${q}-2`)).toBeChecked();
     }
     // 開始前は設問ページへ進めない
@@ -164,16 +164,16 @@ test.describe("E-03 設問ページの操作と再開", () => {
     const otherOrganizationId = createOrganization("E2E 別医院");
     const sessionId = await registerViaApi(page, organizationId);
     await startViaApi(page, sessionId);
-    await savePagesViaApi(page, sessionId, 1);
+    await saveStepsViaApi(page, sessionId, 1);
 
     await page.goto(linkUrl(organizationId));
     const banner = page.getByTestId("resume-banner");
     await expect(banner).toBeVisible();
     await expect(banner).toContainText("回答中の診断があります");
-    await expect(banner).toContainText(`${questionNosOfPage(1).length} 問まで回答済みです`);
+    await expect(banner).toContainText(`${questionNosOfStep(1).length} 問まで回答済みです`);
     await expect(banner).not.toContainText("E2E-");
     await page.getByTestId("resume-link").click();
-    await expect(page).toHaveURL(questionUrl(sessionId, 2));
+    await expect(page).toHaveURL(questionsUrl(sessionId));
 
     await page.goto(linkUrl(organizationId, "executives"));
     await expect(page.getByTestId("registration-form")).toBeVisible();

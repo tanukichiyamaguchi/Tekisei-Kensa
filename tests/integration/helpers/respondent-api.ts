@@ -7,7 +7,7 @@ import { POST as postSubmitRoute } from "@/app/api/v1/respondent/sessions/[sessi
 import { POST as postSessionsRoute } from "@/app/api/v1/respondent/sessions/route";
 import { RESPONDENT_COOKIE_NAME } from "@/lib/auth/respondent-token";
 import type { RespondentKind } from "@/lib/db/types";
-import { getExamPage } from "@/lib/presentation/exam-pages";
+import { EXAM_STEPS } from "@/lib/presentation/exam-steps";
 import type { SessionCreatedDto } from "@/lib/services/dto/respondent";
 import type { AnswerMap } from "@/lib/scoring/types";
 
@@ -95,29 +95,29 @@ export async function registerViaApi(body: RegistrationBody): Promise<Registered
   return { sessionId: dto.sessionId, cookieHeader, dto };
 }
 
-/** answers に含まれる設問をページ単位で保存する（20 回の PUT。含まれないページは飛ばす） */
-export async function saveAllPagesViaApi(
+/** answers に含まれる設問をステップ単位で保存する（4 回の PUT { stepNo, answers }。含まれないステップは飛ばす） */
+export async function saveAllStepsViaApi(
   sessionId: string,
   cookieHeader: string,
   answers: Readonly<Record<number, number>>,
 ): Promise<void> {
-  for (let pageNo = 1; pageNo <= 20; pageNo += 1) {
-    const page = getExamPage(pageNo)
-      .questions.filter((q) => answers[q.questionNo] !== undefined)
+  for (const step of EXAM_STEPS) {
+    const stepAnswers = step.questions
+      .filter((q) => answers[q.questionNo] !== undefined)
       .map((q) => ({ questionNo: q.questionNo, choiceCode: answers[q.questionNo] }));
-    if (page.length === 0) continue;
+    if (stepAnswers.length === 0) continue;
     const res = await respondentApi.saveAnswers(sessionId, cookieHeader, {
-      pageNo,
-      answers: page,
+      stepNo: step.stepNo,
+      answers: stepAnswers,
     });
     if (res.status !== 200)
-      throw new Error(`PUT answers（${pageNo}）が ${res.status} を返しました`);
+      throw new Error(`PUT answers（Step ${step.stepNo}）が ${res.status} を返しました`);
   }
 }
 
 export type SubmitOptions = Pick<RegistrationBody, "kind" | "name" | "phoneNumber">;
 
-/** 登録 → 開始 → 20 ページ保存 → 送信（API 経由）。sessionId と Cookie を返す */
+/** 登録 → 開始 → 4 ステップ保存 → 送信（API 経由）。sessionId と Cookie を返す */
 export async function completeViaApi(
   organizationId: string,
   answers: AnswerMap,
@@ -126,7 +126,7 @@ export async function completeViaApi(
   const registered = await registerViaApi({ organizationId, ...options });
   const started = await respondentApi.start(registered.sessionId, registered.cookieHeader);
   if (started.status !== 200) throw new Error(`POST start が ${started.status} を返しました`);
-  await saveAllPagesViaApi(registered.sessionId, registered.cookieHeader, answers);
+  await saveAllStepsViaApi(registered.sessionId, registered.cookieHeader, answers);
   const submitted = await respondentApi.submit(registered.sessionId, registered.cookieHeader);
   if (submitted.status !== 200) throw new Error(`POST submit が ${submitted.status} を返しました`);
   return registered;

@@ -1,4 +1,4 @@
-// 受検者画面（Server Component）の判定ヘルパー（05 §1.3、§10.6、D05-37）。
+// 受験者側の画面（Server Component）の判定ヘルパー（11-1 §2.1.2・§2.4.8・§3.5、05 D05-37）。
 // Cookie を検証し、セッションの状態に応じて表示・リダイレクト・エラーを返す。components/ とブラウザ用の API 口には依存しない
 import { cache } from "react";
 
@@ -6,7 +6,7 @@ import {
   requireRespondentSessionFromCookies,
   type RespondentSessionContext,
 } from "@/lib/auth/respondent-session";
-import { resolveResumePageNo } from "@/lib/presentation/exam-pages";
+import { resolveCurrentStepNo, type ExamStepNo } from "@/lib/presentation/exam-steps";
 import type { ExamErrorKind } from "@/lib/presentation/exam-types";
 import type { SessionProgressDto } from "@/lib/services/dto/respondent";
 import { ApiError } from "@/lib/services/errors";
@@ -17,12 +17,14 @@ export type RespondentPageGuardResult =
   | {
       readonly kind: "ok";
       readonly session: SessionProgressDto;
-      readonly resumePageNo: number;
+      /** 受験画面で表示するステップ（未回答の設問がある最初のステップ。11-1 §2.4.8、K-41） */
+      readonly currentStepNo: ExamStepNo;
     }
   | { readonly kind: "redirect"; readonly to: string }
   | { readonly kind: "error"; readonly error: ExamErrorKind };
 
-export type RespondentPageExpectation = "start" | { readonly pageNo: number } | "complete";
+/** 開いた画面: start = 診断開始（R-02）、questions = 受験画面（R-03）、complete = 完了（R-05） */
+export type RespondentPageExpectation = "start" | "questions" | "complete";
 
 /** 受検セッションを確認できない（Cookie なし・不一致・期限切れ・削除済み・文書 ID の形式不正）ことを表すコード */
 const UNAVAILABLE_CODES = new Set([
@@ -50,13 +52,14 @@ export const loadRespondentSession = cache(
   },
 );
 
+/** 受験者側の画面の URL（11-1 §2.1.1。ステップ番号は URL に入れない） */
 export const examPaths = {
   start: (sessionId: string) => `/exam/${sessionId}`,
-  question: (sessionId: string, pageNo: number) => `/exam/${sessionId}/questions/${pageNo}`,
+  questions: (sessionId: string) => `/exam/${sessionId}/questions`,
   complete: (sessionId: string) => `/exam/${sessionId}/complete`,
 } as const;
 
-/** 05 §1.3 の表 */
+/** 11-1 §2.1.2 の表（サーバが返す画面） */
 export async function guardRespondentPage(
   sessionId: string,
   expect: RespondentPageExpectation,
@@ -71,10 +74,10 @@ export async function guardRespondentPage(
     if (isUnavailable(error)) return { kind: "error", error: "session_unavailable" };
     throw error;
   }
-  const resumePageNo = resolveResumePageNo(
+  const currentStepNo = resolveCurrentStepNo(
     new Set<QuestionNo>(session.answers.map((a) => a.questionNo)),
   );
-  const ok = { kind: "ok", session, resumePageNo } as const;
+  const ok = { kind: "ok", session, currentStepNo } as const;
 
   if (session.status === "submitted") {
     return expect === "complete" ? ok : { kind: "redirect", to: examPaths.complete(sessionId) };
@@ -83,8 +86,6 @@ export async function guardRespondentPage(
   if (session.startedAt === null) {
     return expect === "start" ? ok : { kind: "redirect", to: examPaths.start(sessionId) };
   }
-  if (expect === "start" || expect.pageNo > resumePageNo) {
-    return { kind: "redirect", to: examPaths.question(sessionId, resumePageNo) };
-  }
-  return ok;
+  // 開始済み: 診断開始を開いたら受験画面へ（受験画面のステップは currentStepNo）
+  return expect === "start" ? { kind: "redirect", to: examPaths.questions(sessionId) } : ok;
 }

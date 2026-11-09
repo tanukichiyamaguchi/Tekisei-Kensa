@@ -3,8 +3,11 @@
 //     aiAnalyses の 3 項目、adminUsers の既読
 // (2) M7 より前の形の文書: M7 で足した項目を消した文書を、リポジトリと今の API・印刷用ページのデータが補って読む
 //     （M7-exam-31、M7-list-32 の補いの分、M7-ai-34 の M7 より前の形の文書の分）。公開の時点で受験中の人の
-//     保存と送信（11-1 §3.6）、M7 より前の組織の招待の受け付けとリンクの作り直しも確かめる
-import { FieldValue } from "firebase-admin/firestore";
+//     保存と送信（11-1 §3.6。登録のときの利用履歴を持つ受験は、その利用履歴を更新する: M7-exam-26）、
+//     M7 より前の組織の招待の受け付けとリンクの作り直しも確かめる。
+// M7 より前の形（M7 の項目が無い文書、lastSavedPageNo を持つセッション、登録のときに作った送信前の利用履歴）は、
+// 今の API では作れないため、08 D08-18 の例外として直接書き込みで作る
+import { FieldValue, type Timestamp } from "firebase-admin/firestore";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { GET as getMeRoute } from "@/app/api/v1/admin/me/route";
@@ -29,7 +32,7 @@ import { getOrganization } from "@/lib/db/repositories/organizations-repository"
 import { getRespondent } from "@/lib/db/repositories/respondents-repository";
 import { getResult } from "@/lib/db/repositories/results-repository";
 import { adminAuth, adminFirestore } from "@/lib/firebase/admin";
-import { getExamPage } from "@/lib/presentation/exam-pages";
+import { getExamStep, type ExamStepNo } from "@/lib/presentation/exam-steps";
 import type { InviteRotatedDto, RespondentUpdatedDto } from "@/lib/services/dto/admin";
 import { loadPrintData, type PrintData } from "@/lib/services/print-data";
 
@@ -42,7 +45,7 @@ import {
   type TestAdmin,
   type TestOrganization,
 } from "../helpers/fixtures";
-import { getDocForTest } from "../helpers/firestore";
+import { countDocs, getDocForTest, listDocs, writeDocForTest } from "../helpers/firestore";
 import { registerViaApi, respondentApi, type RegisteredViaApi } from "../helpers/respondent-api";
 import { callRoute } from "../helpers/routes";
 
@@ -93,14 +96,13 @@ async function stripFields(
     .update(Object.fromEntries(fields.map((f) => [f, FieldValue.delete()])));
 }
 
-/** ページ pageNo の全設問に choice を付けた本文 */
-function pageBody(pageNo: number, choice = 3) {
+/** ステップ stepNo の設問（from 以降）に choice を付けた本文 { stepNo, answers } */
+function stepBody(stepNo: ExamStepNo, choice = 3, from = 1) {
   return {
-    pageNo,
-    answers: getExamPage(pageNo).questions.map((q) => ({
-      questionNo: q.questionNo,
-      choiceCode: choice,
-    })),
+    stepNo,
+    answers: getExamStep(stepNo)
+      .questions.filter((q) => q.questionNo >= from)
+      .map((q) => ({ questionNo: q.questionNo, choiceCode: choice })),
   };
 }
 
@@ -129,15 +131,16 @@ beforeAll(async () => {
 });
 
 describe("作成時の値（M7 の項目を書く）", () => {
-  it("M7-exam-20 のデータの分: 登録した respondents.previousResultId と assessmentSessions.lastSavedStepNo が null", async () => {
+  it("M7-exam-20 のデータの分: 登録した respondents.previousResultId・usageLogId と assessmentSessions.lastSavedStepNo が null。lastSavedPageNo は書かない", async () => {
     const r = await registerViaApi({ organizationId: org.organizationId });
     const session = (await getDocForTest<Doc>(COLLECTIONS.assessmentSessions, r.sessionId))!;
-    expect(session).toMatchObject({ lastSavedStepNo: null, lastSavedPageNo: null });
+    expect(session).toMatchObject({ lastSavedStepNo: null });
+    expect(session).not.toHaveProperty("lastSavedPageNo");
     const respondent = (await getDocForTest<Doc>(
       COLLECTIONS.respondents,
       session.respondentId as string,
     ))!;
-    expect(respondent).toMatchObject({ previousResultId: null });
+    expect(respondent).toMatchObject({ previousResultId: null, usageLogId: null });
     expect(Object.hasOwn(respondent, "previousResultId")).toBe(true);
   });
 
@@ -216,6 +219,9 @@ describe("M7 より前の形の文書を読んでも壊れない（例外的な�
   let target: Awaited<ReturnType<typeof submitAnswerSet>>;
   let executive: Awaited<ReturnType<typeof submitAnswerSet>>;
   let draft: RegisteredViaApi;
+  let draftRespondentId: string;
+  /** 受験中の人が M7 より前に登録のときに作った利用履歴（resultId・submittedAt が null） */
+  let legacyUsageLogId: string;
   let aiAnalysisId: string;
   /** 項目を消す前の応答（同じ形と値を返すことを確かめる） */
   const before = new Map<string, unknown>();
@@ -277,10 +283,16 @@ describe("M7 より前の形の文書を読んでも壊れない（例外的な�
     expect(generated.status).toBe(200);
     aiAnalysisId = (await getDocForTest<Doc>(COLLECTIONS.results, target.resultId))!
       .latestAiAnalysisId as string;
-    // 受験中のセッション（lastSavedPageNo だけを持つ形にする）
+    // 受験中のセッション。M7 より前の画面の 1 ページ目に当たる Q1〜Q7 を保存しておく（あとで lastSavedPageNo だけを持つ形にする）
     draft = await registerViaApi({ organizationId: legacyOrg.organizationId });
+    const firstPage = stepBody(1);
     expect(
-      (await respondentApi.saveAnswers(draft.sessionId, draft.cookieHeader, pageBody(1))).status,
+      (
+        await respondentApi.saveAnswers(draft.sessionId, draft.cookieHeader, {
+          stepNo: 1,
+          answers: firstPage.answers.slice(0, 7),
+        })
+      ).status,
     ).toBe(200);
 
     for (const [name, call] of Object.entries(calls())) {
@@ -295,15 +307,36 @@ describe("M7 より前の形の文書を読んでも壊れない（例外的な�
       await stripFields(COLLECTIONS.results, r.resultId, RESULT_M7_FIELDS);
       await stripFields(COLLECTIONS.respondents, r.respondentId, ["previousResultId"]);
       await stripFields(COLLECTIONS.assessmentSessions, r.sessionId, ["lastSavedStepNo"]);
+      await writeDocForTest(COLLECTIONS.assessmentSessions, r.sessionId, { lastSavedPageNo: 20 });
     }
     const draftSession = (await getDocForTest<Doc>(
       COLLECTIONS.assessmentSessions,
       draft.sessionId,
     ))!;
+    draftRespondentId = draftSession.respondentId as string;
     await stripFields(COLLECTIONS.assessmentSessions, draft.sessionId, ["lastSavedStepNo"]);
-    await stripFields(COLLECTIONS.respondents, draftSession.respondentId as string, [
-      "previousResultId",
-    ]);
+    await writeDocForTest(COLLECTIONS.assessmentSessions, draft.sessionId, { lastSavedPageNo: 1 });
+    await stripFields(COLLECTIONS.respondents, draftRespondentId, ["previousResultId"]);
+    // 登録のときに作った利用履歴（M7 より前の登録。送信前なので resultId・submittedAt が null）
+    const draftRespondent = (await getDocForTest<Doc>(COLLECTIONS.respondents, draftRespondentId))!;
+    const legacyUsageLog = adminFirestore().collection(COLLECTIONS.usageLogs).doc();
+    legacyUsageLogId = legacyUsageLog.id;
+    await legacyUsageLog.set({
+      organizationId: legacyOrg.organizationId,
+      respondentId: draftRespondentId,
+      resultId: null,
+      respondentKind: draftRespondent.kind,
+      name: draftRespondent.name,
+      phoneNumber: draftRespondent.phoneNumber,
+      diagnosisExperience: draftRespondent.diagnosisExperience,
+      registeredAt: draftRespondent.createdAt,
+      submittedAt: null,
+      createdAt: draftRespondent.createdAt,
+      updatedAt: draftRespondent.createdAt,
+    });
+    await writeDocForTest(COLLECTIONS.respondents, draftRespondentId, {
+      usageLogId: legacyUsageLogId,
+    });
     await stripFields(COLLECTIONS.aiAnalyses, aiAnalysisId, [
       "trainingContext",
       "previousResultId",
@@ -319,6 +352,13 @@ describe("M7 より前の形の文書を読んでも壊れない（例外的な�
     const session = (await getDocForTest<Doc>(COLLECTIONS.assessmentSessions, draft.sessionId))!;
     expect(session).not.toHaveProperty("lastSavedStepNo");
     expect(session.lastSavedPageNo).toBe(1);
+    expect((await getDocForTest<Doc>(COLLECTIONS.respondents, draftRespondentId))!.usageLogId).toBe(
+      legacyUsageLogId,
+    );
+    expect(await getDocForTest<Doc>(COLLECTIONS.usageLogs, legacyUsageLogId)).toMatchObject({
+      resultId: null,
+      submittedAt: null,
+    });
     expect(await getDocForTest<Doc>(COLLECTIONS.adminUsers, legacyOwner.uid)).not.toHaveProperty(
       "dismissedAnnouncements",
     );
@@ -353,10 +393,11 @@ describe("M7 より前の形の文書を読んでも壊れない（例外的な�
       (await getRespondent({ respondentId: target.respondentId, viewer: legacyViewer }))
         ?.previousResultId,
     ).toBeNull();
-    expect(await getSession(draft.sessionId)).toMatchObject({
-      lastSavedStepNo: null,
-      lastSavedPageNo: 1,
-    });
+    // M7-exam-31: lastSavedPageNo だけを持つセッションも読め、lastSavedStepNo は null。lastSavedPageNo は読まない
+    const legacySession = await getSession(draft.sessionId);
+    expect(legacySession).toMatchObject({ lastSavedStepNo: null, status: "draft" });
+    expect(legacySession).not.toHaveProperty("lastSavedPageNo");
+    expect(Object.keys(legacySession?.answers ?? {})).toHaveLength(7);
     expect((await getAdminUser(legacyOwner.uid))?.dismissedAnnouncements.size).toBe(0);
     expect((await getOrganization(legacyOrg.organizationId))?.inviteToken).toBeNull();
     expect(
@@ -368,12 +409,17 @@ describe("M7 より前の形の文書を読んでも壊れない（例外的な�
     ).toMatchObject({ trainingContext: null, previousResultId: null, usedTrainingAction: null });
   });
 
-  it("今の API（一覧・詳細・比較・AI 解説・GET /me・受検者の進行状態）が 200 で、項目を消す前と同じ応答を返す", async () => {
+  it("今の API（一覧・詳細・比較・AI 解説・GET /me・受検者の進行状態）が 200 で、項目を消す前と同じ応答を返す（進行状態は lastSavedStepNo だけが null に変わる。M7-exam-31）", async () => {
     for (const [name, call] of Object.entries(calls())) {
       const res = await call();
       expect(res.status, name).toBe(200);
-      expect(stableBody(name, await res.json()), name).toEqual(before.get(name));
+      const expected =
+        name === "session"
+          ? { ...(before.get(name) as Doc), lastSavedStepNo: null }
+          : before.get(name);
+      expect(stableBody(name, await res.json()), name).toEqual(expected);
     }
+    expect((before.get("session") as Doc).lastSavedStepNo).toBe(1);
   });
 
   it("印刷用ページのデータ（loadPrintData。PDF）も補って読み、項目を消す前と同じ値を返す", async () => {
@@ -397,15 +443,26 @@ describe("M7 より前の形の文書を読んでも壊れない（例外的な�
     expect(result).not.toHaveProperty("employmentStatus");
   });
 
-  it("公開の時点で受験中の人（11-1 §3.6）: M7 より前の形の受検者・セッションのまま残りを保存して送信でき、results に M7 の項目が入る", async () => {
-    for (let pageNo = 2; pageNo <= 20; pageNo += 1) {
+  it("公開の時点で受験中の人（11-1 §3.6）: M7 より前の形の受検者・セッションのまま残りをステップごとに保存して送信でき、results に M7 の項目が入る", async () => {
+    const usageLogsBefore = await countDocs(COLLECTIONS.usageLogs);
+    for (const [stepNo, from] of [
+      [1, 8],
+      [2, 1],
+      [3, 1],
+      [4, 1],
+    ] as const) {
       const saved = await respondentApi.saveAnswers(
         draft.sessionId,
         draft.cookieHeader,
-        pageBody(pageNo),
+        stepBody(stepNo, 3, from),
       );
-      expect(saved.status, `ページ ${pageNo}`).toBe(200);
+      expect(saved.status, `Step ${stepNo}`).toBe(200);
     }
+    expect(
+      (await getDocForTest<Doc>(COLLECTIONS.assessmentSessions, draft.sessionId))!,
+    ).toMatchObject(
+      { lastSavedStepNo: 4, lastSavedPageNo: 1 }, // lastSavedPageNo は書き換えず残る（読まない）
+    );
     expect((await respondentApi.submit(draft.sessionId, draft.cookieHeader)).status).toBe(200);
 
     const session = (await getDocForTest<Doc>(COLLECTIONS.assessmentSessions, draft.sessionId))!;
@@ -428,6 +485,20 @@ describe("M7 より前の形の文書を読んでも壊れない（例外的な�
     ))!;
     expect(respondent.resultId).toBe(session.resultId);
     expect(respondent).not.toHaveProperty("previousResultId");
+
+    // M7-exam-26: 登録のときの利用履歴（submittedAt == null）を持つ受験は、新しい文書を作らずその文書に resultId・submittedAt が入る
+    expect(respondent.usageLogId).toBe(legacyUsageLogId);
+    expect(await countDocs(COLLECTIONS.usageLogs)).toBe(usageLogsBefore);
+    const usageLogs = (await listDocs(COLLECTIONS.usageLogs)).filter(
+      (d) => d.data.respondentId === draftRespondentId,
+    );
+    expect(usageLogs.map((d) => d.id)).toEqual([legacyUsageLogId]);
+    const usage = usageLogs[0]!.data;
+    expect(usage.resultId).toBe(session.resultId);
+    expect((usage.submittedAt as Timestamp).isEqual(result.submittedAt as Timestamp)).toBe(true);
+    expect((usage.registeredAt as Timestamp).isEqual(respondent.createdAt as Timestamp)).toBe(true);
+    // I-M7-4: 利用履歴の受検者区分は受検者区分と一致する
+    expect(usage.respondentKind).toBe(respondent.kind);
   });
 
   it("M7 より前の組織（inviteToken なし）でも招待を受け付け、作った管理者の dismissedAnnouncements は {}", async () => {

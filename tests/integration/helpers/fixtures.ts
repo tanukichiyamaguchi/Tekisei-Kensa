@@ -82,7 +82,7 @@ export function cyclicAnswers(): AnswerMap {
 
 export const meta = { ipAddress: "203.0.113.10", userAgent: "vitest" } as const;
 
-/** 受検者 API で登録 → 開始 → 20 ページ保存 → 送信する（08 §3.3.2: results に直接書かない） */
+/** 受検者 API で登録 → 開始 → 4 ステップ保存 → 送信する（08 §3.3.2: results に直接書かない） */
 export async function submitAnswerSet(
   org: TestOrganization,
   answers: AnswerMap,

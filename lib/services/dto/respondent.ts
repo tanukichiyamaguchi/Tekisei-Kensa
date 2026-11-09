@@ -45,7 +45,7 @@ export interface SessionProgressDto {
   readonly kind: RespondentKind;
   readonly status: SessionStatus;
   readonly startedAt: string | null;
-  readonly lastSavedPageNo: number | null; // 通しページ番号 1〜20（02 D02-37）
+  readonly lastSavedStepNo: number | null; // ステップ 1〜4（参考の値。11-1 §3.4.4）。M7 より前の文書は null
   readonly answeredCount: number;
   readonly totalCount: typeof TOTAL_QUESTION_COUNT;
   /** questionNo 昇順（04 D04-44） */
@@ -55,11 +55,11 @@ export interface SessionProgressDto {
 
 export interface AnswersSavedDto {
   readonly sessionId: string;
-  readonly pageNo: number; // 1〜20（入力の pageNo をそのまま返す）
+  readonly stepNo: number; // 1〜4（入力の stepNo をそのまま返す。11-1 §3.4.2）
   readonly savedCount: number;
   readonly answeredCount: number;
   readonly totalCount: typeof TOTAL_QUESTION_COUNT;
-  readonly lastSavedPageNo: number;
+  readonly lastSavedStepNo: number;
   readonly tokenExpiresAt: string;
 }
 

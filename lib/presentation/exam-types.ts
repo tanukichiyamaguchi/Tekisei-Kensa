@@ -1,9 +1,4 @@
-// components/ と lib/auth/ が共有する受検者画面の型（05 §10.5。依存なし）
+// components/ と lib/auth/ が共有する受験者側の画面の型（11-1 §3.5。依存なし）
 
-/** R-06 の種別（05 §5.6）。organization_closed は将来の受付停止フラグ用に予約（D05-31） */
-export type ExamErrorKind =
-  | "organization_not_found"
-  | "organization_closed"
-  | "session_unavailable"
-  | "page_not_found"
-  | "unexpected";
+/** R-06 の種別（11-1 §2.6）。session_unavailable は 404、unexpected は 500 */
+export type ExamErrorKind = "session_unavailable" | "unexpected";

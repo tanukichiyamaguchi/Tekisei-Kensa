@@ -11,7 +11,6 @@ import { fromSnapshot, toRespondent } from "@/lib/db/mappers/documents";
 import { toTimestamp } from "@/lib/db/mappers/timestamp";
 import { assessmentSessionCreateSchema } from "@/lib/db/schemas/assessment-session";
 import { respondentCreateSchema } from "@/lib/db/schemas/respondent";
-import { usageLogCreateSchema } from "@/lib/db/schemas/usage-log";
 import { validateForWrite } from "@/lib/db/schemas/validate";
 import { docIdSchema, teamCodeSchema } from "@/lib/db/schemas/values";
 import type { DiagnosisExperience, RespondentKind, TeamCode } from "@/lib/db/types";
@@ -21,7 +20,7 @@ export interface RegisterRespondentInput {
   readonly organizationId: string;
   readonly kind: RespondentKind;
   readonly name: string; // 前後空白除去済み
-  readonly phoneNumber: string; // 正規化済み（lib/utils/phone-number.ts）
+  readonly phoneNumber: string; // 前後の空白を除いた入力のまま（正規化しない。11-1 §2.2.5）
   readonly occupationCode: number;
   readonly diagnosisExperience: DiagnosisExperience;
   readonly sessionTokenHash: string;
@@ -31,13 +30,13 @@ export interface RegisterRespondentInput {
 export interface RegisteredRespondent {
   readonly respondentId: string;
   readonly sessionId: string;
-  readonly usageLogId: string;
   readonly registeredAt: Date;
 }
 
 /**
- * 受検者登録。respondents / assessmentSessions / usageLogs / auditLogs（respondent.register）を 1 バッチで作成する。
- * 3 文書の ID は事前に採番し相互参照フィールドに入れる（I-1）
+ * 受検者登録。respondents / assessmentSessions / auditLogs（respondent.register）を 1 バッチで作成する（11-1 §3.4.1）。
+ * 利用履歴（usageLogs）は作らず、送信のときに作る（respondents.usageLogId は null。11-1 §2.7.4）。
+ * 2 文書の ID は事前に採番し相互参照フィールドに入れる（I-1）
  */
 export async function registerRespondent(
   input: RegisterRespondentInput,
@@ -47,7 +46,6 @@ export async function registerRespondent(
 
   const respondentRef = rawCollection(COLLECTIONS.respondents).doc();
   const sessionRef = rawCollection(COLLECTIONS.assessmentSessions).doc();
-  const usageLogRef = rawCollection(COLLECTIONS.usageLogs).doc();
   const registeredAt = Timestamp.now();
   const stamps = {
     createdAt: FieldValue.serverTimestamp(),
@@ -66,9 +64,9 @@ export async function registerRespondent(
       teamCode: null,
       isExcluded: false,
       sessionId: sessionRef.id,
-      usageLogId: usageLogRef.id,
+      usageLogId: null, // 利用履歴は送信のときに作る（11-1 §2.7.4）
       resultId: null,
-      previousResultId: null, // 前回の候補（11-1 §3.2.1）。候補の判定（11-1 §2.2.8）は行わない
+      previousResultId: null, // 前回の候補（11-1 §3.2.1）。候補の判定（11-1 §2.2.8）はまだ行わない
       deletedAt: null,
     },
     "respondents",
@@ -82,8 +80,7 @@ export async function registerRespondent(
       sessionTokenHash: input.sessionTokenHash,
       tokenExpiresAt: toTimestamp(input.tokenExpiresAt),
       answers: {},
-      lastSavedPageNo: null,
-      lastSavedStepNo: null, // 11-1 §3.2.2
+      lastSavedStepNo: null, // lastSavedPageNo は書かない（11-1 §3.2.2）
       lastAnsweredAt: null,
       startedAt: null,
       submittedAt: null,
@@ -92,26 +89,10 @@ export async function registerRespondent(
     },
     "assessmentSessions",
   );
-  const usageLog = validateForWrite(
-    usageLogCreateSchema,
-    {
-      organizationId: org.id,
-      respondentId: respondentRef.id,
-      resultId: null,
-      respondentKind: input.kind,
-      name: input.name,
-      phoneNumber: input.phoneNumber,
-      diagnosisExperience: input.diagnosisExperience,
-      registeredAt,
-      submittedAt: null,
-    },
-    "usageLogs",
-  );
 
   const batch = db().batch();
   batch.create(respondentRef, { ...respondent, ...stamps });
   batch.create(sessionRef, { ...session, ...stamps });
-  batch.create(usageLogRef, { ...usageLog, ...stamps });
   addAuditLogToBatch(batch, {
     organizationId: org.id,
     actorKind: "respondent",
@@ -120,7 +101,8 @@ export async function registerRespondent(
     action: "respondent.register",
     targetCollection: COLLECTIONS.respondents,
     targetId: respondentRef.id,
-    details: { kind: input.kind },
+    // 前回の候補を受け付けたら true（11-1 §2.7.5）。候補の判定（11-1 §2.2.8）を入れるまでは常に false
+    details: { kind: input.kind, previousCandidate: false },
     ipAddress: input.meta.ipAddress,
     userAgent: input.meta.userAgent,
   });
@@ -128,7 +110,6 @@ export async function registerRespondent(
   return {
     respondentId: respondentRef.id,
     sessionId: sessionRef.id,
-    usageLogId: usageLogRef.id,
     registeredAt: registeredAt.toDate(),
   };
 }

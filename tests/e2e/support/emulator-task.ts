@@ -22,7 +22,7 @@ async function submitAnswers(
   index: number,
   answers: AnswerMap,
 ): Promise<{ resultId: string; respondentId: string }> {
-  const registered = await registerAndSave(organizationId, index, "applicant", answers, 20);
+  const registered = await registerAndSave(organizationId, index, "applicant", answers, 4);
   const { resultId } = await submitSession({ sessionId: registered.sessionId, meta });
   return { resultId, respondentId: registered.respondentId };
 }

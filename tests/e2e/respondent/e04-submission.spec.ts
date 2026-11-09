@@ -5,11 +5,11 @@ import { expect, test } from "../support/fixtures";
 
 import { emulatorTask } from "../support/admin";
 import {
-  answerCurrentPage,
-  questionUrl,
+  answerCurrentStep,
+  questionsUrl,
   recordApiCalls,
   registerViaApi,
-  savePagesViaApi,
+  saveStepsViaApi,
   startViaApi,
 } from "../support/respondent";
 
@@ -17,9 +17,9 @@ import {
 async function openLastPage(page: Page, organizationId: string): Promise<string> {
   const sessionId = await registerViaApi(page, organizationId);
   await startViaApi(page, sessionId);
-  await savePagesViaApi(page, sessionId, 19);
+  await saveStepsViaApi(page, sessionId, 19);
   await page.goto(`/exam/${sessionId}/questions/20`);
-  await expect(page).toHaveURL(questionUrl(sessionId, 20));
+  await expect(page).toHaveURL(questionsUrl(sessionId));
   return sessionId;
 }
 
@@ -32,7 +32,7 @@ test.describe("E-04 送信と無効なセッション", () => {
   }) => {
     const sessionId = await openLastPage(page, organizationId);
     const calls = recordApiCalls(page);
-    await answerCurrentPage(page, 20);
+    await answerCurrentStep(page, 20);
     await page.getByTestId("submit-button").click();
     const confirm = page.getByTestId("submit-confirm");
     await expect(confirm).toBeVisible();
@@ -50,9 +50,9 @@ test.describe("E-04 送信と無効なセッション", () => {
     organizationId,
   }) => {
     const sessionId = await openLastPage(page, organizationId);
-    await answerCurrentPage(page, 20);
+    await answerCurrentStep(page, 20);
     // 別タブ相当: 画面の外で最終ページを保存して送信する
-    await savePagesViaApi(page, sessionId, 20);
+    await saveStepsViaApi(page, sessionId, 20);
     expect(
       (await page.request.post(`/api/v1/respondent/sessions/${sessionId}/submit`)).status(),
     ).toBe(200);
@@ -70,8 +70,8 @@ test.describe("E-04 送信と無効なセッション", () => {
     // 履歴にページ 19 → 20 を積み、「次へ」で最終ページへ進んだ状態にする
     await page.goto(`/exam/${sessionId}/questions/19`);
     await page.getByTestId("next-button").click();
-    await page.waitForURL(questionUrl(sessionId, 20));
-    await answerCurrentPage(page, 20);
+    await page.waitForURL(questionsUrl(sessionId));
+    await answerCurrentStep(page, 20);
     await page.getByTestId("submit-button").click();
     await page.getByTestId("submit-confirm").click();
     await page.waitForURL(completeUrl(sessionId));
@@ -114,7 +114,7 @@ test.describe("E-04 送信と無効なセッション", () => {
     const sessionId = await registerViaApi(page, organizationId);
     await startViaApi(page, sessionId);
     await page.goto(`/exam/${sessionId}/questions/1`);
-    await answerCurrentPage(page, 1);
+    await answerCurrentStep(page, 1);
 
     emulatorTask("expire-session", sessionId);
     await page.getByTestId("next-button").click();
@@ -122,7 +122,7 @@ test.describe("E-04 送信と無効なセッション", () => {
     await expect(page.locator("main")).toContainText(
       "回答の有効期限が切れました。受検リンクからもう一度登録してください。",
     );
-    await expect(page).toHaveURL(questionUrl(sessionId, 1));
+    await expect(page).toHaveURL(questionsUrl(sessionId));
     // 退避した選択は消す（05 §6.4）
     const drafts = await page.evaluate(() =>
       Object.keys(sessionStorage).filter((k) => k.startsWith("tk_exam_draft:")),
@@ -152,7 +152,7 @@ test.describe("E-04 送信と無効なセッション", () => {
     await expect(page).toHaveURL(new RegExp(`/exam/${sessionId}$`));
     await page.unroute("**/start");
     await page.getByTestId("error-banner-action").click();
-    await page.waitForURL(questionUrl(sessionId, 1));
+    await page.waitForURL(questionsUrl(sessionId));
   });
 
   test("05/T-15b: submit が ANSWERS_INCOMPLETE なら E-03 と「未回答のページへ移動」", async ({
@@ -169,13 +169,13 @@ test.describe("E-04 送信と無効なセッション", () => {
         }),
       }),
     );
-    await answerCurrentPage(page, 20);
+    await answerCurrentStep(page, 20);
     await page.getByTestId("submit-button").click();
     await page.getByTestId("submit-confirm").click();
     await expect(page.getByTestId("error-banner")).toHaveAttribute("data-text-id", "E-03");
     await expect(page.getByTestId("submit-dialog")).not.toBeVisible();
     await page.unroute("**/submit");
     await page.getByTestId("error-banner-action").click();
-    await expect(page).toHaveURL(questionUrl(sessionId, 20));
+    await expect(page).toHaveURL(questionsUrl(sessionId));
   });
 });

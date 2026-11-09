@@ -88,8 +88,8 @@ export interface AssessmentSessionDoc extends SoftDeletableDoc {
   readonly sessionTokenHash: string; // sha256 hex
   readonly tokenExpiresAt: Timestamp;
   readonly answers: AnswersField;
-  readonly lastSavedPageNo: number | null; // 1〜20
-  readonly lastSavedStepNo: number | null; // 1〜4（参考の値。11-1 §3.2.2）。M7 より前の文書には無い（null とみなす）
+  // M7 より前の文書に残る lastSavedPageNo（ページ番号）は読まない（11-1 §3.2.2）
+  readonly lastSavedStepNo: number | null; // 1〜4（参考の値）。保存のときに書く。M7 より前の文書には無い（null とみなす）
   readonly lastAnsweredAt: Timestamp | null;
   readonly startedAt: Timestamp | null;
   readonly submittedAt: Timestamp | null;

@@ -1,13 +1,11 @@
-// ブラウザ側の受検者 API の呼び出し口（05 §7.1）と sessionStorage の退避（05 §6.4）
+// ブラウザ側の受検者 API の呼び出し口（05 §7.1、11-1 §3.4.2）と sessionStorage の退避（M7-exam-15。11-1 §2.4.5）
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   clearAllExamDrafts,
   clearExamDraft,
   examDraftKey,
-  readExamDraft,
-  setExamFlash,
-  takeExamFlash,
+  loadExamDrafts,
   writeExamDraft,
 } from "@/lib/utils/exam-draft-storage";
 import {
@@ -44,7 +42,7 @@ describe("respondent-api", () => {
     const fetchImpl = vi.fn(async () => jsonResponse(200, { sessionId: "S1", answeredCount: 7 }));
     const dto = await saveAnswers(
       "S1",
-      { pageNo: 1, answers: [{ questionNo: 1, choiceCode: 3 }] },
+      { stepNo: 1, answers: [{ questionNo: 1, choiceCode: 3 }] },
       { fetchImpl },
     );
     expect(dto).toEqual({ sessionId: "S1", answeredCount: 7 });
@@ -53,7 +51,7 @@ describe("respondent-api", () => {
     expect(init).toMatchObject({ method: "PUT", credentials: "same-origin", cache: "no-store" });
     expect(init.headers).toEqual({ "Content-Type": "application/json" });
     expect(JSON.parse(init.body as string)).toEqual({
-      pageNo: 1,
+      stepNo: 1,
       answers: [{ questionNo: 1, choiceCode: 3 }],
     });
   });
@@ -123,7 +121,7 @@ describe("respondent-api", () => {
           organizationId: "O",
           kind: "applicant",
           name: "a",
-          phoneNumber: "09000000000",
+          phoneNumber: "00000000000",
           occupationCode: 1,
           diagnosisExperience: "first_time",
         },
@@ -170,61 +168,134 @@ class MemoryStorage {
   }
 }
 
-describe("exam-draft-storage（05 §6.4）", () => {
-  it("キーは tk_exam_draft:{sessionId}:{pageNo}、値は questionNo → choiceCode の JSON", () => {
+describe("M7-exam-15 exam-draft-storage（11-1 §2.4.5）", () => {
+  it("キーは tk_exam_step:{sessionId}:{stepNo}、値は設問番号 → 選択の JSON（空なら消す）", () => {
     const storage = new MemoryStorage();
     writeExamDraft(
       "S1",
-      8,
+      2,
       new Map([
-        [51, 3],
-        [52, 1],
+        [42, 3],
+        [43, 1],
       ]),
       storage,
     );
-    expect(examDraftKey("S1", 8)).toBe("tk_exam_draft:S1:8");
-    expect(storage.getItem("tk_exam_draft:S1:8")).toBe('{"51":3,"52":1}');
-    expect(readExamDraft("S1", 8, storage)).toEqual(
+    expect(examDraftKey("S1", 2)).toBe("tk_exam_step:S1:2");
+    expect(storage.getItem("tk_exam_step:S1:2")).toBe('{"42":3,"43":1}');
+    expect(loadExamDrafts("S1", storage)).toEqual(
       new Map([
-        [51, 3],
-        [52, 1],
+        [42, 3],
+        [43, 1],
       ]),
     );
-    clearExamDraft("S1", 8, storage);
-    expect(readExamDraft("S1", 8, storage).size).toBe(0);
+    writeExamDraft("S1", 2, new Map(), storage);
+    expect(storage.getItem("tk_exam_step:S1:2")).toBeNull();
+    writeExamDraft("S1", 3, new Map([[90, 2]]), storage);
+    clearExamDraft("S1", 3, storage);
+    expect(storage.length).toBe(0);
   });
 
-  it("壊れた値・不正な項目は捨て、ストレージが使えなくても例外を投げない", () => {
+  it("全ステップの退避を読み、設問番号 1〜144・値 1〜5 でないものと壊れた値は捨てる", () => {
     const storage = new MemoryStorage();
-    storage.setItem(examDraftKey("S1", 1), "{not json");
-    expect(readExamDraft("S1", 1, storage).size).toBe(0);
-    storage.setItem(examDraftKey("S1", 2), '{"1":2,"x":3,"4":"5","5":1.5}');
-    expect(readExamDraft("S1", 2, storage)).toEqual(new Map([[1, 2]]));
-    storage.failWrites = true;
-    expect(() => writeExamDraft("S1", 3, new Map([[1, 1]]), storage)).not.toThrow();
-    expect(() => readExamDraft("S1", 3, null)).not.toThrow();
-    expect(() => clearAllExamDrafts(undefined, null)).not.toThrow();
+    storage.setItem("tk_exam_step:S1:1", '{"1":2,"x":3,"4":"5","5":1.5,"6":6,"7":0}');
+    storage.setItem("tk_exam_step:S1:4", '{"144":5,"145":1}');
+    storage.setItem("tk_exam_step:S1:3", "{not json");
+    storage.setItem("tk_exam_step:S1:2", "[1,2]");
+    expect(loadExamDrafts("S1", storage)).toEqual(
+      new Map([
+        [1, 2],
+        [144, 5],
+      ]),
+    );
   });
 
-  it("clearAllExamDrafts は指定セッション（省略時は全セッション）の退避だけを消す", () => {
+  it("旧キー tk_exam_draft:{sessionId}:{pageNo} のこのセッションの値は取り込んでから消し、ほかのセッションの値は取り込まない", () => {
+    const storage = new MemoryStorage();
+    storage.setItem("tk_exam_draft:S1:8", '{"51":3,"52":1,"145":2,"53":6}');
+    storage.setItem("tk_exam_draft:S1:1", '{"1":4}');
+    storage.setItem("tk_exam_draft:S2:1", '{"2":5}');
+    storage.setItem("tk_exam_step:S1:2", '{"52":4,"60":2}');
+    const loaded = loadExamDrafts("S1", storage);
+    // 同じ設問は新しいキーの値を優先する
+    expect(loaded).toEqual(
+      new Map([
+        [51, 3],
+        [52, 4],
+        [1, 4],
+        [60, 2],
+      ]),
+    );
+    expect(storage.getItem("tk_exam_draft:S1:8")).toBeNull();
+    expect(storage.getItem("tk_exam_draft:S1:1")).toBeNull();
+    // 取り込んだ値は新しいキー（ステップごと）に書き直す
+    expect(JSON.parse(storage.getItem("tk_exam_step:S1:1") ?? "{}")).toEqual({ "1": 4 });
+    expect(JSON.parse(storage.getItem("tk_exam_step:S1:2") ?? "{}")).toEqual({
+      "51": 3,
+      "52": 4,
+      "60": 2,
+    });
+    // ほかのセッションの旧キーは触らない
+    expect(storage.getItem("tk_exam_draft:S2:1")).toBe('{"2":5}');
+    expect(loadExamDrafts("S1", storage)).toEqual(loaded);
+  });
+
+  it("「戻る」用の tk_exam_flash: は読み込みのときに消す", () => {
+    const storage = new MemoryStorage();
+    storage.setItem("tk_exam_flash:S1", '{"text":"E-02","pageNo":3}');
+    storage.setItem("tk_exam_flash:S2", '{"text":"E-02","pageNo":1}');
+    expect(loadExamDrafts("S1", storage).size).toBe(0);
+    expect(storage.getItem("tk_exam_flash:S1")).toBeNull();
+    expect(storage.getItem("tk_exam_flash:S2")).not.toBeNull();
+  });
+
+  it("clearAllExamDrafts は新しいキー・旧キー・tk_exam_flash: を、指定セッション（省略時は全セッション）の分だけ消す", () => {
     const storage = new MemoryStorage();
     writeExamDraft("S1", 1, new Map([[1, 1]]), storage);
-    writeExamDraft("S1", 2, new Map([[8, 1]]), storage);
+    writeExamDraft("S1", 2, new Map([[42, 1]]), storage);
     writeExamDraft("S2", 1, new Map([[1, 2]]), storage);
+    storage.setItem("tk_exam_draft:S1:3", '{"15":1}');
+    storage.setItem("tk_exam_draft:S2:3", '{"15":1}');
+    storage.setItem("tk_exam_flash:S1", "x");
     storage.setItem("other", "keep");
     clearAllExamDrafts("S1", storage);
-    expect(readExamDraft("S1", 1, storage).size).toBe(0);
-    expect(readExamDraft("S1", 2, storage).size).toBe(0);
-    expect(readExamDraft("S2", 1, storage).size).toBe(1);
+    expect([...Array(storage.length).keys()].map((i) => storage.key(i)).sort()).toEqual([
+      "other",
+      "tk_exam_draft:S2:3",
+      "tk_exam_step:S2:1",
+    ]);
     clearAllExamDrafts(undefined, storage);
-    expect(readExamDraft("S2", 1, storage).size).toBe(0);
-    expect(storage.getItem("other")).toBe("keep");
+    expect([...Array(storage.length).keys()].map((i) => storage.key(i))).toEqual(["other"]);
   });
 
-  it("フラグは読んだら消える", () => {
+  it("sessionStorage が使えなくても例外を投げない", () => {
     const storage = new MemoryStorage();
-    setExamFlash("S1", "E-02", storage);
-    expect(takeExamFlash("S1", storage)).toBe("E-02");
-    expect(takeExamFlash("S1", storage)).toBeNull();
+    storage.failWrites = true;
+    expect(() => writeExamDraft("S1", 3, new Map([[90, 1]]), storage)).not.toThrow();
+    const throwing = {
+      get length(): number {
+        throw new DOMException("SecurityError");
+      },
+      key: () => {
+        throw new DOMException("SecurityError");
+      },
+      getItem: () => {
+        throw new DOMException("SecurityError");
+      },
+      setItem: () => {
+        throw new DOMException("SecurityError");
+      },
+      removeItem: () => {
+        throw new DOMException("SecurityError");
+      },
+    };
+    expect(() => loadExamDrafts("S1", throwing)).not.toThrow();
+    expect(loadExamDrafts("S1", throwing).size).toBe(0);
+    expect(() => writeExamDraft("S1", 1, new Map([[1, 1]]), throwing)).not.toThrow();
+    expect(() => clearExamDraft("S1", 1, throwing)).not.toThrow();
+    expect(() => clearAllExamDrafts("S1", throwing)).not.toThrow();
+    expect(() => loadExamDrafts("S1", null)).not.toThrow();
+    expect(() => clearAllExamDrafts(undefined, null)).not.toThrow();
+    // window の無い環境（サーバ・Vitest の node）では既定のストレージが null になる
+    expect(loadExamDrafts("S1").size).toBe(0);
   });
 });

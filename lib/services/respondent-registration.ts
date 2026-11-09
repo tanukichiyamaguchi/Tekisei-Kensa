@@ -24,7 +24,8 @@ export async function registerRespondent(
   });
   // 3. トークン
   const issued = issueRespondentToken(now);
-  // 4. 4 文書を 1 バッチで作成（監査ログ respondent.register もリポジトリが同じバッチに積む）
+  // 4. 3 文書（受検者・受検セッション・監査ログ respondent.register）を 1 バッチで作成する。
+  //    利用履歴は送信のときに作る（11-1 §2.7.4）
   const registered = await registerRespondentDocs({
     organizationId: org.id,
     kind: input.kind,
