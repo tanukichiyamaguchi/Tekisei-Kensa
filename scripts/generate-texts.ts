@@ -42,8 +42,8 @@ import {
   TRAIT_LABELS,
 } from "./lib/labels";
 
-/** 解析規則の版（08 §7.2）。規則を変えたら上げ、全生成物を再生成する */
-const GENERATOR_VERSION = "1";
+/** 解析規則の版（08 §7.2）。規則を変えたら上げ、全生成物を再生成する（2: 付録C §8 の位置の表と §9 を読む。11-3 §3.9・11-4 §3.3） */
+const GENERATOR_VERSION = "2";
 
 const SRC_C = "docs/付録C_表示文言マスタ.md";
 const SRC_LABELS = "scripts/lib/labels.ts";
@@ -449,12 +449,31 @@ const ASSERTION_AXIS = new Map([
   ["意見を主張する", "assert"],
 ] as const);
 
+/** 分類の中の位置 → 列・行（記載順 = 左上・右上・左下・右下。11-3 §3.9） */
+const CELL_POSITIONS = new Map([
+  ["左上", { column: 0, row: 0 }],
+  ["右上", { column: 1, row: 0 }],
+  ["左下", { column: 0, row: 1 }],
+  ["右下", { column: 1, row: 1 }],
+] as const);
+
+const POSITIONS_LABEL = "キャラクターの位置と説明";
+const DESCRIPTIONS_LABEL = "分類の説明文";
+
+interface ClassificationCharacterItem {
+  aptitudeType: AptitudeTypeKey;
+  column: 0 | 1;
+  row: 0 | 1;
+  positionDescription: string;
+}
+
 interface ClassificationItem {
   socialStyleKey: SocialStyleKey;
   labelJa: string;
   axisPosition: { emotion: "suppress" | "express"; assertion: "listen" | "assert" };
   characterOrder: AptitudeTypeKey[];
   characterNamesHiragana: string[];
+  characters: ClassificationCharacterItem[];
   description: string;
   emptyMessage: string;
 }
@@ -486,6 +505,48 @@ function allCodeBlocks(lines: readonly string[]): string[] {
   return out;
 }
 
+/** 「あいり（サイエンティスト）」→ タイプ。ひらがな名が 00 §1.6 と一致すること */
+function characterOf(entry: string, where: string): { type: AptitudeTypeKey; hiragana: string } {
+  const m = /^(.+)（(.+)）$/.exec(entry.trim());
+  if (!m) fail(`${where}: キャラクターの書式が想定外です: ${entry}`);
+  const type = lookup(TYPE_BY_SHORT_LABEL, m[2]!, where);
+  if (TYPE_LABEL.get(type)!.characterNameHiragana !== m[1])
+    fail(`${where}: ${entry} のひらがな名が 00 §1.6 と異なります`);
+  return { type, hiragana: m[1]! };
+}
+
+/** 位置の表: 16 タイプが 1 回ずつ、分類ごとに 4 つの位置が 1 回ずつ、位置の説明が空でない（11-3 §3.9） */
+function parseCharacterPositions(
+  lines: readonly string[],
+  where: string,
+): Map<AptitudeTypeKey, Omit<ClassificationCharacterItem, "aptitudeType">> {
+  const [header, ...rows] = tableRows(lines);
+  if (header?.join("|") !== "キャラクター（適性タイプ）|分類の中の位置|位置の説明") {
+    fail(`${where} の位置の表の見出しが想定外です: ${header?.join(" | ")}`);
+  }
+  if (rows.length !== APTITUDE_TYPE_KEYS.length) fail(`${where} の位置の表が 16 行ではありません`);
+  const positions = new Map<AptitudeTypeKey, Omit<ClassificationCharacterItem, "aptitudeType">>();
+  for (const cells of rows) {
+    if (cells.length !== 3)
+      fail(`${where} の位置の表の列数が 3 ではありません: ${cells.join(" | ")}`);
+    const [entry, cell, positionDescription] = cells as [string, string, string];
+    const { type } = characterOf(entry, where);
+    const { column, row } = lookup(CELL_POSITIONS, cell, where);
+    if (positionDescription === "") fail(`${where}: ${entry} の位置の説明が空です`);
+    if (positions.has(type)) fail(`${where}: ${entry} が位置の表で重複しています`);
+    positions.set(type, { column, row, positionDescription });
+  }
+  for (const style of SOCIAL_STYLE_KEYS) {
+    const cells = [...positions.entries()]
+      .filter(([type]) => TYPE_LABEL.get(type)!.socialStyle === style)
+      .map(([, p]) => `${p.column},${p.row}`);
+    if (new Set(cells).size !== CELL_POSITIONS.size) {
+      fail(`${where}: ${style} の位置が左上・右上・左下・右下の 1 回ずつではありません`);
+    }
+  }
+  return positions;
+}
+
 function parseClassifications(section: readonly string[]): ClassificationFile {
   const where = "付録C §8";
   const text = section.join("\n");
@@ -499,20 +560,27 @@ function parseClassifications(section: readonly string[]): ClassificationFile {
   if (!emptyMatch) fail(`${where}: 該当者 0 名の文言が見つかりません`);
   const emptyMessage = emptyMatch[1]!;
 
-  const descriptionStart = section.findIndex((l) => l.startsWith("分類の説明文"));
-  if (descriptionStart < 0) fail(`${where}: 「分類の説明文」がありません`);
-  const [header, ...rows] = tableRows(section.slice(0, descriptionStart));
+  // tableRows は渡した行の表の行をすべて拾うので、分類の表・位置の表・説明文の区切りごとに切って渡す（11-3 §3.9）
+  const positionsStart = section.findIndex((l) => l.startsWith(POSITIONS_LABEL));
+  const descriptionStart = section.findIndex((l) => l.startsWith(DESCRIPTIONS_LABEL));
+  if (positionsStart < 0) fail(`${where}: 「${POSITIONS_LABEL}」がありません`);
+  if (descriptionStart < positionsStart)
+    fail(`${where}: 「${DESCRIPTIONS_LABEL}」が位置の表の後にありません`);
+  const [header, ...rows] = tableRows(section.slice(0, positionsStart));
   if (header?.join("|") !== "分類|日本語名|位置|キャラクター（適性タイプ）") {
     fail(`${where} の表の見出しが想定外です: ${header?.join(" | ")}`);
   }
+  const positions = parseCharacterPositions(section.slice(positionsStart, descriptionStart), where);
 
+  // 説明文は「{カタカナ名}タイプ」で始まる（英名で始まる前回の書式は失敗にする）
   const descriptions = new Map<SocialStyleKey, string>();
   for (const block of allCodeBlocks(section.slice(descriptionStart))) {
-    const en = /^([A-Za-z]+)タイプ/.exec(block)?.[1];
-    if (!en) fail(`${where}: 説明文が「{英名}タイプ」で始まっていません`);
-    const key = lookup(STYLE_BY_EN, en, where);
-    if (descriptions.has(key)) fail(`${where}: ${en} の説明文が重複しています`);
-    descriptions.set(key, block);
+    const style = SOCIAL_STYLE_LABELS.find((s) => block.startsWith(`${s.labelKatakana}タイプ`));
+    if (!style)
+      fail(`${where}: 説明文が「{カタカナ名}タイプ」で始まっていません: ${block.slice(0, 20)}`);
+    if (descriptions.has(style.key))
+      fail(`${where}: ${style.labelKatakana} の説明文が重複しています`);
+    descriptions.set(style.key, block);
   }
 
   const items = new Map<SocialStyleKey, ClassificationItem>();
@@ -529,18 +597,26 @@ function parseClassifications(section: readonly string[]): ClassificationFile {
     const characterOrder: AptitudeTypeKey[] = [];
     const characterNamesHiragana: string[] = [];
     for (const entry of characters.split("、")) {
-      const m = /^(.+)（(.+)）$/.exec(entry.trim());
-      if (!m) fail(`${where}: キャラクターの書式が想定外です: ${entry}`);
-      const type = lookup(TYPE_BY_SHORT_LABEL, m[2]!, where);
-      const def = TYPE_LABEL.get(type)!;
-      if (def.characterNameHiragana !== m[1])
-        fail(`${where}: ${entry} のひらがな名が 00 §1.6 と異なります`);
-      if (def.socialStyle !== key)
+      const { type, hiragana } = characterOf(entry, where);
+      if (TYPE_LABEL.get(type)!.socialStyle !== key)
         fail(`${where}: ${entry} の所属分類が付録B と異なります（${en}）`);
       if (seenTypes.has(type)) fail(`${where}: ${entry} が複数の分類にあります`);
       seenTypes.add(type);
       characterOrder.push(type);
-      characterNamesHiragana.push(m[1]!);
+      characterNamesHiragana.push(hiragana);
+    }
+    // キャラクターの並びは、位置の表のその分類の 4 行を 左上・右上・左下・右下 の順に並べたものと一致すること
+    const cellIndex = (type: AptitudeTypeKey) => {
+      const p = positions.get(type)!;
+      return p.row * 2 + p.column;
+    };
+    const byPosition = [...positions.keys()]
+      .filter((type) => TYPE_LABEL.get(type)!.socialStyle === key)
+      .sort((a, b) => cellIndex(a) - cellIndex(b));
+    if (characterOrder.join("|") !== byPosition.join("|")) {
+      fail(
+        `${where}: ${en} のキャラクターの並びが位置の表（左上・右上・左下・右下）と一致しません`,
+      );
     }
     const description = descriptions.get(key);
     if (!description) fail(`${where}: ${en} の説明文がありません`);
@@ -550,6 +626,7 @@ function parseClassifications(section: readonly string[]): ClassificationFile {
       axisPosition: { emotion, assertion },
       characterOrder,
       characterNamesHiragana,
+      characters: characterOrder.map((type) => ({ aptitudeType: type, ...positions.get(type)! })),
       description,
       emptyMessage,
     });
@@ -557,6 +634,35 @@ function parseClassifications(section: readonly string[]): ClassificationFile {
   requireAll(SOCIAL_STYLE_KEYS, new Set(items.keys()), where);
   requireAll(APTITUDE_TYPE_KEYS, seenTypes, `${where} のキャラクター`);
   return { axes, items: SOCIAL_STYLE_KEYS.map((k) => items.get(k)!) };
+}
+
+// ---------------------------------------------------------------------------
+// §9 16の特性の説明
+
+interface TraitDescriptionItem {
+  key: TraitKey;
+  description: string;
+  highLow: string;
+}
+
+function parseTraitDescriptions(section: readonly string[]): TraitDescriptionItem[] {
+  const where = "付録C §9";
+  const [header, ...rows] = tableRows(section);
+  if (header?.join("|") !== "尺度|説明（1 行目）|高いとき・低いとき（2 行目）") {
+    fail(`${where} の表の見出しが想定外です: ${header?.join(" | ")}`);
+  }
+  const items = new Map<TraitKey, TraitDescriptionItem>();
+  for (const cells of rows) {
+    if (cells.length !== 3) fail(`${where} の列数が 3 ではありません: ${cells.join(" | ")}`);
+    const [name, description, highLow] = cells as [string, string, string];
+    // 尺度の名前は 00 §1.2 の日本語名（labels.ts）と一致すること
+    const key = lookup(TRAIT_BY_LABEL, name, where);
+    if (description === "" || highLow === "") fail(`${where}: ${name} に空の文があります`);
+    if (items.has(key)) fail(`${where}: ${name} が重複しています`);
+    items.set(key, { key, description, highLow });
+  }
+  requireAll(TRAIT_KEYS, new Set(items.keys()), where);
+  return TRAIT_KEYS.map((k) => items.get(k)!);
 }
 
 // ---------------------------------------------------------------------------
@@ -571,6 +677,7 @@ export interface GeneratedTexts {
   styleInteractions: StyleInteractionItem[];
   positions: PositionItem[];
   classifications: ClassificationFile;
+  traitDescriptions: TraitDescriptionItem[];
 }
 
 function build(appendixC: string): GeneratedTexts {
@@ -585,6 +692,7 @@ function build(appendixC: string): GeneratedTexts {
     styleInteractions: parseStyleInteractions(section5),
     positions: parsePositions(sectionByPrefix(sections, "6. ")),
     classifications: parseClassifications(sectionByPrefix(sections, "8. ")),
+    traitDescriptions: parseTraitDescriptions(sectionByPrefix(sections, "9. ")),
   };
 }
 
@@ -618,6 +726,7 @@ function files(g: GeneratedTexts) {
       "classifications",
       { axes: g.classifications.axes, items: g.classifications.items },
     ],
+    ["trait-descriptions.json", "trait_descriptions", { items: g.traitDescriptions }],
   ];
   return out.map(([fileName, kind, body]) => ({
     fileName,

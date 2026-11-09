@@ -1,10 +1,10 @@
 {
   "generatedFrom": ["docs/付録C_表示文言マスタ.md", "scripts/lib/labels.ts"],
   "sourceHash": {
-    "docs/付録C_表示文言マスタ.md": "sha256:b4041cf335c0440fe523193c4ea3acf5cf9025bbc1bdb419e70d08e610d65cc1",
-    "scripts/lib/labels.ts": "sha256:f1ca930f176821e4491f5bfa922b4404d70ea5b7c25af689bdc7ca0016c4eae9"
+    "docs/付録C_表示文言マスタ.md": "sha256:2434b49bef623cdb0630a7103c8595df041112b9ef4ee2a5413a0df0381c7e16",
+    "scripts/lib/labels.ts": "sha256:7d19c21be905d71f1e8f362dec3f9840dd3e4929ad6ca510bfffd1d5594bc19a"
   },
-  "generatorVersion": "1",
+  "generatorVersion": "2",
   "kind": "trait_highlights",
   "items": [
     {
