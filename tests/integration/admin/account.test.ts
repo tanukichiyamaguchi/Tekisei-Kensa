@@ -213,7 +213,7 @@ describe("I-39 GET /admin/me の links と招待リンクの再発行", () => {
     });
   });
 
-  it("owner の再発行は 200 で adminInvite と rotatedAt を返し、ハッシュを置き換えて監査ログを書く。平文は Firestore に無い", async () => {
+  it("owner の再発行は 200 で adminInvite と rotatedAt を返し、平文とハッシュを置き換えて監査ログを書く。平文は organizations.inviteToken にだけある", async () => {
     const { org, owner } = await createOrganizationWithOwner("再発行歯科");
     const res = await callRoute(rotateInviteRoute, {
       method: "POST",
@@ -231,9 +231,11 @@ describe("I-39 GET /admin/me の links と招待リンクの再発行", () => {
     expect(token).not.toBe(org.inviteToken);
 
     const orgDoc = await getDocForTest<{
+      inviteToken: string;
       inviteTokenHash: string;
       inviteTokenIssuedAt: { toDate(): Date };
     }>(COLLECTIONS.organizations, org.organizationId);
+    expect(orgDoc!.inviteToken).toBe(token);
     expect(orgDoc!.inviteTokenHash).toBe(hashInviteToken(token));
     expect(body.rotatedAt).toBe(orgDoc!.inviteTokenIssuedAt.toDate().toISOString());
 
@@ -245,10 +247,19 @@ describe("I-39 GET /admin/me の links と招待リンクの再発行", () => {
     expect(logs).toHaveLength(1);
     expect(logs[0]!.data.actorUid).toBe(owner.uid);
 
-    // 平文がどのコレクションにも無い
+    // 平文は organizations.inviteToken にだけ保存し（K-30。11-8 §3.2）、ほかの文書（監査ログを含む）には無い
     for (const collection of await adminFirestore().listCollections()) {
       const snap = await collection.get();
-      for (const doc of snap.docs) expect(JSON.stringify(doc.data())).not.toContain(token);
+      for (const doc of snap.docs) {
+        const data = doc.data();
+        if (collection.id === COLLECTIONS.organizations && doc.id === org.organizationId) {
+          const { inviteToken, ...rest } = data;
+          expect(inviteToken).toBe(token);
+          expect(JSON.stringify(rest)).not.toContain(token);
+        } else {
+          expect(JSON.stringify(data)).not.toContain(token);
+        }
+      }
     }
 
     // 再発行後の GET /me の adminInviteIssuedAt も更新される

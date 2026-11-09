@@ -1,4 +1,4 @@
-// 管理者追加用リンクの招待トークン（02 §9.7）。平文はリンクにだけ現れ、ハッシュだけを保存する。有効期限は無い
+// 管理者追加用リンクの招待トークン（02 §9.7）。平文も organizations.inviteToken に保存し（K-30）、照合はハッシュで引く。有効期限は無い
 import { newRandomToken, sha256Hex, TOKEN_PATTERN } from "./random-token";
 
 export interface IssuedInviteToken {

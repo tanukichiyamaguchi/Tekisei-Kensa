@@ -14,7 +14,8 @@ export const respondentCreateSchema = z.strictObject({
   teamCode: z.null(),
   isExcluded: z.literal(false),
   sessionId: docIdSchema,
-  usageLogId: docIdSchema,
+  usageLogId: docIdSchema.nullable(),
   resultId: z.null(),
+  previousResultId: docIdSchema.nullable(),
   deletedAt: z.null(),
 });

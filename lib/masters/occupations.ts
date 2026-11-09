@@ -1,7 +1,11 @@
-// 職業マスタ（00 §1.10）。アイリストのサロン向けの選択肢（10 K-19。既存システムの歯科向け 9 項目から置き換え）
+// 職業マスタ（00 §1.10）。アイリストのサロン向けの選択肢 9 項目（10 K-19 で既存システムの歯科向け 9 項目から
+// 置き換え、K-21 で末尾に 10「責任者」を足した。9 は欠番）
 
-export const OCCUPATION_CODES = [1, 2, 3, 4, 5, 6, 7, 8] as const;
+export const OCCUPATION_CODES = [1, 2, 3, 4, 5, 6, 7, 8, 10] as const; // 9 は欠番（旧データの「その他」の表示用）
 export type OccupationCode = (typeof OCCUPATION_CODES)[number];
+
+/** 職業「責任者」（参照元: 院長。K-21）。役職の札の既定（11-2）と AI 解説の出し分け（11-6）はこの定数で判定する */
+export const MANAGER_OCCUPATION_CODE = 10 as const;
 
 export interface OccupationDefinition {
   readonly code: OccupationCode;
@@ -18,6 +22,7 @@ export const OCCUPATIONS: readonly OccupationDefinition[] = Object.freeze([
   { code: 6, key: "reception", label: "受付" },
   { code: 7, key: "office_staff", label: "事務スタッフ" },
   { code: 8, key: "other", label: "その他" },
+  { code: 10, key: "manager", label: "責任者" },
 ] as const satisfies readonly OccupationDefinition[]);
 
 const LABEL_BY_CODE: ReadonlyMap<number, string> = new Map(

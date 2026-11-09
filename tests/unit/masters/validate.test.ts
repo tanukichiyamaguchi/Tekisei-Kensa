@@ -6,7 +6,13 @@ import choiceScoresJson from "@/lib/masters/data/choice-scores.json";
 import questionsJson from "@/lib/masters/data/questions.json";
 import socialStylesJson from "@/lib/masters/data/social-styles.json";
 import traitsJson from "@/lib/masters/data/traits.json";
-import { getOccupationLabel, isOccupationCode, OCCUPATIONS } from "@/lib/masters/occupations";
+import {
+  getOccupationLabel,
+  isOccupationCode,
+  MANAGER_OCCUPATION_CODE,
+  OCCUPATION_CODES,
+  OCCUPATIONS,
+} from "@/lib/masters/occupations";
 import { stepAndPageOf } from "@/lib/masters/question-layout";
 import {
   MasterValidationError,
@@ -163,18 +169,25 @@ describe("設問のステップ・ページ割り当て", () => {
   });
 });
 
-describe("職業マスタ（00 §1.10、10 K-19）", () => {
-  it("8 件、コード順（アイリストのサロン向け）", () => {
-    expect(OCCUPATIONS.map((o) => o.code)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+describe("M7-exam-01 職業マスタ（00 §1.10、10 K-19・K-21、11-1 §2.2.4）", () => {
+  it("1〜8・10 の 9 件、コード順で 10 が末尾の「責任者」（アイリストのサロン向け）", () => {
+    expect(OCCUPATIONS.map((o) => o.code)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 10]);
+    expect([...OCCUPATION_CODES]).toEqual(OCCUPATIONS.map((o) => o.code));
+    expect(OCCUPATIONS.at(-1)).toEqual({ code: 10, key: "manager", label: "責任者" });
+    expect(MANAGER_OCCUPATION_CODE).toBe(10);
     expect(getOccupationLabel(1)).toBe("アイリスト");
     expect(getOccupationLabel(6)).toBe("受付");
     expect(getOccupationLabel(8)).toBe("その他");
-    // K-19 より前に保存された旧コード 9（その他）は表示できるが、新規の登録には使えない
+    expect(getOccupationLabel(10)).toBe("責任者");
+    expect(isOccupationCode(10)).toBe(true);
+    // K-19 より前に保存された旧コード 9（その他）は表示できるが、新規の登録には使えない（欠番）
     expect(getOccupationLabel(9)).toBe("その他");
     expect(isOccupationCode(9)).toBe(false);
-    expect(() => getOccupationLabel(10)).toThrow(RangeError);
+    expect(() => getOccupationLabel(11)).toThrow(RangeError);
+    expect(() => getOccupationLabel(0)).toThrow(RangeError);
     expect(isOccupationCode(1)).toBe(true);
     expect(isOccupationCode(0)).toBe(false);
+    expect(isOccupationCode(11)).toBe(false);
     expect(isOccupationCode("1")).toBe(false);
   });
 });

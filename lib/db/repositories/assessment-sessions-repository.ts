@@ -13,6 +13,7 @@ import {
   usageLogsRef,
 } from "@/lib/db/collections";
 import type { AssessmentSession } from "@/lib/db/domain";
+import { initialEmploymentStatus } from "@/lib/db/employment-status";
 import { RepositoryError } from "@/lib/db/errors";
 import { toAnswerMap } from "@/lib/db/mappers/answers";
 import {
@@ -207,6 +208,9 @@ export async function submitSession(
     ) {
       throw new RepositoryError("SESSION_NOT_FOUND", "セッションが見つかりません");
     }
+    if (respondent.usageLogId === null) {
+      throw new RepositoryError("SESSION_NOT_FOUND", "利用履歴が見つかりません");
+    }
     const usageLog = fromSnapshot(
       await tx.get(usageLogsRef().doc(respondent.usageLogId)),
       toUsageLog,
@@ -244,6 +248,23 @@ export async function submitSession(
         aiGenerationStartedAt: null,
         aiGenerationError: null,
         latestAiAnalysisId: null,
+        // 区分は受検者区分から決め（K-28）、入社日・退職日・役職は前回の値を引き継がない（K-39 Q-34。11-2 §3.1）
+        employmentStatus: initialEmploymentStatus(respondent.kind),
+        hiredOn: null,
+        leftOn: null,
+        staffRole: null,
+        // 前回の結果（11-7 §3.1）。つながりの確定（11-1 §2.7.3）は行わない
+        previousResultId: null,
+        // 育成・定着と経年比較の AI 解説の作成時の値（11-6 §3.1）
+        trainingAiStatus: "not_generated",
+        trainingAiStartedAt: null,
+        trainingAiError: null,
+        latestTrainingAiAnalysisId: null,
+        trainingContext: null,
+        longitudinalAiStatus: "not_generated",
+        longitudinalAiStartedAt: null,
+        longitudinalAiError: null,
+        latestLongitudinalAiAnalysisId: null,
         deletedAt: null,
       },
       "results",

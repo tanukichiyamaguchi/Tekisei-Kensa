@@ -1,7 +1,9 @@
-// I-50 複合インデックスの過不足（08 §3.3、02 §7、09 §6.4 の 3）。
+// I-50 複合インデックスの過不足（08 §3.3、02 §7、09 §6.4 の 3）と、M7 のインデックス（M7-exam-34・M7-list-33・
+// M7-misc-25。11-1 §3.2.5、11-2 §3.4、11-8 §3.4）。
 // Firestore Emulator は未定義の複合インデックスを必要とするクエリでも失敗せず、ログにも警告を出さないことを確認した
 // （firestore-debug.log に該当出力なし）。そのため 08 の代替手順どおり、リポジトリ関数が実際に発行したクエリの形
 // （等価条件・不等号条件・並び順）を捕捉し、firestore.indexes.json の定義と機械的に照合する。
+// リポジトリの関数がまだ無い M7 のクエリ（Q-M7-1、Q5・Q6 の改め）は、Q7・Q12 と同じく直接のクエリで発行する
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
@@ -11,7 +13,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Viewer } from "@/lib/auth/claims";
 import { hashInviteToken } from "@/lib/auth/invite-token";
 import { getSessionByTokenHash } from "@/lib/db/repositories/assessment-sessions-repository";
-import { listAdminUsers } from "@/lib/db/repositories/admin-users-repository";
+import { listActiveOwners, listAdminUsers } from "@/lib/db/repositories/admin-users-repository";
 import { countAiAnalysesSince } from "@/lib/db/repositories/ai-analyses-repository";
 import { countRecentAuditLogs } from "@/lib/db/repositories/audit-logs-repository";
 import { findOrganizationByInviteTokenHash } from "@/lib/db/repositories/organizations-repository";
@@ -143,7 +145,7 @@ beforeAll(async () => {
     return originalAggregateGet.apply(this, args);
   });
 
-  // リポジトリの全クエリを発行する（02 §7.1 の Q1〜Q14）
+  // リポジトリの全クエリを発行する（02 §7.1 の Q1〜Q14、Q-M7-2）
   const { org, owner } = await createOrganizationWithOwner("インデックス歯科");
   await submitAnswerSet(org, uniformAnswers(3));
   const ownerViewer: Viewer = { uid: owner.uid, organizationId: org.organizationId, role: "owner" };
@@ -161,6 +163,7 @@ beforeAll(async () => {
     }
   }
   await listAdminUsers(org.organizationId); // Q8
+  await listActiveOwners(org.organizationId); // Q-M7-2（11-8 §3.4）
   await findOrganizationByInviteTokenHash(hashInviteToken(org.inviteToken)); // Q9
   await getSessionByTokenHash({
     organizationId: org.organizationId,
@@ -189,6 +192,25 @@ beforeAll(async () => {
     .orderBy("createdAt", "desc")
     .limit(10)
     .get();
+  // M7 で定義し、リポジトリの関数が後で使うクエリ（Q-M7-1: 前回の候補とつながり。Q5・Q6（改）: 利用履歴の submittedAt 順）
+  await adminFirestore()
+    .collection("results")
+    .where("organizationId", "==", org.organizationId)
+    .where("previousResultId", "==", "x")
+    .where("deletedAt", "==", null)
+    .limit(1)
+    .get(); // Q-M7-1（11-1 §3.2.5）
+  await adminFirestore()
+    .collection("usageLogs")
+    .where("organizationId", "==", org.organizationId)
+    .orderBy("submittedAt", "desc")
+    .get(); // Q5（改。11-2 §3.4）
+  await adminFirestore()
+    .collection("usageLogs")
+    .where("organizationId", "==", org.organizationId)
+    .where("respondentKind", "==", "applicant")
+    .orderBy("submittedAt", "desc")
+    .get(); // Q6（改。11-2 §3.4）
 });
 
 afterAll(() => {
@@ -210,6 +232,27 @@ describe("I-50 firestore.indexes.json とクエリの照合", () => {
       (index) => !captured.filter(needsComposite).some((shape) => indexServes(index, shape)),
     );
     expect(unused).toEqual([]);
+  });
+
+  it("M7 の 4 本（Q-M7-1・Q-M7-2・Q5／Q6 の改め）と除外 2 つが定義にあり、複合 18 本・除外 14 件（02 §7.3）", () => {
+    const key = (index: IndexDef) =>
+      `${index.collectionGroup}(${index.fields.map((f) => `${f.fieldPath} ${f.order}`).join(", ")})`;
+    expect(indexFile.indexes.map(key)).toEqual(
+      expect.arrayContaining([
+        "results(organizationId ASCENDING, previousResultId ASCENDING, deletedAt ASCENDING)",
+        "adminUsers(organizationId ASCENDING, role ASCENDING, deletedAt ASCENDING)",
+        "usageLogs(organizationId ASCENDING, submittedAt DESCENDING)",
+        "usageLogs(organizationId ASCENDING, respondentKind ASCENDING, submittedAt DESCENDING)",
+      ]),
+    );
+    expect(indexFile.fieldOverrides).toEqual(
+      expect.arrayContaining([
+        { collectionGroup: "organizations", fieldPath: "inviteToken", indexes: [] },
+        { collectionGroup: "adminUsers", fieldPath: "dismissedAnnouncements", indexes: [] },
+      ]),
+    );
+    expect(indexFile.indexes).toHaveLength(18);
+    expect(indexFile.fieldOverrides).toHaveLength(14);
   });
 
   it("単一フィールドインデックスを除外したフィールドを条件・並びに使っていない", () => {

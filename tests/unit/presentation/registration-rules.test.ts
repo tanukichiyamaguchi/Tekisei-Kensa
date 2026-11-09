@@ -70,7 +70,9 @@ describe("U-03 registration-rules", () => {
   it("職業・診断経験の未選択は V-05・V-06。全項目が妥当ならエラーなし", () => {
     expect(validateRegistration(valid)).toEqual({});
     expect(validateRegistration({ ...valid, occupationCode: null }).occupationCode).toBe("V-05");
-    expect(validateRegistration({ ...valid, occupationCode: 10 }).occupationCode).toBe("V-05");
+    // 職業 10（責任者。K-21）は選べ、9（旧データの「その他」。欠番）は V-05
+    expect(validateRegistration({ ...valid, occupationCode: 9 }).occupationCode).toBe("V-05");
+    expect(validateRegistration({ ...valid, occupationCode: 10 }).occupationCode).toBeUndefined();
     expect(validateRegistration({ ...valid, diagnosisExperience: null }).diagnosisExperience).toBe(
       "V-06",
     );
@@ -152,6 +154,7 @@ describe("U-03 registration-rules", () => {
       "受付",
       "事務スタッフ",
       "その他",
+      "責任者",
     ]);
   });
 });

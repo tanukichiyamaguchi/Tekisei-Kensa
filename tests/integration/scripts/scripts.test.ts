@@ -46,7 +46,7 @@ describe("I-09 scripts/create-owner", () => {
     );
   });
 
-  it("organizations 文書 1 件（inviteTokenHash あり）と、招待リンクの平文が標準出力に 1 回だけ出る", async () => {
+  it("organizations 文書 1 件（inviteToken・inviteTokenHash あり）と、招待リンクの平文が標準出力に 1 回だけ出る", async () => {
     const org = await getDocForTest("organizations", result.organizationId);
     expect(org).toMatchObject({
       name: "スクリプト歯科",
@@ -58,9 +58,9 @@ describe("I-09 scripts/create-owner", () => {
     expect(linkLines).toHaveLength(1);
     const token = new URL(result.inviteLink!).searchParams.get("q")!;
     expect(result.inviteLink).toBe(`${BASE_URL}/admin/signup?q=${token}`);
+    // 平文は organizations.inviteToken にも保存し、ハッシュと合う（K-30。11-8 §3.2）。監査ログには無い
+    expect(org!.inviteToken).toBe(token);
     expect(org!.inviteTokenHash).toBe(hashInviteToken(token));
-    // 平文トークンは Firestore に保存しない
-    expect(JSON.stringify(await listDocs("organizations"))).not.toContain(token);
     expect(JSON.stringify(await listDocs("auditLogs"))).not.toContain(token);
   });
 

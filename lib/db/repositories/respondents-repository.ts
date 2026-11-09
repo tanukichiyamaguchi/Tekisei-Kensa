@@ -68,6 +68,7 @@ export async function registerRespondent(
       sessionId: sessionRef.id,
       usageLogId: usageLogRef.id,
       resultId: null,
+      previousResultId: null, // 前回の候補（11-1 §3.2.1）。候補の判定（11-1 §2.2.8）は行わない
       deletedAt: null,
     },
     "respondents",
@@ -82,6 +83,7 @@ export async function registerRespondent(
       tokenExpiresAt: toTimestamp(input.tokenExpiresAt),
       answers: {},
       lastSavedPageNo: null,
+      lastSavedStepNo: null, // 11-1 §3.2.2
       lastAnsweredAt: null,
       startedAt: null,
       submittedAt: null,

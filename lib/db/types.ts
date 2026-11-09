@@ -1,7 +1,9 @@
 // Firestore の保存形（02 §5.3）。Timestamp を含み、文書 ID は含まない。
 import type { Timestamp } from "firebase-admin/firestore";
 
+import type { AiAnalysisKind } from "@/lib/ai/kinds";
 import type { AiAnalysisOutput, AiGenerationStatus, AiUsage } from "@/lib/ai/types";
+import type { TrainingContext } from "@/lib/masters/training-context";
 import type {
   AptitudeKey,
   AptitudeTypeKey,
@@ -23,6 +25,15 @@ export const AUDIT_ACTOR_KINDS = ["admin", "respondent", "system"] as const;
 export type AuditActorKind = (typeof AUDIT_ACTOR_KINDS)[number];
 export const AI_ANALYSIS_STATUSES = ["completed"] as const;
 export type AiAnalysisStatus = (typeof AI_ANALYSIS_STATUSES)[number];
+/** 区分（00 §1.8、11-2 §2.3）。受験のときは受検者区分から決める（applicant → candidate、executive → employed。K-28） */
+export const EMPLOYMENT_STATUSES = ["candidate", "employed", "left"] as const; // 求職者・在籍・退職
+export type EmploymentStatus = (typeof EMPLOYMENT_STATUSES)[number];
+/** 役職（00 §1.8、11-2 §2.3）。未設定は null */
+export const STAFF_ROLES = ["manager", "leader", "staff"] as const; // 責任者・幹部・スタッフ
+export type StaffRole = (typeof STAFF_ROLES)[number];
+/** 新機能のお知らせのキー（出す順。11-8 §2.8.1） */
+export const ANNOUNCEMENT_KEYS = ["employment_analysis", "ai_training", "ai_recruitment"] as const;
+export type AnnouncementKey = (typeof ANNOUNCEMENT_KEYS)[number];
 
 /** 監査フィールド（00 §2.1） */
 export interface BaseDoc {
@@ -38,6 +49,7 @@ export interface OrganizationDoc extends SoftDeletableDoc {
   readonly name: string;
   readonly code: string | null;
   readonly customerNumber: string | null;
+  readonly inviteToken: string; // 招待トークンの平文（K-30。11-8 §3.2）。M7 より前の文書には無い（読み取りで補う）
   readonly inviteTokenHash: string; // sha256 hex
   readonly inviteTokenIssuedAt: Timestamp;
 }
@@ -47,6 +59,8 @@ export interface AdminUserDoc extends SoftDeletableDoc {
   readonly role: AdminRole; // カスタムクレームと同じ値
   readonly displayName: string;
   readonly isSuspended: boolean;
+  /** お知らせの既読（キー → 閉じた日時。11-8 §3.3）。M7 より前の文書には無い（読み取りで補う） */
+  readonly dismissedAnnouncements: Readonly<Partial<Record<AnnouncementKey, Timestamp>>>;
 }
 
 export interface RespondentDoc extends SoftDeletableDoc {
@@ -54,13 +68,14 @@ export interface RespondentDoc extends SoftDeletableDoc {
   readonly kind: RespondentKind;
   readonly name: string;
   readonly phoneNumber: string;
-  readonly occupationCode: number; // 1〜8（10 K-19）
+  readonly occupationCode: number; // 新規は 1〜8・10（10 K-19・K-21）。K-19 より前の旧データは 9 もある
   readonly diagnosisExperience: DiagnosisExperience;
   readonly teamCode: TeamCode | null; // 正
   readonly isExcluded: boolean; // 正
   readonly sessionId: string;
-  readonly usageLogId: string;
+  readonly usageLogId: string | null; // 利用履歴の ID か null（11-1 §3.2.1）
   readonly resultId: string | null;
+  readonly previousResultId: string | null; // 前回の候補（11-1 §3.2.1）。M7 より前の文書には無い（null とみなす）
 }
 
 /** answers の保存形。キーは "1"〜"144"、値は 1〜5（choice_code） */
@@ -74,6 +89,7 @@ export interface AssessmentSessionDoc extends SoftDeletableDoc {
   readonly tokenExpiresAt: Timestamp;
   readonly answers: AnswersField;
   readonly lastSavedPageNo: number | null; // 1〜20
+  readonly lastSavedStepNo: number | null; // 1〜4（参考の値。11-1 §3.2.2）。M7 より前の文書には無い（null とみなす）
   readonly lastAnsweredAt: Timestamp | null;
   readonly startedAt: Timestamp | null;
   readonly submittedAt: Timestamp | null;
@@ -93,13 +109,28 @@ export interface ResultDoc extends SoftDeletableDoc, ScoreResult {
   readonly aiGenerationStartedAt: Timestamp | null;
   readonly aiGenerationError: string | null; // AiFailureReason | "internal_error"
   readonly latestAiAnalysisId: string | null;
+  // 以下は M7 で足した項目。M7 より前の文書には無い（mapper が補う。02 §5.5）
+  readonly employmentStatus: EmploymentStatus; // 区分（11-2 §3.1）
+  readonly hiredOn: string | null; // 入社日。暦日 YYYY-MM-DD
+  readonly leftOn: string | null; // 退職日。暦日 YYYY-MM-DD
+  readonly staffRole: StaffRole | null; // 役職。未設定は null
+  readonly previousResultId: string | null; // 前回の結果（11-7 §3.1）
+  readonly trainingAiStatus: AiGenerationStatus; // 育成・定着の AI 解説（11-6 §3.1）
+  readonly trainingAiStartedAt: Timestamp | null;
+  readonly trainingAiError: string | null;
+  readonly latestTrainingAiAnalysisId: string | null;
+  readonly trainingContext: TrainingContext | null; // 生成に使った 8 項目
+  readonly longitudinalAiStatus: AiGenerationStatus; // 経年比較の AI 解説（11-6 §3.1）
+  readonly longitudinalAiStartedAt: Timestamp | null;
+  readonly longitudinalAiError: string | null;
+  readonly latestLongitudinalAiAnalysisId: string | null;
 }
 
 export interface AiAnalysisDoc extends BaseDoc {
   readonly organizationId: string;
   readonly resultId: string;
   readonly respondentId: string;
-  readonly analysisKind: string; // "recruitment"
+  readonly analysisKind: AiAnalysisKind;
   readonly provider: string; // "anthropic" | "stub"
   readonly model: string;
   readonly promptVersion: string;
@@ -111,6 +142,10 @@ export interface AiAnalysisDoc extends BaseDoc {
   readonly status: AiAnalysisStatus;
   readonly reliability: number;
   readonly generatedBy: string; // uid
+  // 以下は M7 で足した項目（11-6 §3.2）。M7 より前の文書には無い（null とみなす）
+  readonly trainingContext: TrainingContext | null; // 育成・定着は入力の 8 項目、経年比較は今回の 8 項目の写し
+  readonly previousResultId: string | null; // 経年比較で生成に使った前回の結果
+  readonly usedTrainingAction: boolean | null; // 経年比較で育成・定着の一手を入力に入れたか
 }
 
 export interface UsageLogDoc extends BaseDoc {
@@ -142,4 +177,12 @@ export interface AuditLogDoc extends BaseDoc {
 }
 
 /** 参照用に再エクスポート（services が lib/scoring を直接 import しなくてよいように） */
-export type { AiGenerationStatus, AptitudeKey, AptitudeTypeKey, SocialStyleKey, TeamCode };
+export type {
+  AiAnalysisKind,
+  AiGenerationStatus,
+  AptitudeKey,
+  AptitudeTypeKey,
+  SocialStyleKey,
+  TeamCode,
+  TrainingContext,
+};

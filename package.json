@@ -27,6 +27,7 @@
     "owner:create": "tsx scripts/create-owner.ts",
     "admin:set-role": "tsx scripts/set-admin-role.ts",
     "seed:local": "tsx scripts/seed-local.ts",
+    "m7:backfill": "tsx scripts/backfill-m7.ts",
     "firebase:verify": "tsx scripts/verify-firebase.ts",
     "firebase": "firebase --config firebase/firebase.json",
     "emulators": "pnpm firebase emulators:start --only auth,firestore --project demo-tekisei",

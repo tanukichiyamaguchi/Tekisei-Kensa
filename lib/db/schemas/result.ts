@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-import { docIdSchema, teamCodeSchema, timestampSchema } from "./values";
+import { calendarDateSchema, docIdSchema, teamCodeSchema, timestampSchema } from "./values";
 import { AI_GENERATION_STATUSES } from "@/lib/ai/types";
-import { RESPONDENT_KINDS } from "@/lib/db/types";
+import { EMPLOYMENT_STATUSES, RESPONDENT_KINDS, STAFF_ROLES } from "@/lib/db/types";
 import {
   APTITUDE_KEYS,
   APTITUDE_TYPE_KEYS,
@@ -45,6 +45,9 @@ export const scoreFieldsSchema = z
     path: ["aptitudeSecond"],
   });
 
+/** AI 解説の状態の作成時の値（今の採用向けと同じ書き方） */
+const notGeneratedSchema = z.enum(AI_GENERATION_STATUSES).pipe(z.literal("not_generated"));
+
 /** results の作成データ（02 §3.5）。submitSession() だけが作る */
 export const resultCreateSchema = z
   .strictObject({
@@ -55,10 +58,40 @@ export const resultCreateSchema = z
     teamCode: teamCodeSchema.nullable(),
     isExcluded: z.boolean(),
     submittedAt: timestampSchema,
-    aiGenerationStatus: z.enum(AI_GENERATION_STATUSES).pipe(z.literal("not_generated")),
+    aiGenerationStatus: notGeneratedSchema,
     aiGenerationStartedAt: z.null(),
     aiGenerationError: z.null(),
     latestAiAnalysisId: z.null(),
+    // 区分・入社日・退職日・役職（11-2 §3.1）
+    employmentStatus: z.enum(EMPLOYMENT_STATUSES),
+    hiredOn: calendarDateSchema.nullable(),
+    leftOn: calendarDateSchema.nullable(),
+    staffRole: z.enum(STAFF_ROLES).nullable(),
+    // 前回の結果（11-7 §3.1）
+    previousResultId: docIdSchema.nullable(),
+    // 育成・定着と経年比較の AI 解説（11-6 §3.1）。作成時の値だけを許す
+    trainingAiStatus: notGeneratedSchema,
+    trainingAiStartedAt: z.null(),
+    trainingAiError: z.null(),
+    latestTrainingAiAnalysisId: z.null(),
+    trainingContext: z.null(),
+    longitudinalAiStatus: notGeneratedSchema,
+    longitudinalAiStartedAt: z.null(),
+    longitudinalAiError: z.null(),
+    latestLongitudinalAiAnalysisId: z.null(),
     deletedAt: z.null(),
+  })
+  .superRefine((v, ctx) => {
+    // 退職日は区分が退職のときだけ持てる。入社日と両方あるときは入社日 ≤ 退職日（11-2 §3.1）
+    if (v.leftOn !== null && v.employmentStatus !== "left") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["leftOn"],
+        message: "退職日は区分が退職のときだけ持てます",
+      });
+    }
+    if (v.hiredOn !== null && v.leftOn !== null && v.leftOn < v.hiredOn) {
+      ctx.addIssue({ code: "custom", path: ["leftOn"], message: "退職日が入社日より前です" });
+    }
   })
   .and(scoreFieldsSchema);

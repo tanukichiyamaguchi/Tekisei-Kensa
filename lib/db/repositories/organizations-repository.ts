@@ -18,10 +18,13 @@ export interface CreateOrganizationInput {
 }
 export interface CreatedOrganization {
   readonly organizationId: string;
-  readonly inviteToken: string; // 平文。呼び出し元（scripts）が 1 回だけ表示する。保存しない
+  readonly inviteToken: string; // 平文。organizations.inviteToken にも保存する（K-30。11-8 §3.2）
 }
 
-/** 組織を作成し、初回の招待トークンを発行する。auditLogs に organization.create（actorKind: system） */
+/**
+ * 組織を作成し、初回の招待トークンを発行する（平文・ハッシュ・発行日時を同じ create で書く。11-8 §3.2）。
+ * auditLogs に organization.create（actorKind: system）
+ */
 export async function createOrganization(
   input: CreateOrganizationInput,
 ): Promise<CreatedOrganization> {
@@ -33,6 +36,7 @@ export async function createOrganization(
       name: input.name,
       code: input.code,
       customerNumber: input.customerNumber,
+      inviteToken: invite.token,
       inviteTokenHash: invite.tokenHash,
       inviteTokenIssuedAt: Timestamp.now(),
       deletedAt: null,
@@ -67,7 +71,7 @@ export async function getOrganization(organizationId: string): Promise<Organizat
   return org && org.deletedAt === null ? org : null;
 }
 
-/** 招待トークン（平文）のハッシュで組織を引く。無効・削除済みなら null（Q9） */
+/** 招待トークン（平文）のハッシュで組織を引く。無効・削除済みなら null（Q9。平文のフィールドは条件に使わない） */
 export async function findOrganizationByInviteTokenHash(
   inviteTokenHash: string,
 ): Promise<Organization | null> {
@@ -88,7 +92,10 @@ export interface RotateInviteTokenInput {
   readonly meta: RequestMeta | null;
 }
 
-/** 新しいトークンを生成し inviteTokenHash / inviteTokenIssuedAt を更新する。平文を返す（応答で 1 回だけ表示。D02-35） */
+/**
+ * 新しいトークンを生成し inviteToken（平文）・inviteTokenHash・inviteTokenIssuedAt を更新する（K-30。11-8 §3.2）。
+ * 監査ログ organization.rotate_invite_token を同じバッチで書く（details に平文を入れない）。平文を返す
+ */
 export async function rotateInviteToken(
   input: RotateInviteTokenInput,
 ): Promise<{ readonly inviteToken: string; readonly issuedAt: Date }> {
@@ -98,6 +105,7 @@ export async function rotateInviteToken(
   const issuedAt = Timestamp.now();
   const batch = db().batch();
   batch.update(rawCollection(COLLECTIONS.organizations).doc(org.id), {
+    inviteToken: invite.token,
     inviteTokenHash: invite.tokenHash,
     inviteTokenIssuedAt: issuedAt,
     updatedAt: FieldValue.serverTimestamp(),
