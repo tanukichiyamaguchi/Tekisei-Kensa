@@ -6,11 +6,7 @@
 // 付録の書式や不変条件（03 §4.2）から外れた箇所が 1 つでもあれば、何も書き込まずに失敗する。
 import { pathToFileURL } from "node:url";
 
-import {
-  QUESTION_PAGE_LAYOUT,
-  SCORED_QUESTION_COUNT,
-  stepAndPageOf,
-} from "../lib/masters/question-layout";
+import { QUESTION_STEP_SIZES, SCORED_QUESTION_COUNT, stepOf } from "../lib/masters/question-layout";
 import {
   APTITUDE_KEYS,
   APTITUDE_TYPE_KEYS,
@@ -66,7 +62,6 @@ interface QuestionItem {
   isActive: boolean;
   isScored: boolean;
   step: number | null;
-  page: number | null;
 }
 
 function parseQuestions(appendixA: string): QuestionItem[] {
@@ -80,14 +75,12 @@ function parseQuestions(appendixA: string): QuestionItem[] {
     if (questionNo !== i + 1) fail(`付録A の設問番号が連番ではありません: Q${questionNo}`);
     if (text === "") fail(`付録A の設問文が空です: Q${questionNo}`);
     const scored = questionNo <= SCORED_QUESTION_COUNT;
-    const layout = scored ? stepAndPageOf(questionNo) : null;
     return {
       questionNo,
       text,
       isActive: scored,
       isScored: scored,
-      step: layout?.step ?? null,
-      page: layout?.page ?? null,
+      step: scored ? stepOf(questionNo) : null,
     };
   });
   if (items.length !== TOTAL_QUESTION_COUNT)
@@ -699,7 +692,7 @@ function main(): void {
   console.log(
     check
       ? `マスタ生成物は付録と一致しています（${count} ファイル）。`
-      : `${count} ファイルを ${OUT_DIR}/ に生成しました（ページ構成: ${QUESTION_PAGE_LAYOUT.pageSizes.join("・")}）。`,
+      : `${count} ファイルを ${OUT_DIR}/ に生成しました（ステップ構成: ${QUESTION_STEP_SIZES.join("・")}）。`,
   );
 }
 

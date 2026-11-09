@@ -258,10 +258,20 @@ describe("I-09 scripts/seed-local", () => {
     expect(admin).toHaveLength(8);
     expect(owner.filter((r) => r.isExcluded)).toHaveLength(1);
     expect(new Set(owner.map((r) => r.teamCode))).toEqual(new Set(["A", "B", null]));
-    expect(await getDocForTest("assessmentSessions", summary.draftSessionId)).toMatchObject({
-      status: "draft",
-      lastSavedPageNo: 5,
-    });
+    // 下書きは Step 1 まで保存（lastSavedStepNo == 1）。利用履歴は送信のときに作るので、送信済みの 10 人の分だけ
+    const draftSession = await getDocForTest<Record<string, unknown>>(
+      "assessmentSessions",
+      summary.draftSessionId,
+    );
+    expect(draftSession).toMatchObject({ status: "draft", lastSavedStepNo: 1 });
+    expect(Object.keys(draftSession!.answers as object)).toHaveLength(41);
+    expect(draftSession).not.toHaveProperty("lastSavedPageNo");
+    expect(await countDocs("usageLogs", [["organizationId", "==", summary.organizationId]])).toBe(
+      10,
+    );
+    expect(await countDocs("usageLogs", [["respondentId", "==", draftSession!.respondentId]])).toBe(
+      0,
+    );
     // 作ったオーナーでログインできる
     const ownerUser = await adminAuth().getUser(summary.ownerUid);
     const cookieHeader = await loginAs(ownerUser.email!);

@@ -365,7 +365,7 @@ describe("respondents・assessmentSessions・aiAnalyses の M7 の項目の読�
     expect(() => toRespondent("resp1", withoutFields(doc, ["usageLogId"]))).toThrow(MappingError);
   });
 
-  it("M7-exam-31 のうち mapper の分: lastSavedPageNo だけを持つ M7 より前のセッションは lastSavedStepNo == null", () => {
+  it("M7-exam-31 のうち mapper の分: lastSavedPageNo だけを持つ M7 より前のセッションも読め（lastSavedStepNo == null）、lastSavedPageNo は読まない", () => {
     const doc: AssessmentSessionDoc = {
       organizationId: "org1",
       respondentId: "resp1",
@@ -373,7 +373,6 @@ describe("respondents・assessmentSessions・aiAnalyses の M7 の項目の読�
       sessionTokenHash: "b".repeat(64),
       tokenExpiresAt: now,
       answers: { "1": 3 },
-      lastSavedPageNo: 1,
       lastSavedStepNo: 2,
       lastAnsweredAt: now,
       startedAt: now,
@@ -383,10 +382,22 @@ describe("respondents・assessmentSessions・aiAnalyses の M7 の項目の読�
       updatedAt: now,
       deletedAt: null,
     };
-    const legacy = toAssessmentSession("sess1", withoutFields(doc, ["lastSavedStepNo"]));
+    // M7 より前の文書: lastSavedStepNo が無く、lastSavedPageNo（ページ番号）がある
+    const legacyDoc = {
+      ...withoutFields(doc, ["lastSavedStepNo"]),
+      lastSavedPageNo: 5,
+    } as unknown as AssessmentSessionDoc;
+    const legacy = toAssessmentSession("sess1", legacyDoc);
     expect(legacy.lastSavedStepNo).toBeNull();
-    expect(legacy.lastSavedPageNo).toBe(1);
-    expect(toAssessmentSession("sess1", doc).lastSavedStepNo).toBe(2);
+    expect(legacy).not.toHaveProperty("lastSavedPageNo");
+    expect(legacy.answers).toEqual({ "1": 3 });
+    // M7 以後の文書には lastSavedPageNo が無い（必須の確認を外した）
+    const current = toAssessmentSession("sess1", doc);
+    expect(current.lastSavedStepNo).toBe(2);
+    expect(current).not.toHaveProperty("lastSavedPageNo");
+    expect(
+      toAssessmentSession("sess1", { ...doc, lastSavedStepNo: null }).lastSavedStepNo,
+    ).toBeNull();
   });
 
   const aiAnalysisDoc: AiAnalysisDoc = {

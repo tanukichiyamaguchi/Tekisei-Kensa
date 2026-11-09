@@ -183,7 +183,6 @@ export function parseQuestionDefinitions(raw: unknown): readonly QuestionDefinit
         isActive: asBoolean(o.isActive, `${where}.isActive`),
         isScored: asBoolean(o.isScored, `${where}.isScored`),
         step: o.step === null ? null : asOneOf(o.step, [1, 2, 3, 4] as const, `${where}.step`),
-        page: o.page === null ? null : asOneOf(o.page, [1, 2, 3, 4, 5] as const, `${where}.page`),
       };
     }),
   );

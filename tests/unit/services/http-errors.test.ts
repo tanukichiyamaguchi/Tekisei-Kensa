@@ -185,7 +185,7 @@ describe("Firebase・リポジトリ例外の変換（04 §2.4、§8.4）", () =
 });
 
 describe("U-06 入力スキーマ（M2 時点で存在するもの。受検者・管理者 API のスキーマは M3・M4 で追加）", () => {
-  it("回答 1 ページ: 値 1〜5、キー 1〜144、1〜8 問", () => {
+  it("回答 1 ステップ: 値 1〜5、キー 1〜144、1〜41 問（11-1 §3.2.2）", () => {
     expect(answersPatchSchema.safeParse({ "1": 1, "144": 5 }).success).toBe(true);
     for (const bad of [
       { "1": 6 },
@@ -198,8 +198,10 @@ describe("U-06 入力スキーマ（M2 時点で存在するもの。受検者�
     ]) {
       expect(answersPatchSchema.safeParse(bad).success).toBe(false);
     }
-    const nine = Object.fromEntries(Array.from({ length: 9 }, (_, i) => [String(i + 1), 1]));
-    expect(answersPatchSchema.safeParse(nine).success).toBe(false);
+    const patch = (n: number) =>
+      Object.fromEntries(Array.from({ length: n }, (_, i) => [String(i + 1), 1]));
+    expect(answersPatchSchema.safeParse(patch(41)).success).toBe(true);
+    expect(answersPatchSchema.safeParse(patch(42)).success).toBe(false);
   });
   it("teamCode は A〜Z の 1 文字", () => {
     expect(teamCodeSchema.safeParse("A").success).toBe(true);

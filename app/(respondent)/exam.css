@@ -1,38 +1,60 @@
-/* 受検者画面（05 §2）。トークンは §2.5。管理画面に影響させないため :root ではなく .exam-root に置く */
+/* 受験者側の画面（11-1 §2.1〜§2.6）。トークンは 11-1 §2.1.3 の表（K-48・K-50 の色を含む）。
+   トークンは .exam-root に置くので、その外に描いた要素には効かない。重ねて出す R-07（エラーの通知）と R-08（ロード中）も
+   .exam-root の中に描く（11-1 §2.1.3 の「トークンの効く範囲」）。
+   /admin/login へのリンクは画面内の移動（next/link）で、このファイルが管理画面に残ることがあるため、
+   指定はすべて .exam-root の下に書き（body の margin を除く）、@keyframes も受験者側の名前にする */
 body {
   margin: 0;
 }
 
 .exam-root {
-  --color-bg: #f3f5f8; /* 画面外側の背景 */
-  --color-surface: #ffffff; /* カード・フォームの背景 */
-  --color-text: #1f2933; /* 本文。#ffffff 上 14.7:1 */
-  --color-text-muted: #52606d; /* 補助文。#ffffff 上 6.4:1、#f3f5f8 上 5.9:1 */
-  --color-border: #cbd2d9; /* 装飾用の区切り線・カードの外形線のみ（意味を持つ境界には使わない。D05-35） */
-  --color-border-input: #6b7785; /* 入力欄・select・ラジオ円・選択肢カードの枠線。#ffffff 上 4.5:1 */
-  --color-primary: #0b5cad; /* 主ボタン・選択状態・進捗バー。白文字と 6.6:1 */
-  --color-primary-soft: #e6f0fa; /* 選択済みの選択肢の背景 */
-  --color-danger: #c62828; /* 未入力・未回答の赤枠と文言。#ffffff 上 5.6:1 */
-  --color-danger-soft: #fdecea; /* エラーバナー背景 */
-  --color-success: #1b7f4b; /* 完了画面のアイコン。#ffffff 上 5.0:1 */
-  --radius: 8px;
-  --tap-min: 48px;
-  --content-max-width: 640px;
-  --gutter: 16px;
+  --color-bg: #f7f9fc; /* 画面の背景（#Page Background） */
+  --color-surface: #ffffff; /* 入力欄・カードの地 */
+  --color-text: #4c4b4b; /* 文字（白の上 8.69:1、背景の上 8.24:1） */
+  --color-primary: #3f8da5; /* 主色。押せない状態のほかは、文字と白い文字の地に使わない（K-48） */
+  --color-button: #397f94; /* ボタンの地・済んだステップの丸の地。参照元 #3F8DA5（K-48 の表の 3） */
+  /* ボタンのホバー・押下。参照元 rgba(63, 141, 165, 0.9)（表の 4） */
+  --color-button-hover: rgba(50, 111, 130, 0.9);
+  --color-primary-50: rgba(63, 141, 165, 0.5); /* 今と先のステップの丸のホバー・押下の地 */
+  --color-primary-10: rgba(63, 141, 165, 0.1); /* 押せない状態のボタンの地、今のステップの丸の地 */
+  --color-step-number-current: #24515f; /* 今のステップの丸の番号。参照元 #3F8DA5（表の 6・10） */
+  --color-step-number-future: #141313; /* 先のステップの丸の番号（丸ごと 70%）。参照元 #4C4B4B（表の 8・11） */
+  --color-step-label: #377a8f; /* 今と済んだステップのラベル。参照元 #3F8DA5（表の 7） */
+  --color-step-circle-hover-done: #437e92; /* 済んだステップの丸のホバー・押下。参照元 rgba(63, 141, 165, 0.5)（表の 9） */
+  --color-loading-text: #387d93; /* R-08 の「ロード中」。参照元 #3F8DA5（表の 12） */
+  --color-line: #d5d5d5; /* カードの枠、ステップの先の線、入力欄のアイコン */
+  --color-input-border: #7c90b9; /* 入力欄・プルダウンの枠。参照元 #F2F4F8（K-50 の表の 1） */
+  --color-placeholder: #767676; /* 入力欄のプレースホルダー。参照元 #A1A1A1（K-48 の表の 1） */
+  --color-select-placeholder: #767676; /* プルダウンの未選択。参照元 #9C9C9C（実測。表の 2） */
+  --color-select-text: #252525; /* プルダウンの選んだ値（実測） */
+  --color-select-arrow: #949494; /* プルダウンの矢印。参照元 #999999（実測。K-50 の表の 2） */
+  --color-destructive: #dd0d0d; /* 未回答の印。入力欄の不正の枠は rgba(221, 13, 13, 0.7) */
+  --color-select-focus: #2b94e8; /* プルダウンのフォーカスの枠と影。参照元 #52A8EC（K-50 の表の 3） */
+  --color-select-invalid: #ff0000; /* プルダウンの不正の枠と影 */
+  --color-link: #3b799c; /* ログインのリンク（ふだんと訪れたあと）。参照元 #4083A9（K-48 の表の 5） */
+  --color-radio-border: #949494; /* ラジオボタンの円。参照元 #CCCCCC（K-50 の表の 4） */
+  --color-radio-checked: #337ab7; /* 選んだラジオボタンの円と点（.radio-primary） */
+  --color-step-row-border: rgba(76, 75, 75, 0.2); /* ステップ表示の行の下の線 */
+  --color-step-circle-border: rgba(76, 75, 75, 0.3); /* ステップの丸の枠 */
+  --color-step-circle-bg: rgba(76, 75, 75, 0.1); /* ステップの丸の地 */
+  --color-overlay-light: rgba(255, 255, 255, 0.5); /* R-08 の全面 */
+  --color-overlay-dark: rgba(0, 0, 0, 0.4); /* R-07 の背景（::backdrop は変数を使わず値で書く） */
+  --font-inter: "Inter"; /* @fontsource/inter が定める名前 */
+  --font-body:
+    var(--font-inter), "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic",
+    Meiryo, sans-serif;
+  --font-radio:
+    Arial, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", Meiryo,
+    sans-serif;
 
   min-height: 100vh;
   min-height: 100dvh;
   background: var(--color-bg);
   color: var(--color-text);
-  font-family:
-    system-ui,
-    -apple-system,
-    "Hiragino Sans",
-    "Noto Sans JP",
-    sans-serif;
+  font-family: var(--font-body);
   font-size: 16px;
-  line-height: 1.6;
-  color-scheme: light; /* ダークモードには対応しない（05 §2.5） */
+  line-height: 1.5;
+  color-scheme: light; /* ダークモードにしない（11-1 §1.3） */
 }
 
 .exam-root *,
@@ -41,54 +63,12 @@ body {
   box-sizing: border-box;
 }
 
-.exam-container {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  max-width: var(--content-max-width);
-  min-height: 100vh;
-  min-height: 100dvh;
-  margin: 0 auto;
-  background: var(--color-surface);
+.exam-root .exam-main {
+  display: block;
+  overflow-wrap: anywhere; /* 長い語でも画面を横に動かさない（11-1 §2.1.4） */
 }
 
-.exam-header {
-  padding: 12px var(--gutter);
-  border-bottom: 1px solid var(--color-border);
-}
-.exam-site-name {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.exam-main {
-  flex: 1;
-  padding: var(--gutter);
-  overflow-wrap: anywhere; /* 長い設問文でも横スクロールを出さない（05 §2.1） */
-}
-
-.exam-heading {
-  margin: 8px 0 12px;
-  font-size: 21px;
-  line-height: 1.4;
-}
-.exam-heading:focus {
-  outline: none;
-}
-.exam-lead {
-  margin: 0 0 16px;
-}
-.exam-muted {
-  color: var(--color-text-muted);
-  font-size: 14px;
-}
-.exam-list {
-  margin: 0 0 24px;
-  padding-left: 1.4em;
-}
-
-.visually-hidden {
+.exam-root .exam-sr-only {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -100,323 +80,711 @@ body {
   border: 0;
 }
 
-/* ボタン（05 §2.2: 高さ 48 px 以上） */
-.exam-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+/* ---- 枠（11-1 §2.1.4） ---- */
+/* 狭い枠（R-01・R-05・R-06）: 上 134px（70 + 64）、下 96px（32 + 64）、中身は最大 500px で左右の内側 20px */
+.exam-root .exam-frame-narrow {
+  max-width: 500px;
+  margin: 0 auto;
+  padding: 134px 20px 96px;
+}
+/* 広い枠（R-02・R-03）: 上 50px、幅は画面の 90% */
+.exam-root .exam-frame-wide {
+  width: 90%;
+  margin: 0 auto;
+  padding-top: 50px;
+}
+@media (max-width: 489.98px) {
+  .exam-root .exam-frame-narrow {
+    margin: 0 8px;
+  }
+}
+
+/* ---- 見出しと本文 ---- */
+/* 23px の見出し（Text_23pt_600_header_。R-01・R-02・R-05・R-06）。幅 768px 未満で 19px */
+.exam-root .exam-title {
   width: 100%;
-  min-height: var(--tap-min);
-  padding: 8px 16px;
-  border: 1px solid var(--color-primary);
-  border-radius: var(--radius);
-  background: var(--color-primary);
-  color: #ffffff;
-  font: inherit;
-  font-weight: 700;
-  text-align: center;
-  text-decoration: none;
-  cursor: pointer;
-}
-.exam-button--secondary {
-  border-color: var(--color-border-input);
-  background: var(--color-surface);
+  margin: 0;
   color: var(--color-text);
-}
-.exam-button[aria-disabled="true"] {
-  border-color: #9aa5b1;
-  background: #9aa5b1;
-  color: #ffffff;
-  cursor: not-allowed;
-}
-.exam-button:focus-visible,
-.exam-input:focus-visible,
-.exam-choice:focus-within {
-  outline: 3px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-/* 登録フォーム */
-.exam-form {
-  display: grid;
-  gap: 20px;
-}
-.exam-field {
-  display: grid;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-.exam-label {
-  font-weight: 700;
-}
-.exam-required {
-  margin-left: 4px;
-  color: var(--color-danger);
-}
-.exam-input {
-  width: 100%;
-  min-height: var(--tap-min);
-  padding: 8px 12px;
-  border: 1px solid var(--color-border-input);
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font: inherit;
-  font-size: 16px; /* iOS Safari のフォーカス時自動ズームを避ける */
-}
-.exam-input[aria-invalid="true"] {
-  border: 2px solid var(--color-danger);
-}
-.exam-field-error {
-  margin: 0;
-  color: var(--color-danger);
-  font-size: 14px;
-  font-weight: 700;
-}
-.exam-radio-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: var(--tap-min);
-  padding: 0 12px;
-  border: 1px solid var(--color-border-input);
-  border-radius: var(--radius);
-  cursor: pointer;
-}
-.exam-field[aria-invalid="true"] .exam-radio-row {
-  border: 2px solid var(--color-danger);
-}
-
-/* 再開バナー・エラーバナー */
-.exam-resume {
-  margin: 0 0 24px;
-  padding: 16px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  background: var(--color-primary-soft);
-}
-.exam-resume > p {
-  margin: 0 0 8px;
-}
-.exam-resume .exam-button {
-  margin: 4px 0 12px;
-}
-.exam-banner {
-  margin: 0 0 16px;
-  padding: 12px 16px;
-  border-left: 4px solid var(--color-danger);
-  border-radius: var(--radius);
-  background: var(--color-danger-soft);
-}
-.exam-banner p {
-  margin: 0 0 8px;
-}
-.exam-banner .exam-button {
-  margin-top: 4px;
-}
-
-/* 設問ページ */
-.exam-progress {
-  margin: 0 0 16px;
-}
-.exam-progress-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.exam-progress .exam-heading {
-  margin: 0;
-  font-size: 20px;
-}
-.exam-step-dots {
-  display: inline-flex;
-  gap: 6px;
-  margin-left: 12px;
-  vertical-align: middle;
-}
-.exam-step-dot {
-  width: 10px;
-  height: 10px;
-  border: 1px solid var(--color-primary);
-  border-radius: 50%;
-}
-.exam-step-dot--done {
-  background: var(--color-primary);
-}
-.exam-progress-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 8px 0;
-}
-.exam-progress-bar progress {
-  flex: 1;
-  height: 10px;
-  appearance: none;
-  border: 0;
-  border-radius: 5px;
-  background: var(--color-border);
-  overflow: hidden;
-}
-.exam-progress-bar progress::-webkit-progress-bar {
-  background: var(--color-border);
-}
-.exam-progress-bar progress::-webkit-progress-value {
-  background: var(--color-primary);
-  transition: width 0.2s ease;
-}
-.exam-progress-bar progress::-moz-progress-bar {
-  background: var(--color-primary);
-}
-
-.exam-questions {
-  display: grid;
-  gap: 16px;
-  padding-bottom: 8px;
-}
-.exam-question {
-  min-width: 0;
-  margin: 0;
-  padding: 16px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  scroll-margin-top: 16px;
-}
-.exam-question--error {
-  border: 2px solid var(--color-danger);
-}
-.exam-question legend {
-  float: left; /* 枠線の中に置く */
-  width: 100%;
-  margin: 0 0 8px;
-  padding: 0;
-}
-.exam-question legend + * {
-  clear: both;
-}
-.exam-question-no {
-  display: block;
-  color: var(--color-text-muted);
-  font-size: 14px;
-  font-weight: 700;
-}
-.exam-choices {
-  display: grid;
-  gap: 8px;
-}
-.exam-choice {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: var(--tap-min);
-  padding: 8px 12px;
-  border: 1px solid var(--color-border-input);
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  cursor: pointer;
-}
-.exam-choice--checked {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
-}
-.exam-choice input,
-.exam-radio-row input {
-  flex: none;
-  width: 20px;
-  height: 20px;
-  margin: 0;
-  accent-color: var(--color-primary);
-}
-
-/* 下部固定のナビゲーション（05 §2.1） */
-.exam-nav {
-  position: sticky;
-  bottom: 0;
-  z-index: 10;
-  margin: 0 calc(-1 * var(--gutter)) calc(-1 * var(--gutter));
-  padding: 12px var(--gutter) calc(12px + env(safe-area-inset-bottom));
-  border-top: 1px solid var(--color-border);
-  background: var(--color-surface);
-}
-.exam-nav-unanswered {
-  margin: 0 0 8px;
-  color: var(--color-danger);
-  font-size: 14px;
-  font-weight: 700;
-  text-align: center;
-}
-.exam-nav-buttons {
-  display: grid;
-  grid-template-columns: 1fr 2fr;
-  gap: 12px;
-}
-.exam-nav-buttons--single {
-  grid-template-columns: 1fr;
-}
-
-/* 送信確認ダイアログ */
-.exam-dialog {
-  width: calc(100% - 2 * var(--gutter));
-  max-width: 480px;
-  padding: 24px 16px 16px;
-  border: 0;
-  border-radius: var(--radius);
-  color: var(--color-text);
-}
-.exam-dialog::backdrop {
-  background: rgba(31, 41, 51, 0.5);
-}
-.exam-dialog h2 {
-  margin: 0 0 8px;
-  font-size: 20px;
-}
-.exam-dialog-buttons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-top: 20px;
-}
-
-/* 通信中のオーバーレイ */
-.exam-busy {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.8);
-  font-weight: 700;
-}
-
-/* 完了・エラー */
-.exam-complete,
-.exam-error {
-  padding-top: 24px;
-  text-align: center;
-}
-.exam-complete-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: var(--color-success);
-  color: #ffffff;
-  font-size: 36px;
-  line-height: 1;
-}
-.exam-complete p,
-.exam-error p {
+  font-size: 23px;
+  font-weight: 600;
+  line-height: 1.4;
   text-align: left;
 }
+.exam-root .exam-title--center {
+  text-align: center;
+}
+@media (max-width: 767.98px) {
+  .exam-root .exam-title {
+    font-size: 19px;
+  }
+}
+/* 見出し（h1。tabIndex -1）は表示のときにフォーカスを受けるが、輪郭を出さない（11-1 §2.1.7） */
+.exam-root .exam-title:focus,
+.exam-root .exam-step__heading:focus {
+  outline: none;
+}
+.exam-root .exam-text {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.5;
+}
 
+/* ---- ボタン（Button_primary_15_bold_。診断に進む・開始する・次へ・送信する。11-1 §2.2.3） ---- */
+.exam-root .exam-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0 16px;
+  border: none;
+  border-radius: 10px;
+  background: var(--color-button); /* 参照元 #3F8DA5（K-48） */
+  color: #ffffff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
+  cursor: pointer;
+}
+.exam-root .exam-button:hover,
+.exam-root .exam-button:active {
+  background: var(--color-button-hover); /* 参照元 rgba(63, 141, 165, 0.9)（K-48） */
+}
+/* 押せない状態（参照元どおり。K-48 の対象外）。押すことはでき、押したときは検査する */
+.exam-root .exam-button[aria-disabled="true"],
+.exam-root .exam-button[aria-disabled="true"]:hover,
+.exam-root .exam-button[aria-disabled="true"]:active {
+  background: var(--color-primary-10);
+  color: var(--color-primary);
+  cursor: default;
+}
+
+/* ---- フォーカスの見た目（11-1 §2.1.7） ---- */
+/* 参照元に定めの無い部品（ボタン・リンク・ラジオボタン）: キーボードで操作したときだけ 2px #3F8DA5 を外側 2px */
+.exam-root .exam-button:focus-visible,
+.exam-root .exam-login-link:focus-visible,
+.exam-root .exam-choice__input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+/* 入力欄・プルダウン: 参照元どおり輪郭を出さず、枠の色と影で示す（参照元の実行時 CSS の input・select の :focus の規則） */
+.exam-root .exam-input:focus,
+.exam-root .exam-select:focus {
+  outline: none;
+}
+
+/* ---- R-01 受験者登録（11-1 §2.2） ---- */
+.exam-root .exam-reg {
+  display: flex;
+  flex-direction: column;
+  gap: 50px; /* GR - section 1 の要素の間 */
+}
+.exam-root .exam-reg__body,
+.exam-root .exam-reg__form {
+  display: flex;
+  flex-direction: column;
+  gap: 32px; /* 見出しと入力欄、入力欄とボタン（+ ボタンの上余白 8px）の間 */
+}
+.exam-root .exam-reg__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.exam-root .exam-field {
+  position: relative;
+}
+/* 入力欄の左のアイコン（文字に添えた印。K-50 の対象外で参照元どおり #D5D5D5）。押せない */
+.exam-root .exam-field__icon {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 10px;
+  width: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-line);
+  pointer-events: none;
+}
+.exam-root .exam-field__icon svg {
+  display: block;
+}
+/* お名前・電話番号（Input_input_14___login_page_） */
+.exam-root .exam-input {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0 10px 0 50px;
+  border: 1px solid var(--color-input-border); /* 参照元 #F2F4F8（K-50） */
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 1px;
+}
+.exam-root .exam-input--name {
+  height: 40px;
+}
+.exam-root .exam-input--phone {
+  height: 45px;
+}
+.exam-root .exam-input::placeholder {
+  color: var(--color-placeholder); /* 参照元 #A1A1A1（K-48） */
+  opacity: 1; /* ブラウザの既定の薄さを使わない */
+}
+.exam-root .exam-input:hover,
+.exam-root .exam-input:active,
+.exam-root .exam-input:focus {
+  border-color: var(--color-primary);
+}
+.exam-root .exam-input[aria-invalid="true"]:not(:focus) {
+  border-color: rgba(221, 13, 13, 0.7);
+}
+/* 職業・過去の診断経験のプルダウン（参照元定義 bUkeA・bUkgD と画面の実測） */
+.exam-root .exam-select {
+  display: block;
+  width: 100%;
+  height: 48px;
+  margin: 0;
+  padding: 0 28px 0 50px;
+  border: 1px solid var(--color-input-border); /* 参照元 #F2F4F8（K-50） */
+  border-radius: 2px;
+  background: var(--color-surface);
+  color: var(--color-select-text);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  appearance: none;
+  cursor: pointer;
+}
+.exam-root .exam-select[data-empty="true"] {
+  color: var(--color-select-placeholder); /* 参照元 #9C9C9C（実測。K-48） */
+}
+.exam-root .exam-select option {
+  color: var(--color-select-text);
+}
+.exam-root .exam-select:focus {
+  border-color: var(--color-select-focus); /* 参照元 #52A8EC（K-50） */
+  box-shadow: 0 0 6px var(--color-select-focus);
+}
+.exam-root .exam-select[aria-invalid="true"],
+.exam-root .exam-select[aria-invalid="true"]:focus {
+  border-color: var(--color-select-invalid);
+  box-shadow: 0 0 6px var(--color-select-invalid);
+}
+.exam-root .exam-select__arrow {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  display: block;
+  color: var(--color-select-arrow); /* 参照元 #999999（実測。K-50） */
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.exam-root .exam-reg__submit {
+  width: 100%;
+  min-height: 45px;
+  margin: 8px 0;
+}
+.exam-root .exam-reg__login {
+  margin: 16px 0 0;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1;
+  text-align: center;
+}
+/* ログインのリンク: 4 つの状態の色をこの順に明示する（総論 8.3 の 25）。下線はどの状態でも引かない */
+.exam-root .exam-login-link:link,
+.exam-root .exam-login-link:visited {
+  color: var(--color-link); /* 参照元 #4083A9（K-48）。訪れたあとも同じ色 */
+  text-decoration: none;
+}
+.exam-root .exam-login-link:hover {
+  color: #205f82; /* 参照元どおり */
+  text-decoration: none;
+}
+.exam-root .exam-login-link:active {
+  color: #134b70; /* 参照元どおり */
+  text-decoration: none;
+}
+
+/* ---- カード（Group_group_section___dark_light_） ---- */
+.exam-root .exam-card {
+  width: 100%;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+
+/* ---- R-02 診断開始（11-1 §2.3） ---- */
+.exam-root .exam-start {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 125px;
+  padding: 30px 32px;
+}
+.exam-root .exam-start__title {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.exam-root .exam-start__button {
+  align-self: center;
+  min-width: 150px;
+  min-height: 40px;
+  margin-top: 30px;
+}
+
+/* ---- R-03 受験画面（11-1 §2.4） ---- */
+/* 受験のまとまり（g:form）。最小幅は付けない */
+.exam-root .exam-form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 32px 0;
+}
+/* ステップ表示の行（11-1 §2.4.3）: [先頭の線][番号 1〜4][末尾の線]。線は丸の中心の高さ */
+.exam-root .exam-steps {
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+  margin-bottom: 16px;
+  padding: 15px;
+  border-bottom: 1px solid var(--color-step-row-border);
+}
+.exam-root .exam-steps__edge {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 2px;
+  margin-top: 16.5px;
+  border-radius: 1px;
+  background: var(--color-primary);
+}
+.exam-root .exam-steps__edge[data-on="false"] {
+  background: var(--color-line);
+}
+.exam-root .exam-steps__numbers {
+  display: flex;
+  flex: 0 1 960px;
+  min-width: 640px;
+}
+.exam-root .exam-steps__cell {
+  display: flex;
+  flex: 1 1 0;
+  align-items: flex-start;
+  min-width: 40px;
+}
+/* セルの中の線。丸との間 16px は線の中にとる（狭い幅で線から縮み、行を横にはみ出さない） */
+.exam-root .exam-steps__line {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 2px;
+  margin-top: 16.5px;
+}
+.exam-root .exam-steps__line::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border-radius: 1px;
+  background: var(--color-line);
+}
+.exam-root .exam-steps__line--left::before {
+  right: 16px;
+}
+.exam-root .exam-steps__line--right::before {
+  left: 16px;
+}
+.exam-root .exam-steps__line[data-on="true"]::before {
+  background: var(--color-primary);
+}
+.exam-root .exam-steps__item {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.exam-root .exam-steps__circle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 35px;
+  height: 35px;
+  border: 2px solid var(--color-step-circle-border);
+  border-radius: 50%;
+  background: var(--color-step-circle-bg);
+  /* 番号の色は参照元 #4C4B4B（K-48。この色が出るのは先のステップだけ） */
+  color: var(--color-step-number-future);
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1;
+}
+.exam-root .exam-steps__cell[data-state="current"] .exam-steps__circle {
+  border-color: var(--color-primary);
+  background: var(--color-primary-10);
+  color: var(--color-step-number-current); /* 参照元 #3F8DA5（K-48） */
+}
+.exam-root .exam-steps__cell[data-state="done"] .exam-steps__circle {
+  border-color: var(--color-primary);
+  background: var(--color-button); /* 参照元 #3F8DA5（K-48）。枠は参照元どおり */
+  color: #ffffff;
+}
+.exam-root .exam-steps__cell[data-state="future"] .exam-steps__circle {
+  opacity: 0.7;
+}
+/* 丸のホバー・押下は地だけが変わる（番号の色は変えない。押しても何も起きない） */
+.exam-root .exam-steps__circle:hover,
+.exam-root .exam-steps__circle:active,
+.exam-root .exam-steps__cell[data-state="current"] .exam-steps__circle:hover,
+.exam-root .exam-steps__cell[data-state="current"] .exam-steps__circle:active {
+  background: var(--color-primary-50);
+}
+.exam-root .exam-steps__cell[data-state="done"] .exam-steps__circle:hover,
+.exam-root .exam-steps__cell[data-state="done"] .exam-steps__circle:active {
+  background: var(--color-step-circle-hover-done); /* 参照元 rgba(63, 141, 165, 0.5)（K-48） */
+}
+.exam-root .exam-steps__label {
+  height: 20px;
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  text-align: center;
+  white-space: nowrap;
+}
+.exam-root .exam-steps__cell[data-state="current"] .exam-steps__label,
+.exam-root .exam-steps__cell[data-state="done"] .exam-steps__label {
+  color: var(--color-step-label); /* 参照元 #3F8DA5（K-48） */
+}
+/* 設問の欄（g:step-content） */
+.exam-root .exam-step-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 960px;
+}
+/* ステップのカード（今のステップだけ） */
+.exam-root .exam-step {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 32px 48px;
+}
+.exam-root .exam-step--first {
+  gap: 25px;
+}
+.exam-root .exam-step__head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.exam-root .exam-step__heading {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.exam-root .exam-step__guide {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+/* 設問（11-1 §2.4.4） */
+.exam-root .exam-question {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+.exam-root .exam-question__text {
+  display: block;
+  margin: 0;
+  padding: 0;
+  color: var(--color-text);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+/* 未回答の印（11-1 §2.4.6） */
+.exam-root .exam-question--unanswered .exam-question__text {
+  color: var(--color-destructive);
+}
+.exam-root .exam-question__error {
+  margin: 0;
+  color: var(--color-destructive);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+/* 選択肢（参照元の実行時 CSS の .radio。1 列、行の間 10px、上下 3px、左 20px） */
+.exam-root .exam-choices {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: 10px;
+  margin: 8px 0 0 10px;
+  padding: 3px 0 3px 20px;
+}
+.exam-root .exam-choice {
+  position: relative;
+  display: block;
+  padding: 0 6px;
+  color: var(--color-text);
+  font-family: var(--font-radio);
+  font-size: 16px;
+  letter-spacing: 0;
+  line-height: 1.5;
+  cursor: pointer;
+}
+/* ラジオボタンの円: ラベルの左端から 20px 左に 15×15px。選ぶと枠と中央の 9×9px の点が #337AB7（0.1 秒で拡大して出る） */
+.exam-root .exam-choice__input {
+  position: absolute;
+  top: 4.5px;
+  left: -20px;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  border: 1px solid var(--color-radio-border); /* 参照元 #CCCCCC（K-50） */
+  border-radius: 50%;
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 7px var(--color-surface);
+  appearance: none;
+  cursor: pointer;
+  transition: box-shadow 0.1s;
+}
+.exam-root .exam-choice__input:checked {
+  border-color: var(--color-radio-checked);
+  background: var(--color-radio-checked);
+  box-shadow: inset 0 0 0 2px var(--color-surface);
+}
+/* 送信する（Step 4 だけ。カードの最後に中央） */
+.exam-root .exam-step__submit {
+  align-self: center;
+  min-width: 150px;
+  min-height: 40px;
+  margin-top: 30px;
+}
+/* 次へ（Step 1〜3 だけ。カードの下、最大幅 960px の右端） */
+.exam-root .exam-step-actions {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  max-width: 960px;
+}
+.exam-root .exam-step-actions .exam-button {
+  min-width: 120px;
+  min-height: 40px;
+}
+/* 受験画面のモバイル表示（画面幅 920px 以下。Mobile Breakpoint の型の既定値。11-1 §2.1.4） */
+@media (max-width: 920px) {
+  .exam-root .exam-steps,
+  .exam-root .exam-steps__cell {
+    align-items: center;
+  }
+  .exam-root .exam-steps__edge,
+  .exam-root .exam-steps__line {
+    margin-top: 0;
+  }
+  .exam-root .exam-steps__numbers {
+    flex-basis: 100%;
+    min-width: 100%;
+  }
+  .exam-root .exam-steps__label {
+    display: none;
+  }
+  .exam-root .exam-step-content {
+    padding: 0 8px;
+  }
+}
+
+/* ---- R-05 完了（11-1 §2.5） ---- */
+.exam-root .exam-complete {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  text-align: center;
+}
+.exam-root .exam-complete__icon {
+  display: block;
+  color: var(--color-text);
+}
+.exam-root .exam-complete__icon:hover {
+  color: var(--color-primary);
+}
+.exam-root .exam-complete__text {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: pre-line;
+}
+
+/* ---- R-06 続けられないとき・予期しない失敗（11-1 §2.6。R-05 と同じ狭い枠、アイコンなし） ---- */
+.exam-root .exam-error {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  text-align: center;
+}
+.exam-root .exam-error__text {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+/* ---- R-07 エラーの通知（11-1 §2.1.5）。共用の components/ui/SweetAlert.tsx のクラスに受験者側の値を当てる
+   （管理画面の admin.css は受験者側では読まれない。11-8 §4.5） ---- */
+.exam-root .exam-alert-host {
+  display: contents; /* 包むだけで箱を作らない（並びの間をとらない） */
+}
+.exam-root .swal-layer {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 10px;
+  border: none;
+  background: transparent;
+}
+.exam-root .swal-layer[open] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.exam-root .swal-layer::backdrop {
+  background: rgba(0, 0, 0, 0.4); /* ::backdrop が変数を受け継がないブラウザがあるため値で書く */
+}
+.exam-root .swal-modal {
+  width: 500px;
+  max-width: 100%;
+  padding: 20px;
+  border-radius: 5px;
+  background: #ffffff;
+  text-align: center;
+  font-family:
+    "Helvetica Neue", Helvetica, Arial, "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+    "Noto Sans JP", "Yu Gothic", Meiryo, sans-serif;
+  animation: exam-swal-show 0.3s;
+}
+/* 箱はフォーカスを受けても輪郭を出さない（SweetAlert2 6.6.10 の .swal2-modal:focus。キーボードの操作で出したときも） */
+.exam-root .swal-modal:focus {
+  outline: none;
+}
+.exam-root .swal-modal[data-closing] {
+  animation: exam-swal-hide 0.15s forwards;
+}
+.exam-root .swal-title {
+  margin: 0 0 0.4em;
+  padding: 0;
+  color: #595959;
+  font-size: 30px;
+  font-weight: 600;
+  text-align: center;
+  overflow-wrap: break-word;
+}
+.exam-root .swal-content {
+  margin: 0;
+  padding: 0;
+  color: #545454;
+  font-size: 18px;
+  font-weight: 300;
+  line-height: normal;
+  text-align: center;
+  white-space: pre-line; /* 本文の改行で折り返す（11-1 §1.4 の 15） */
+  overflow-wrap: break-word;
+}
+@keyframes exam-swal-show {
+  0% {
+    transform: scale(0.7);
+  }
+  45% {
+    transform: scale(1.05);
+  }
+  80% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes exam-swal-hide {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+}
+
+/* ---- R-08 ロード中（11-1 §2.1.6） ---- */
+.exam-root .exam-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-overlay-light);
+}
+.exam-root .exam-loading__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.exam-root .exam-loading__icon {
+  display: block;
+  color: var(--color-primary); /* 「ロード中」に添えた印。K-50 の対象外で主色のまま */
+  animation: exam-spin 2s linear infinite;
+}
+.exam-root .exam-loading__text {
+  margin: 10px 0 0;
+  color: var(--color-loading-text); /* 参照元 #3F8DA5（K-48） */
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+@keyframes exam-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---- 動きを減らす設定（11-1 §2.1.7） ---- */
 @media (prefers-reduced-motion: reduce) {
-  .exam-progress-bar progress::-webkit-progress-value {
+  .exam-root .swal-modal,
+  .exam-root .swal-modal[data-closing] {
+    animation: none;
+  }
+  .exam-root .exam-loading__icon {
+    animation: none;
+  }
+  .exam-root .exam-choice__input {
     transition: none;
   }
 }

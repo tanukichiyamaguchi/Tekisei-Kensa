@@ -1,72 +1,157 @@
-// E-01 受検リンク → 登録 → 開始 → 20 ページ回答 → 送信確認 → 完了（05/T-02、T-07、T-11、T-18、決定事項 3）
+// M7-exam-40 受験の流れ、M7-exam-41 幹部用の見出しと p、M7-exam-45 ログインのリンク（11-1 §5.3）
 import { expect, test } from "../support/fixtures";
 
-import { INACTIVE_QUESTION_TEXTS, questionNosOfPage } from "../support/questions";
+import { emulatorTask } from "../support/admin";
+import { INACTIVE_QUESTION_TEXTS, questionNosOfStep } from "../support/questions";
 import {
-  answerCurrentPage,
+  answerCurrentStep,
+  completeUrl,
+  computed,
   e2eName,
-  questionUrl,
+  expectStep,
+  fillRegistration,
+  linkUrl,
+  questionsUrl,
   recordApiCalls,
   registerViaUi,
+  saveStepsViaApi,
+  SAMPLE_PHONE,
 } from "../support/respondent";
 
-test("E-01 受検リンクから 144 問に回答して送信し、完了画面に結果・個人情報を出さない", async ({
+test("M7-exam-40 受験の流れ（求職者）: 登録 → 開始 → 4 ステップ → 送信 → 完了", async ({
   page,
   organizationId,
 }) => {
   const name = e2eName();
-  const phoneNumber = "090-3333-4444";
   const calls = recordApiCalls(page);
 
-  const sessionId = await registerViaUi(page, organizationId, { name, phoneNumber });
+  // R-01: 見出し「受験者登録」、プレースホルダー 4 つ、ラベルが無い
+  await page.goto(linkUrl(organizationId, "user"));
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("受験者登録");
+  await expect(page.getByPlaceholder("お名前を入力")).toBeVisible();
+  await expect(page.getByPlaceholder("電話番号を入力")).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "職業" })).toHaveValue("");
+  await expect(page.getByRole("combobox", { name: "職業" }).locator("option").first()).toHaveText(
+    "職業を選択",
+  );
+  await expect(
+    page.getByRole("combobox", { name: "過去の診断経験" }).locator("option").first(),
+  ).toHaveText("選択してください。");
+  await expect(page.locator("main label")).toHaveCount(0);
+  await expect(page.locator("main")).not.toContainText("*");
+  await fillRegistration(page, { name });
+  await page.getByTestId("register-submit").click();
+  await page.waitForURL(/\/exam\/[A-Za-z0-9]+$/);
+  const sessionId = new URL(page.url()).pathname.split("/")[2] ?? "";
   expect(calls).toEqual(["POST /api/v1/respondent/sessions"]);
   // URL に sessionId 以外の識別子を含めない
-  expect(new URL(page.url()).pathname).toBe(`/exam/${sessionId}`);
   expect(new URL(page.url()).search).toBe("");
 
+  // R-02: 「診断を開始する」（アプリが足していた補足の箇条書きが無い）
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("診断を開始する");
+  await expect(
+    page.getByText("下記のボタンをクリックして、診断を開始してください。"),
+  ).toBeVisible();
+  await expect(page.locator("main li")).toHaveCount(0);
   await page.getByTestId("start-button").click();
-  await page.waitForURL(questionUrl(sessionId, 1));
+  await page.waitForURL(questionsUrl(sessionId));
   expect(calls.at(-1)).toBe(`POST /api/v1/respondent/sessions/${sessionId}/start`);
 
-  for (let pageNo = 1; pageNo <= 20; pageNo += 1) {
-    await expect(page.getByTestId("question-page")).toHaveAttribute("data-page-no", String(pageNo));
-    const expected = questionNosOfPage(pageNo).length;
-    // 05/T-02: fieldset が 7 または 8 個、ラジオが 35 または 40 個
+  for (const stepNo of [1, 2, 3, 4]) {
+    await expectStep(page, stepNo);
+    const expected = questionNosOfStep(stepNo).length;
+    expect(expected).toBe(stepNo === 4 ? 21 : 41);
     await expect(page.locator("fieldset.exam-question")).toHaveCount(expected);
     await expect(page.locator("fieldset.exam-question input[type=radio]")).toHaveCount(
       expected * 5,
     );
+    // 「戻る」と確認ダイアログが無い。URL は /questions のまま
+    await expect(page.getByRole("button", { name: "戻る" })).toHaveCount(0);
+    await expect(page).toHaveURL(questionsUrl(sessionId));
     const body = await page.locator("body").innerText();
-    // 出題しない Q145〜Q204 の設問文が一度も現れない（決定事項 3）
+    // 出題しない Q145〜Q204 の設問文が一度も出ない（決定事項 3）
     for (const text of INACTIVE_QUESTION_TEXTS) expect(body).not.toContain(text);
 
-    await answerCurrentPage(page, pageNo, (q) => ((q - 1) % 5) + 1);
-    const before = calls.length;
-    if (pageNo < 20) {
+    await answerCurrentStep(page, stepNo, { choice: (q) => ((q - 1) % 5) + 1 });
+    if (stepNo < 4) {
+      await expect(page.getByTestId("submit-button")).toHaveCount(0);
       await page.getByTestId("next-button").click();
-      await page.waitForURL(questionUrl(sessionId, pageNo + 1));
-      // 05/T-07: 「次へ」で呼ぶ API は PUT answers の 1 本だけ
-      expect(calls.slice(before)).toEqual([`PUT /api/v1/respondent/sessions/${sessionId}/answers`]);
-    } else {
-      await page.getByTestId("submit-button").click();
-      await expect(page.getByTestId("submit-dialog")).toBeVisible();
-      expect(calls.length).toBe(before); // ダイアログを開くだけでは通信しない
-      await page.getByTestId("submit-confirm").click();
-      await page.waitForURL(new RegExp(`/exam/${sessionId}/complete$`));
-      expect(calls.slice(before)).toEqual([
-        `PUT /api/v1/respondent/sessions/${sessionId}/answers`,
-        `POST /api/v1/respondent/sessions/${sessionId}/submit`,
-      ]);
+      continue;
     }
+    // Step 4: 「次へ」が無く「送信する」がカードの中
+    await expect(page.getByTestId("next-button")).toHaveCount(0);
+    await expect(page.getByTestId("step-card").getByTestId("submit-button")).toHaveText("送信する");
   }
 
-  // 05/T-18: 完了画面は C-01・C-02 のみ。氏名・電話番号・日時・スコアを含まない
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("回答が完了しました");
+  // 「送信する」で確認なしにロード中（描いた要素の計算された色がトークンの値。11-1 §2.1.3・§2.1.6）
+  const clickedAt = Date.now();
+  await page.getByTestId("submit-button").click();
+  const overlay = page.getByTestId("loading-overlay");
+  await expect(overlay).toBeVisible();
+  await expect(overlay.getByRole("status")).toHaveText("ロード中");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(await computed(overlay, "background-color")).toBe("rgba(255, 255, 255, 0.5)");
+  expect(await computed(overlay.locator(".exam-loading__text"), "color")).toBe("rgb(56, 125, 147)");
+  expect(await computed(overlay.locator(".exam-loading__icon"), "color")).toBe("rgb(63, 141, 165)");
+  await page.waitForURL(completeUrl(sessionId));
+  // 送信の応答のあと 2,000 ミリ秒待ってから完了画面へ
+  expect(Date.now() - clickedAt).toBeGreaterThanOrEqual(2000);
+  expect(calls.filter((c) => c.endsWith("/submit"))).toHaveLength(1);
+
+  // R-05: 「回答完了」と本文。氏名・電話番号・点数が無い
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("回答完了");
   const main = await page.locator("main").innerText();
-  expect(main).toContain("ご回答ありがとうございました。");
+  expect(main).toContain("お疲れ様でした");
+  expect(main).toContain("回答の送信が完了しました。");
   expect(main).not.toContain(name);
-  expect(main).not.toContain("3333");
+  expect(main).not.toContain(SAMPLE_PHONE);
   expect(main).not.toMatch(/\d{4}[-/年]\d{1,2}/); // 日付
-  expect(main).not.toMatch(/タイプ|スコア|偏差|適性/);
+  expect(main).not.toMatch(/タイプ|スコア|偏差|適性|点/);
+  const result = emulatorTask<{ respondentKind: string; employmentStatus: string }>(
+    "result-of-session",
+    sessionId,
+  );
+  expect(result).toMatchObject({ respondentKind: "applicant", employmentStatus: "candidate" });
+});
+
+test("M7-exam-41 p=executives は「受験者登録(幹部用)」。p 無し・ほかの値は「受験者登録」で、結果は求職者", async ({
+  page,
+  organizationId,
+}) => {
+  await page.goto(linkUrl(organizationId, "executives"));
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("受験者登録(幹部用)");
+  await page.goto(linkUrl(organizationId, "x"));
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("受験者登録");
+
+  // p 無しで登録して送信すると、求職者の結果（オーナー以外の回答一覧に出る受検者区分）
+  const sessionId = await registerViaUi(page, organizationId, {}, undefined);
+  const respondent = emulatorTask<{ kind: string }>("respondent-of-session", sessionId);
+  expect(respondent.kind).toBe("applicant");
+  await page.getByTestId("start-button").click();
+  await page.waitForURL(questionsUrl(sessionId));
+  await saveStepsViaApi(page, sessionId, 4);
+  const submitted = await page.request.post(`/api/v1/respondent/sessions/${sessionId}/submit`);
+  expect(submitted.status()).toBe(200);
+  expect(
+    emulatorTask<{ respondentKind: string; employmentStatus: string; usageLogCount: number }>(
+      "result-of-session",
+      sessionId,
+    ),
+  ).toMatchObject({ respondentKind: "applicant", employmentStatus: "candidate", usageLogCount: 1 });
+});
+
+test("M7-exam-45 「すでに受験された方・ログインはこちら」で /admin/login へ。/ でも R-01 が出る", async ({
+  page,
+  organizationId,
+}) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("受験者登録");
+  await expect(page.getByTestId("registration-form")).toBeVisible();
+
+  await page.goto(linkUrl(organizationId, "user"));
+  const link = page.getByTestId("login-link");
+  await expect(link).toHaveText("すでに受験された方・ログインはこちら");
+  await expect(link).toHaveAttribute("href", "/admin/login");
+  await link.click();
+  await page.waitForURL((url) => url.pathname === "/admin/login");
 });

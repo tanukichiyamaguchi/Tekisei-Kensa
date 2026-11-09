@@ -1,6 +1,7 @@
 "use client";
-// 設問 1 問（05 §5.3.4、§8）。fieldset + legend（「Q51 設問文」）、未回答で「次へ」を押した後は赤枠と Q-02
-import { EXAM_TEXTS } from "@/lib/presentation/exam-texts";
+// 設問 1 問（11-1 §2.4.4・§2.4.6）。fieldset と legend（「{番号}. {設問文}」）。
+// 未回答の印は「次へ」「送信する」を押して未回答があったときだけ出す: 設問文を赤くし、すぐ下に Q-02（選択肢と aria-describedby で結ぶ）
+import { EXAM_TEXTS, examTextQuestion } from "@/lib/presentation/exam-texts";
 import type { ChoiceCode, QuestionNo } from "@/lib/scoring/types";
 
 import { ChoiceRadioGroup } from "./ChoiceRadioGroup";
@@ -9,7 +10,7 @@ export interface QuestionCardProps {
   readonly questionNo: QuestionNo;
   readonly text: string;
   readonly value: ChoiceCode | null;
-  readonly showUnansweredError: boolean;
+  readonly showUnanswered: boolean;
   readonly onChange: (code: ChoiceCode) => void;
 }
 
@@ -17,32 +18,28 @@ export function QuestionCard({
   questionNo,
   text,
   value,
-  showUnansweredError,
+  showUnanswered,
   onChange,
 }: QuestionCardProps) {
   const errorId = `q${questionNo}-error`;
   return (
     <fieldset
       id={`question-${questionNo}`}
-      className={`exam-question${showUnansweredError ? " exam-question--error" : ""}`}
-      aria-describedby={showUnansweredError ? errorId : undefined}
+      className={`exam-question${showUnanswered ? " exam-question--unanswered" : ""}`}
       data-testid={`question-${questionNo}`}
-      data-unanswered-error={showUnansweredError ? "true" : undefined}
+      data-unanswered={showUnanswered ? "true" : undefined}
     >
-      <legend>
-        <span className="exam-question-no">Q{questionNo}</span>
-        {/* 設問文は加工しない（03 §4.3） */}
-        {text}
-      </legend>
-      {showUnansweredError ? (
-        <p id={errorId} className="exam-field-error" style={{ marginBottom: 8 }}>
+      {/* 設問文は設問マスタ（付録A）のまま加工しない（K-11） */}
+      <legend className="exam-question__text">{examTextQuestion(questionNo, text)}</legend>
+      {showUnanswered ? (
+        <p id={errorId} className="exam-question__error">
           {EXAM_TEXTS["Q-02"]}
         </p>
       ) : null}
       <ChoiceRadioGroup
         questionNo={questionNo}
         value={value}
-        describedBy={showUnansweredError ? errorId : undefined}
+        describedBy={showUnanswered ? errorId : undefined}
         onChange={onChange}
       />
     </fieldset>

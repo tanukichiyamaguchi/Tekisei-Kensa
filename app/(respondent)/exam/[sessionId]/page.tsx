@@ -1,4 +1,4 @@
-// R-02 診断開始（05 §5.2、§11.2）。開始済みなら再開位置へ、送信済みなら完了画面へ
+// R-02 診断開始（11-1 §2.3）。開始済みなら受験画面（/exam/{sessionId}/questions）へ、送信済みなら完了画面へ（11-1 §2.1.2）
 import { notFound, redirect } from "next/navigation";
 
 import { StartPanel } from "@/components/respondent/StartPanel";

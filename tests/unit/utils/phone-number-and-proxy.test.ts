@@ -1,35 +1,9 @@
-// U-03 の電話番号部分（04 D04-06、05 D05-16）と proxy.ts（Cookie の有無だけによる早期遮断。01 §5.5、04 §8.5）
+// proxy.ts（Cookie の有無だけによる早期遮断。01 §5.5、04 §8.5）。
+// U-03 の電話番号の部分は、登録の検査が電話番号の書式を見なくなったため M7-exam-05・07（registration-rules.test.ts）に置き換えた（11-1 §5.5）
 import { NextRequest } from "next/server";
 import { describe, expect, it } from "vitest";
 
-import { isValidPhoneNumber, normalizePhoneNumber, PHONE_PATTERN } from "@/lib/utils/phone-number";
 import { config, proxy } from "@/proxy";
-
-describe("電話番号の正規化と形式", () => {
-  it.each([
-    ["０３－１２３４－５６７８", "03-1234-5678"],
-    ["+81 3 1234 5678", "+81312345678"],
-    [" 090‐1234‐5678 ", "090-1234-5678"],
-    ["（03）1234ー5678", "(03)1234-5678"],
-    ["＋８１　９０　１２３４　５６７８", "+819012345678"],
-  ])("%s → %s（受理）", (input, normalized) => {
-    expect(normalizePhoneNumber(input)).toBe(normalized);
-    expect(isValidPhoneNumber(normalizePhoneNumber(input))).toBe(true);
-  });
-  it.each(["1234567", "1".repeat(21), "03-1234-567a", "", "０３－ABCD－５６７８"])(
-    "%s は拒否",
-    (input) => {
-      expect(isValidPhoneNumber(normalizePhoneNumber(input))).toBe(false);
-    },
-  );
-  it("パターンは 8〜20 文字の数字・+・括弧・ハイフン", () => {
-    for (const ok of ["12345678", "1".repeat(20), "+(03)-1234"])
-      expect(PHONE_PATTERN.test(ok)).toBe(true);
-    for (const ng of ["1234567", "1".repeat(21), "03 1234 5678", "03.1234.5678", "03_1234_5678"]) {
-      expect(PHONE_PATTERN.test(ng)).toBe(false);
-    }
-  });
-});
 
 describe("proxy.ts", () => {
   const call = (path: string, cookie?: string) =>

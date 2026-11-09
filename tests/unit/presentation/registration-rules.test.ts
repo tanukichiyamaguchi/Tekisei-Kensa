@@ -1,161 +1,194 @@
-// U-03（登録の入力規則・選択肢）、05/T-03〜T-05 の単体部分（05 §10.2、§10.3、D05-16、D05-17）
+// M7-exam-05 のうち p の判定（prev の観点は PR-7.4）、M7-exam-07 入力の規則（11-1 §2.2.1・§2.2.5・§3.5、K-42）。
+// U-03 の登録の入力規則と電話番号の部分は、この 2 つに置き換えた（11-1 §5.5）
 import { describe, expect, it } from "vitest";
 
 import { OCCUPATIONS } from "@/lib/masters/occupations";
 import { CHOICE_OPTIONS, isChoiceCode } from "@/lib/presentation/exam-choices";
-import * as rules from "@/lib/presentation/registration-rules";
 import {
+  isOverLimit,
   isRegistrationFilled,
   issuePathToErrorCode,
   kindFromLinkParam,
-  normalizeName,
-  normalizePhoneNumber,
+  NAME_MAX_LENGTH,
+  normalizeText,
   OCCUPATION_OPTIONS,
-  PHONE_PATTERN,
+  PHONE_MAX_LENGTH,
   validateRegistration,
+  validateRegistrationField,
   type RegistrationDraft,
+  type RegistrationErrorCode,
 } from "@/lib/presentation/registration-rules";
 import { registerRespondentInputSchema } from "@/lib/services/schemas/respondent";
-import * as phone from "@/lib/utils/phone-number";
 
 const valid: RegistrationDraft = {
-  name: "山田 太郎",
-  phoneNumber: "090-1234-5678",
+  name: "見本 花子",
+  phoneNumber: "00000000000",
   occupationCode: 2,
   diagnosisExperience: "first_time",
 };
 
-describe("U-03 registration-rules", () => {
-  it("電話番号の規則は lib/utils/phone-number.ts の再エクスポート（再定義しない。D05-16）", () => {
-    expect(rules.normalizePhoneNumber).toBe(phone.normalizePhoneNumber);
-    expect(rules.PHONE_PATTERN).toBe(phone.PHONE_PATTERN);
+describe("M7-exam-05 p の判定（kindFromLinkParam）", () => {
+  it("「executives」と完全に一致するときだけ executive", () => {
+    expect(kindFromLinkParam("executives")).toBe("executive");
+  });
+  it.each([["user"], [undefined], [""], ["EXECUTIVES"], ["x"], ["executive"], [" executives"]])(
+    "%s は applicant（null を返さない）",
+    (p) => {
+      expect(kindFromLinkParam(p)).toBe("applicant");
+    },
+  );
+});
+
+describe("M7-exam-07 入力の規則", () => {
+  it("上限はお名前 100 文字・電話番号 30 文字（K-42）", () => {
+    expect([NAME_MAX_LENGTH, PHONE_MAX_LENGTH]).toEqual([100, 30]);
   });
 
-  it("05 §10.3 の単体テストの例", () => {
-    expect(normalizeName("　山田 太郎　")).toBe("山田 太郎");
-    expect(normalizePhoneNumber("０９０－１２３４－５６７８")).toBe("090-1234-5678");
-    expect(normalizePhoneNumber("090 1234 5678")).toBe("09012345678");
-    expect(normalizePhoneNumber("+81 90 1234 5678")).toBe("+819012345678");
-    for (const ok of [
-      "090-1234-5678",
-      "09012345678",
-      "0312345678",
-      "03(1234)5678",
-      "+819012345678",
-    ]) {
-      expect(PHONE_PATTERN.test(ok)).toBe(true);
-    }
-    const phoneError = (raw: string) =>
-      validateRegistration({ ...valid, phoneNumber: raw }).phoneNumber;
-    expect(phoneError("12345")).toBe("V-04");
-    expect(phoneError("1".repeat(21))).toBe("V-04");
-    expect(phoneError("abc-1234-5678")).toBe("V-04");
-    expect(phoneError("")).toBe("V-03");
-    expect(phoneError("　 ")).toBe("V-03");
-    expect(phoneError("０３－１２３４－５６７８")).toBeUndefined();
-    expect(phoneError("+81 3 1234 5678")).toBeUndefined();
-    expect(validateRegistration({ ...valid, name: "あ".repeat(101) }).name).toBe("V-02");
-    expect(issuePathToErrorCode("phoneNumber")).toEqual({ field: "phoneNumber", code: "V-04" });
+  it("normalizeText は前後の空白（全角を含む）だけを除く", () => {
+    expect(normalizeText("　見本 花子　")).toBe("見本 花子");
+    expect(normalizeText(" \t０９０ー１２３４　")).toBe("０９０ー１２３４");
+    expect(normalizeText("見本　花子")).toBe("見本　花子");
   });
 
-  it("氏名: 空・空白のみは V-01、101 文字（コードポイント）は V-02、100 文字は可、改行は不可（D05-17）", () => {
-    const nameError = (name: string) => validateRegistration({ ...valid, name }).name;
+  it("お名前: 前後の空白を除いて判定。空白だけは V-01、100 文字（コードポイント）は通り 101 文字は V-02、改行は V-01", () => {
+    const nameError = (name: string) => validateRegistrationField("name", { ...valid, name });
     expect(nameError("")).toBe("V-01");
     expect(nameError(" 　 ")).toBe("V-01");
-    expect(nameError("𠮷".repeat(100))).toBeUndefined();
+    expect(nameError("𠮷".repeat(100))).toBeNull();
     expect(nameError("𠮷".repeat(101))).toBe("V-02");
-    expect(nameError("山田\n太郎")).toBe("V-01");
+    expect(nameError(`\u3000${"あ".repeat(100)}\u3000`)).toBeNull();
+    expect(nameError("見本\n花子")).toBe("V-01");
   });
 
-  it("職業・診断経験の未選択は V-05・V-06。全項目が妥当ならエラーなし", () => {
-    expect(validateRegistration(valid)).toEqual({});
-    expect(validateRegistration({ ...valid, occupationCode: null }).occupationCode).toBe("V-05");
-    // 職業 10（責任者。K-21）は選べ、9（旧データの「その他」。欠番）は V-05
-    expect(validateRegistration({ ...valid, occupationCode: 9 }).occupationCode).toBe("V-05");
-    expect(validateRegistration({ ...valid, occupationCode: 10 }).occupationCode).toBeUndefined();
-    expect(validateRegistration({ ...valid, diagnosisExperience: null }).diagnosisExperience).toBe(
-      "V-06",
-    );
+  it("電話番号: 書式・桁数・文字の種類を見ない。空白だけは V-03、30 文字は通り 31 文字は V-04", () => {
+    const phoneError = (phoneNumber: string) =>
+      validateRegistrationField("phoneNumber", { ...valid, phoneNumber });
+    for (const ok of [
+      "abc",
+      "０９０－１２３４",
+      "+81 (90)",
+      "1",
+      " 00000000000 ",
+      "0".repeat(30),
+    ]) {
+      expect(phoneError(ok), ok).toBeNull();
+    }
+    expect(phoneError("")).toBe("V-03");
+    expect(phoneError("　 ")).toBe("V-03");
+    expect(phoneError("0".repeat(31))).toBe("V-04");
+    expect(phoneError(`\u3000${"０".repeat(30)}\u3000`)).toBeNull();
+  });
+
+  it("職業は 1〜8・10（10 は通り 9 は V-05）、過去の診断経験は first_time・experienced", () => {
+    const occupationError = (occupationCode: number | null) =>
+      validateRegistrationField("occupationCode", { ...valid, occupationCode });
+    expect(occupationError(10)).toBeNull();
+    expect(occupationError(1)).toBeNull();
+    expect(occupationError(9)).toBe("V-05");
+    expect(occupationError(null)).toBe("V-05");
     expect(
-      validateRegistration({
-        name: "",
-        phoneNumber: "",
-        occupationCode: null,
-        diagnosisExperience: null,
+      validateRegistrationField("diagnosisExperience", { ...valid, diagnosisExperience: null }),
+    ).toBe("V-06");
+    expect(
+      validateRegistrationField("diagnosisExperience", {
+        ...valid,
+        diagnosisExperience: "experienced",
       }),
-    ).toEqual({
+    ).toBeNull();
+  });
+
+  it("validateRegistration は項目の順（お名前 → 電話番号 → 職業 → 過去の診断経験）に最初のエラーを返す", () => {
+    expect(validateRegistration(valid)).toEqual({});
+    const empty = validateRegistration({
+      name: "",
+      phoneNumber: "",
+      occupationCode: null,
+      diagnosisExperience: null,
+    });
+    expect(empty).toEqual({
       name: "V-01",
       phoneNumber: "V-03",
       occupationCode: "V-05",
       diagnosisExperience: "V-06",
     });
+    expect(Object.keys(empty)).toEqual([
+      "name",
+      "phoneNumber",
+      "occupationCode",
+      "diagnosisExperience",
+    ]);
   });
 
-  it("画面で妥当とした値はサーバのスキーマ（04 §4.2）でも受理される（05/T-04）", () => {
-    for (const raw of [
-      "０９０－１２３４－５６７８",
-      "090 1234 5678",
-      "03(1234)5678",
-      "+81 90 1234 5678",
-    ]) {
-      expect(validateRegistration({ ...valid, phoneNumber: raw })).toEqual({});
-      expect(
-        registerRespondentInputSchema.safeParse({
-          organizationId: "Org1",
-          kind: "applicant",
-          ...valid,
-          phoneNumber: normalizePhoneNumber(raw),
-        }).success,
-      ).toBe(true);
-    }
-  });
-
-  it("「診断に進む」の有効化は全必須項目の入力で判定する（05 §5.1.5）", () => {
+  it("isRegistrationFilled は 4 項目がそろったときだけ true（上限を超えた値でもそろっていれば true）", () => {
     expect(isRegistrationFilled(valid)).toBe(true);
     expect(isRegistrationFilled({ ...valid, name: "　" })).toBe(false);
-    expect(isRegistrationFilled({ ...valid, phoneNumber: "" })).toBe(false);
+    expect(isRegistrationFilled({ ...valid, phoneNumber: " " })).toBe(false);
     expect(isRegistrationFilled({ ...valid, occupationCode: null })).toBe(false);
     expect(isRegistrationFilled({ ...valid, diagnosisExperience: null })).toBe(false);
-    // 入力済みでも形式不正はあり得る（押下時に検証する）
-    expect(isRegistrationFilled({ ...valid, phoneNumber: "12" })).toBe(true);
+    expect(isRegistrationFilled({ ...valid, phoneNumber: "0".repeat(31) })).toBe(true);
   });
 
-  it("issuePathToErrorCode は項目名の path だけを対応づける（name は常に V-01）", () => {
-    expect(issuePathToErrorCode("name")).toEqual({ field: "name", code: "V-01" });
-    expect(issuePathToErrorCode("occupationCode")).toEqual({
+  it("isOverLimit は V-02・V-04 だけ true", () => {
+    const codes: RegistrationErrorCode[] = ["V-01", "V-02", "V-03", "V-04", "V-05", "V-06"];
+    expect(codes.filter(isOverLimit)).toEqual(["V-02", "V-04"]);
+  });
+
+  it("issuePathToErrorCode は path の先頭を項目に写し、文言は今の入力の検査の結果（正しい値なら必須の文言）", () => {
+    expect(issuePathToErrorCode("name", valid)).toEqual({ field: "name", code: "V-01" });
+    expect(issuePathToErrorCode("phoneNumber", valid)).toEqual({
+      field: "phoneNumber",
+      code: "V-03",
+    });
+    expect(issuePathToErrorCode("occupationCode", valid)).toEqual({
       field: "occupationCode",
       code: "V-05",
     });
-    expect(issuePathToErrorCode("diagnosisExperience")).toEqual({
+    expect(issuePathToErrorCode("diagnosisExperience", valid)).toEqual({
       field: "diagnosisExperience",
       code: "V-06",
     });
-    expect(issuePathToErrorCode("organizationId")).toBeNull();
-    expect(issuePathToErrorCode("kind")).toBeNull();
-    expect(issuePathToErrorCode("answers[0].questionNo")).toBeNull();
+    expect(issuePathToErrorCode("phoneNumber", { ...valid, phoneNumber: "0".repeat(31) })).toEqual({
+      field: "phoneNumber",
+      code: "V-04",
+    });
+    expect(issuePathToErrorCode("name.0", { ...valid, name: "" })).toEqual({
+      field: "name",
+      code: "V-01",
+    });
+    for (const path of ["organizationId", "kind", "answers[0].questionNo", "", "names"]) {
+      expect(issuePathToErrorCode(path, valid), path).toBeNull();
+    }
   });
 
-  it("05/T-05: p は user → applicant、executives → executive、それ以外は null", () => {
-    expect(kindFromLinkParam("user")).toBe("applicant");
-    expect(kindFromLinkParam("executives")).toBe("executive");
-    expect(kindFromLinkParam("executive")).toBeNull();
-    expect(kindFromLinkParam("")).toBeNull();
-    expect(kindFromLinkParam(undefined)).toBeNull();
+  it("画面で正しいとした値は、前後の空白を除いた値のままサーバのスキーマ（11-1 §3.4.1）でも通る。上限を超えた値は両方で拒否", () => {
+    const draftOf = (phoneNumber: string, name = valid.name): RegistrationDraft => ({
+      ...valid,
+      name,
+      phoneNumber,
+    });
+    const serverAccepts = (draft: RegistrationDraft) =>
+      registerRespondentInputSchema.safeParse({
+        organizationId: "OrgExample0000000001",
+        kind: "applicant",
+        name: normalizeText(draft.name),
+        phoneNumber: normalizeText(draft.phoneNumber),
+        occupationCode: draft.occupationCode,
+        diagnosisExperience: draft.diagnosisExperience,
+      }).success;
+    for (const phone of ["０９０－１２３４", "+81 (90)", "abc", "0".repeat(30)]) {
+      expect(validateRegistration(draftOf(phone))).toEqual({});
+      expect(serverAccepts(draftOf(phone)), phone).toBe(true);
+    }
+    expect(validateRegistration(draftOf("0".repeat(31))).phoneNumber).toBe("V-04");
+    expect(serverAccepts(draftOf("0".repeat(31)))).toBe(false);
+    expect(validateRegistration(draftOf("0", "あ".repeat(101))).name).toBe("V-02");
+    expect(serverAccepts(draftOf("0", "あ".repeat(101)))).toBe(false);
   });
 
-  it("職業の選択肢はマスタ（00 §1.10）の順・表示名そのまま", () => {
+  it("職業の選択肢はマスタ（00 §1.10）の順・表示名そのまま（10「責任者」が末尾）", () => {
     expect(OCCUPATION_OPTIONS).toEqual(OCCUPATIONS.map((o) => ({ code: o.code, label: o.label })));
-    expect(OCCUPATION_OPTIONS.map((o) => o.label)).toEqual([
-      "アイリスト",
-      "アイリスト（アシスタント・見習い）",
-      "ネイリスト",
-      "美容師",
-      "エステティシャン",
-      "受付",
-      "事務スタッフ",
-      "その他",
-      "責任者",
-    ]);
+    expect(OCCUPATION_OPTIONS.map((o) => o.code)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 10]);
+    expect(OCCUPATION_OPTIONS.at(-1)?.label).toBe("責任者");
   });
 });
 

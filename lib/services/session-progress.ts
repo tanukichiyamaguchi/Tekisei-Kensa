@@ -53,7 +53,7 @@ export async function getSessionProgress(
     kind: ctx.kind,
     status: session.status,
     startedAt: session.startedAt?.toISOString() ?? null,
-    lastSavedPageNo: session.lastSavedPageNo,
+    lastSavedStepNo: session.lastSavedStepNo,
     answeredCount: answers.length,
     totalCount: TOTAL_QUESTION_COUNT,
     answers,

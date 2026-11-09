@@ -1,5 +1,5 @@
-// 設問ページの前段でセッションを検証する（05 §1.3）。ここで notFound() すると、親の [sessionId]/not-found.tsx
-// （session_unavailable）が表示される。ページ番号の不正（page_not_found）は [page]/not-found.tsx が表示する
+// 受験画面（questions/page.tsx）と M7 より前の URL のリダイレクト（questions/[...legacy]/page.tsx）の前段でセッションを検証する
+// （11-1 §2.1.2）。ここで notFound() すると、親の [sessionId]/not-found.tsx（R-06 session_unavailable、404）が表示される
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 

@@ -26,6 +26,7 @@ import { toResultDocFields } from "@/lib/db/mappers/result";
 import { toTimestamp } from "@/lib/db/mappers/timestamp";
 import { answersPatchSchema, saveAnswersInputSchema } from "@/lib/db/schemas/assessment-session";
 import { resultCreateSchema } from "@/lib/db/schemas/result";
+import { usageLogCreateSchema } from "@/lib/db/schemas/usage-log";
 import { validateForWrite } from "@/lib/db/schemas/validate";
 import { docIdSchema } from "@/lib/db/schemas/values";
 import type { AssessmentSessionDoc } from "@/lib/db/types";
@@ -106,14 +107,14 @@ export async function markSessionStarted(input: {
 
 export interface SaveAnswersInput {
   readonly sessionId: string;
-  readonly answers: Readonly<Partial<Record<QuestionNo, ChoiceCode>>>; // 1 ページ分（7〜8 問）
-  readonly lastSavedPageNo: number; // 1〜20
+  readonly answers: Readonly<Partial<Record<QuestionNo, ChoiceCode>>>; // 1 ステップ分（1〜41 問）
+  readonly lastSavedStepNo: number; // 1〜4（11-1 §3.2.2）
   readonly tokenExpiresAt: Date;
 }
 
 /**
- * ページ単位の回答保存。status == draft を検査し、answers.{questionNo} をフィールドパス指定で部分更新する
- * （他のページの回答は触らない。書き込みは 1 文書 1 回）。戻り値は保存後の回答済み数
+ * ステップ単位の回答保存（11-1 §3.4.2）。status == draft を検査し、answers.{questionNo} をフィールドパス指定で部分更新する
+ * （ほかのステップの回答は触らない。書き込みは 1 文書 1 回）。lastSavedPageNo は書かない。戻り値は保存後の回答済み数
  */
 export async function saveAnswers(
   input: SaveAnswersInput,
@@ -125,7 +126,7 @@ export async function saveAnswers(
   );
   validateForWrite(
     saveAnswersInputSchema,
-    { lastSavedPageNo: input.lastSavedPageNo },
+    { lastSavedStepNo: input.lastSavedStepNo },
     "assessmentSessions",
   );
 
@@ -142,8 +143,8 @@ export async function saveAnswers(
     for (const [key, value] of Object.entries(patch))
       fieldPathArgs.push(new FieldPath("answers", key), value);
     fieldPathArgs.push(
-      "lastSavedPageNo",
-      input.lastSavedPageNo,
+      "lastSavedStepNo",
+      input.lastSavedStepNo,
       "lastAnsweredAt",
       now,
       "tokenExpiresAt",
@@ -180,15 +181,18 @@ const DEFAULT_DEPS: SubmitSessionDeps = {
 };
 
 /**
- * 送信の確定（1 トランザクション。02 §8.4）。読み取り 3（session・respondent・usageLog）→ 検査 → 採点（永続化済みの回答）→
- * results 作成 + session・respondent・usageLog 更新 + auditLogs（session.submit）。
+ * 送信の確定（1 トランザクション。02 §8.4、11-1 §3.4.3）。読み取り（session・respondent・respondents.usageLogId が null でなければ
+ * その利用履歴）→ 検査 → 採点（永続化済みの回答）→ results 作成 + session・respondent 更新 + 利用履歴の作成
+ * （M7 より前の登録で文書があればその更新。11-1 §2.7.4）+ auditLogs（session.submit）。書き込みは 5 件。
  * 同時に 2 回呼ばれても、再実行された側が status == "submitted" を読み SESSION_ALREADY_SUBMITTED になる
  */
 export async function submitSession(
   input: SubmitSessionInput,
   deps: SubmitSessionDeps = DEFAULT_DEPS,
 ): Promise<SubmittedSession> {
+  // 結果と利用履歴の文書 ID はトランザクションの外で採番する（再実行でも同じ ID）
   const resultRef = rawCollection(COLLECTIONS.results).doc();
+  const newUsageLogRef = rawCollection(COLLECTIONS.usageLogs).doc();
   return db().runTransaction(async (tx) => {
     // 読み取りはすべて書き込みより先に行う（Admin SDK の制約。02 §8.1）
     const s = fromSnapshot(await tx.get(sessionRef(input.sessionId)), toAssessmentSession);
@@ -197,25 +201,22 @@ export async function submitSession(
     if (s.status !== "draft") {
       throw new RepositoryError("SESSION_ALREADY_SUBMITTED", "この受検はすでに送信済みです");
     }
-    const respondent = fromSnapshot(
-      await tx.get(respondentsRef().doc(s.respondentId)),
-      toRespondent,
-    );
+    const respondentSnapshot = await tx.get(respondentsRef().doc(s.respondentId));
+    const respondentDoc = respondentSnapshot.data();
+    const respondent = fromSnapshot(respondentSnapshot, toRespondent);
     if (
       !respondent ||
+      !respondentDoc ||
       respondent.deletedAt !== null ||
       respondent.organizationId !== s.organizationId
     ) {
       throw new RepositoryError("SESSION_NOT_FOUND", "セッションが見つかりません");
     }
-    if (respondent.usageLogId === null) {
-      throw new RepositoryError("SESSION_NOT_FOUND", "利用履歴が見つかりません");
-    }
-    const usageLog = fromSnapshot(
-      await tx.get(usageLogsRef().doc(respondent.usageLogId)),
-      toUsageLog,
-    );
-    if (!usageLog) throw new RepositoryError("SESSION_NOT_FOUND", "利用履歴が見つかりません");
+    // M7 より前の登録は登録のときに作った利用履歴を持つ（usageLogId）。文書が無ければ新しく作る（11-1 §2.7.4）
+    const existingUsageLog =
+      respondent.usageLogId === null
+        ? null
+        : fromSnapshot(await tx.get(usageLogsRef().doc(respondent.usageLogId)), toUsageLog);
 
     let answers: AnswerMap;
     try {
@@ -231,7 +232,7 @@ export async function submitSession(
       throw error;
     }
     const score = deps.scoreAnswers(answers);
-    const submittedAt = Timestamp.now(); // 3 文書で同じ値にする（02 §8.1）
+    const submittedAt = Timestamp.now(); // 結果・セッション・利用履歴で同じ値にする（02 §8.1）
 
     const result = validateForWrite(
       resultCreateSchema,
@@ -269,6 +270,27 @@ export async function submitSession(
       },
       "results",
     );
+    // 利用履歴は送信のときに作る（11-1 §2.7.4）。氏名・電話番号・受検者区分は受検者から写し、登録日時は respondents.createdAt
+    const newUsageLog =
+      existingUsageLog === null
+        ? validateForWrite(
+            usageLogCreateSchema,
+            {
+              organizationId: s.organizationId,
+              respondentId: respondent.id,
+              resultId: resultRef.id,
+              respondentKind: respondent.kind,
+              name: respondent.name,
+              phoneNumber: respondent.phoneNumber,
+              diagnosisExperience: respondent.diagnosisExperience,
+              registeredAt: respondentDoc.createdAt,
+              submittedAt,
+            },
+            "usageLogs",
+          )
+        : null;
+    const usageLogId = existingUsageLog?.id ?? newUsageLogRef.id;
+
     const updatedAt = FieldValue.serverTimestamp();
     tx.create(resultRef, { ...result, createdAt: updatedAt, updatedAt });
     tx.update(rawCollection(COLLECTIONS.assessmentSessions).doc(s.id), {
@@ -279,13 +301,18 @@ export async function submitSession(
     });
     tx.update(rawCollection(COLLECTIONS.respondents).doc(respondent.id), {
       resultId: resultRef.id,
+      usageLogId,
       updatedAt,
     });
-    tx.update(rawCollection(COLLECTIONS.usageLogs).doc(usageLog.id), {
-      resultId: resultRef.id,
-      submittedAt,
-      updatedAt,
-    });
+    if (newUsageLog !== null) {
+      tx.create(newUsageLogRef, { ...newUsageLog, createdAt: updatedAt, updatedAt });
+    } else {
+      tx.update(rawCollection(COLLECTIONS.usageLogs).doc(usageLogId), {
+        resultId: resultRef.id,
+        submittedAt,
+        updatedAt,
+      });
+    }
     addAuditLogToBatch(tx, {
       organizationId: s.organizationId,
       actorKind: "respondent",
@@ -294,7 +321,8 @@ export async function submitSession(
       action: "session.submit",
       targetCollection: COLLECTIONS.results,
       targetId: resultRef.id,
-      details: { scoringVersion: score.scoringVersion },
+      // 前回の結果につないだら true（11-1 §2.7.5）。つながりの確定（11-1 §2.7.3）を入れるまでは常に false
+      details: { scoringVersion: score.scoringVersion, linkedPrevious: false },
       ipAddress: input.meta.ipAddress,
       userAgent: input.meta.userAgent,
     });

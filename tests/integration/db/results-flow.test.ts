@@ -1,5 +1,6 @@
-// I-00（Emulator 接続・results の保存形）、受検の登録 → 保存 → 送信のリポジトリ経路、I-36（複製フィールドの同期）、
-// 論理削除の同一バッチ。受検者 API・管理者 API は M3・M4 で追加し、そこで API 経由の I-11〜I-18・I-04 を行う
+// I-00（Emulator 接続・results の保存形）、受検の登録 → 保存 → 送信のリポジトリ経路（登録は 3 文書、保存はステップ単位で
+// lastSavedStepNo を書き、利用履歴は送信のときに作る。11-1 §2.7.4・§3.2・§3.4）、I-36（複製フィールドの同期）、論理削除の同一バッチ。
+// API 経由の確かめは respondent/api.test.ts（M7-exam-20〜25・32）
 import { Timestamp } from "firebase-admin/firestore";
 import { beforeAll, describe, expect, it } from "vitest";
 
@@ -21,6 +22,7 @@ import {
 import { fetchPopulation, getResult, listResults } from "@/lib/db/repositories/results-repository";
 import { listUsageLogs } from "@/lib/db/repositories/usage-logs-repository";
 import { adminFirestore } from "@/lib/firebase/admin";
+import { EXAM_STEPS } from "@/lib/presentation/exam-steps";
 import { scoreAnswers } from "@/lib/scoring/score";
 import { SCORING_VERSION } from "@/lib/scoring/version";
 
@@ -131,14 +133,14 @@ describe("I-00 Emulator 接続と results 文書の保存形", () => {
 });
 
 describe("受検の登録 → 保存 → 送信（リポジトリ経路）", () => {
-  it("登録は respondents / assessmentSessions / usageLogs / auditLogs を 1 バッチで作り、相互参照が一致する", async () => {
+  it("登録は respondents / assessmentSessions / auditLogs を 1 バッチで作り、相互参照が一致する。usageLogs は作らない", async () => {
     const r = await register();
     const respondent = await getDocForTest("respondents", r.respondentId);
     const session = await getDocForTest("assessmentSessions", r.sessionId);
-    const usage = await getDocForTest("usageLogs", r.usageLogId);
     expect(respondent).toMatchObject({
       sessionId: r.sessionId,
-      usageLogId: r.usageLogId,
+      usageLogId: null,
+      previousResultId: null,
       resultId: null,
       deletedAt: null,
     });
@@ -146,16 +148,15 @@ describe("受検の登録 → 保存 → 送信（リポジトリ経路）", () 
       respondentId: r.respondentId,
       status: "draft",
       answers: {},
+      lastSavedStepNo: null,
       resultId: null,
     });
+    expect(Object.hasOwn(session!, "lastSavedPageNo")).toBe(false);
     expect(session!.sessionTokenHash).toBe(r.token.tokenHash);
-    expect(usage).toMatchObject({
-      respondentId: r.respondentId,
-      resultId: null,
-      submittedAt: null,
-    });
+    expect(r).not.toHaveProperty("usageLogId");
+    expect(await countDocs("usageLogs", [["respondentId", "==", r.respondentId]])).toBe(0);
     // 平文トークンはどの文書にも保存しない
-    expect(JSON.stringify([respondent, session, usage])).not.toContain(r.token.token);
+    expect(JSON.stringify([respondent, session])).not.toContain(r.token.token);
     expect(
       await countDocs("auditLogs", [
         ["targetId", "==", r.respondentId],
@@ -207,50 +208,50 @@ describe("受検の登録 → 保存 → 送信（リポジトリ経路）", () 
     ).toBe(1);
   });
 
-  it("ページ保存は他ページの回答を消さず、上書きは最後の値。範囲外の値は VALIDATION_ERROR", async () => {
+  it("ステップの保存はほかのステップの回答を消さず、上書きは最後の値で lastSavedStepNo を書く。範囲外の値・42 問は VALIDATION_ERROR", async () => {
     const r = await register();
     await saveAnswers({
       sessionId: r.sessionId,
       answers: { 1: 1, 2: 2 },
-      lastSavedPageNo: 1,
+      lastSavedStepNo: 1,
       tokenExpiresAt: r.token.expiresAt,
     });
     const second = await saveAnswers({
       sessionId: r.sessionId,
-      answers: { 8: 5, 2: 4 },
-      lastSavedPageNo: 2,
+      answers: { 42: 5, 2: 4 },
+      lastSavedStepNo: 2,
       tokenExpiresAt: r.token.expiresAt,
     });
     expect(second.answeredCount).toBe(3);
     const s = await getSession(r.sessionId);
-    expect(s?.answers).toStrictEqual({ 1: 1, 2: 4, 8: 5 });
-    expect(s?.lastSavedPageNo).toBe(2);
-    await expectRepositoryError(
-      saveAnswers({
-        sessionId: r.sessionId,
-        answers: { 3: 6 as 1 },
-        lastSavedPageNo: 1,
-        tokenExpiresAt: r.token.expiresAt,
-      }),
-      "VALIDATION_ERROR",
+    expect(s?.answers).toStrictEqual({ 1: 1, 2: 4, 42: 5 });
+    expect(s?.lastSavedStepNo).toBe(2);
+    expect(await getDocForTest("assessmentSessions", r.sessionId)).not.toHaveProperty(
+      "lastSavedPageNo",
     );
-    await expectRepositoryError(
-      saveAnswers({
-        sessionId: r.sessionId,
-        answers: { 145: 1 },
-        lastSavedPageNo: 1,
-        tokenExpiresAt: r.token.expiresAt,
-      }),
-      "VALIDATION_ERROR",
-    );
+    for (const invalid of [
+      { answers: { 3: 6 as 1 }, lastSavedStepNo: 1 },
+      { answers: { 145: 1 as const }, lastSavedStepNo: 4 },
+      { answers: { 3: 1 as const }, lastSavedStepNo: 5 },
+      {
+        answers: Object.fromEntries(Array.from({ length: 42 }, (_, i) => [i + 1, 1 as const])),
+        lastSavedStepNo: 1,
+      },
+    ]) {
+      await expectRepositoryError(
+        saveAnswers({ sessionId: r.sessionId, tokenExpiresAt: r.token.expiresAt, ...invalid }),
+        "VALIDATION_ERROR",
+      );
+    }
+    expect((await getSession(r.sessionId))?.answers).toStrictEqual({ 1: 1, 2: 4, 42: 5 });
   });
 
-  it("未回答があると ANSWERS_INCOMPLETE（details.missing）で results を作らない", async () => {
+  it("未回答があると ANSWERS_INCOMPLETE（details.missing）で results・利用履歴を作らない", async () => {
     const r = await register();
     await saveAnswers({
       sessionId: r.sessionId,
       answers: { 1: 1 },
-      lastSavedPageNo: 1,
+      lastSavedStepNo: 1,
       tokenExpiresAt: r.token.expiresAt,
     });
     const before = await countDocs("results");
@@ -263,9 +264,10 @@ describe("受検の登録 → 保存 → 送信（リポジトリ経路）", () 
     expect(missing[0]).toBe(2);
     expect(await countDocs("results")).toBe(before);
     expect((await getSession(r.sessionId))?.status).toBe("draft");
+    expect(await countDocs("usageLogs", [["respondentId", "==", r.respondentId]])).toBe(0);
   });
 
-  it("送信は results を作り、session・respondent・usageLog に resultId と同じ submittedAt を入れる。2 回目は SESSION_ALREADY_SUBMITTED", async () => {
+  it("送信は results と利用履歴を作り、session・respondent・usageLog に resultId と同じ submittedAt を入れる。2 回目は SESSION_ALREADY_SUBMITTED", async () => {
     const { respondentId, sessionId, resultId, usageLogId } = await submitAnswerSet(
       org,
       uniformAnswers(3),
@@ -275,8 +277,20 @@ describe("受検の登録 → 保存 → 送信（リポジトリ経路）", () 
     const usage = await getDocForTest("usageLogs", usageLogId);
     const result = await getDocForTest("results", resultId);
     expect(session).toMatchObject({ status: "submitted", resultId });
-    expect(respondent).toMatchObject({ resultId });
-    expect(usage).toMatchObject({ resultId });
+    expect(respondent).toMatchObject({ resultId, usageLogId });
+    expect(usage).toMatchObject({
+      organizationId: org.organizationId,
+      respondentId,
+      resultId,
+      respondentKind: "applicant",
+      name: respondent!.name,
+      phoneNumber: respondent!.phoneNumber,
+      diagnosisExperience: respondent!.diagnosisExperience,
+    });
+    expect((usage!.registeredAt as Timestamp).isEqual(respondent!.createdAt as Timestamp)).toBe(
+      true,
+    );
+    expect(await countDocs("usageLogs", [["respondentId", "==", respondentId]])).toBe(1);
     expect((session!.submittedAt as Timestamp).isEqual(result!.submittedAt as Timestamp)).toBe(
       true,
     );
@@ -305,24 +319,25 @@ describe("受検の登録 → 保存 → 送信（リポジトリ経路）", () 
       saveAnswers({
         sessionId,
         answers: { 1: 1 },
-        lastSavedPageNo: 1,
+        lastSavedStepNo: 1,
         tokenExpiresAt: new Date(Date.now() + 60_000),
       }),
       "SESSION_ALREADY_SUBMITTED",
     );
     expect(await countDocs("results")).toBe(before);
+    expect(await countDocs("usageLogs", [["respondentId", "==", respondentId]])).toBe(1);
   });
 
-  it("同じセッションを並行して 2 回送信しても results は 1 件（トランザクション）", async () => {
+  it("同じセッションを並行して 2 回送信しても results と利用履歴は 1 件ずつ（トランザクション）", async () => {
     const r = await register();
     const answers = uniformAnswers(2);
-    for (let start = 1; start <= 144; start += 8) {
-      const page: Record<number, 2> = {};
-      for (let q = start; q < start + 8 && q <= 144; q += 1) page[q] = answers[q] as 2;
+    for (const step of EXAM_STEPS) {
+      const stepAnswers: Record<number, 2> = {};
+      for (const q of step.questions) stepAnswers[q.questionNo] = answers[q.questionNo] as 2;
       await saveAnswers({
         sessionId: r.sessionId,
-        answers: page,
-        lastSavedPageNo: 1,
+        answers: stepAnswers,
+        lastSavedStepNo: step.stepNo,
         tokenExpiresAt: r.token.expiresAt,
       });
     }
@@ -336,6 +351,7 @@ describe("受検の登録 → 保存 → 送信（リポジトリ経路）", () 
     expect(rejected).toHaveLength(1);
     expect((rejected[0]!.reason as RepositoryError).code).toBe("SESSION_ALREADY_SUBMITTED");
     expect(await countDocs("results", [["sessionId", "==", r.sessionId]])).toBe(1);
+    expect(await countDocs("usageLogs", [["respondentId", "==", r.respondentId]])).toBe(1);
   });
 });
 

@@ -39,7 +39,8 @@ export const choiceCodeSchema = z.union([
   z.literal(5),
 ]);
 export const scoredQuestionNoSchema = z.number().int().min(1).max(144);
-export const pageNoSchema = z.number().int().min(1).max(20);
+/** 受験画面のステップ番号 1〜4（11-1 §3.2.2） */
+export const stepNoSchema = z.number().int().min(1).max(4);
 
 /** 暦日 YYYY-MM-DD（1900-01-01〜2100-12-31 の実在する日。11-2 §3.1）。判定は lib/presentation/employment.ts */
 export const calendarDateSchema = z

@@ -1,4 +1,4 @@
-// PUT /api/v1/respondent/sessions/{sessionId}/answers（1 ページ分の回答の上書き保存。04 §4.4）
+// PUT /api/v1/respondent/sessions/{sessionId}/answers（1 ステップ分の回答の上書き保存。11-1 §3.4.2、04 §4.4）
 import { requireRespondentSession } from "@/lib/auth/respondent-session";
 import { saveAnswers } from "@/lib/services/answer-saving";
 import type { AnswersSavedDto } from "@/lib/services/dto/respondent";

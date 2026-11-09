@@ -13,7 +13,7 @@ import {
   OCCUPATION_CODES,
   OCCUPATIONS,
 } from "@/lib/masters/occupations";
-import { stepAndPageOf } from "@/lib/masters/question-layout";
+import { QUESTION_STEP_SIZES, SCORED_QUESTION_COUNT, stepOf } from "@/lib/masters/question-layout";
 import {
   MasterValidationError,
   parseAptitudeTypeDefinitions,
@@ -155,17 +155,19 @@ describe("parse* は不正なマスタを MasterValidationError で拒否する"
   });
 });
 
-describe("設問のステップ・ページ割り当て", () => {
-  it("境界", () => {
-    expect(stepAndPageOf(7)).toEqual({ step: 1, page: 1 });
-    expect(stepAndPageOf(8)).toEqual({ step: 1, page: 2 });
-    expect(stepAndPageOf(28)).toEqual({ step: 1, page: 4 });
-    expect(stepAndPageOf(29)).toEqual({ step: 1, page: 5 });
-    expect(stepAndPageOf(73)).toEqual({ step: 3, page: 1 });
-    expect(stepAndPageOf(109)).toEqual({ step: 4, page: 1 });
+describe("M7-exam-02 設問のステップの区切り（11-1 §2.4.1・§3.5）", () => {
+  it("境界: 1・41 → 1、42・82 → 2、83・123 → 3、124・144 → 4", () => {
+    expect([1, 41, 42, 82, 83, 123, 124, 144].map(stepOf)).toEqual([1, 1, 2, 2, 3, 3, 4, 4]);
+  });
+  it("問数は 41・41・41・21 で合計 144", () => {
+    expect([...QUESTION_STEP_SIZES]).toEqual([41, 41, 41, 21]);
+    expect(QUESTION_STEP_SIZES.reduce((sum, n) => sum + n, 0)).toBe(SCORED_QUESTION_COUNT);
+    const counts = [0, 0, 0, 0];
+    for (let q = 1; q <= SCORED_QUESTION_COUNT; q += 1) counts[stepOf(q) - 1]! += 1;
+    expect(counts).toEqual([...QUESTION_STEP_SIZES]);
   });
   it.each([0, 145, 1.5, -1])("出題対象外の %s は RangeError", (q) => {
-    expect(() => stepAndPageOf(q)).toThrow(RangeError);
+    expect(() => stepOf(q)).toThrow(RangeError);
   });
 });
 

@@ -1,13 +1,9 @@
 // E2E 用の設問情報。Playwright のローダーは JSON の import を扱えないため、設問マスタ（lib/masters/questions.ts）は
-// import せず、ページ割り当ては question-layout.ts（純粋な TS）から、設問文は JSON を fs で読む
+// import せず、ステップの区切りは question-layout.ts（純粋な TS）の stepOf から、設問文は JSON を fs で読む
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import {
-  QUESTION_PAGE_LAYOUT,
-  SCORED_QUESTION_COUNT,
-  examPageNoOf,
-} from "@/lib/masters/question-layout";
+import { QUESTION_STEP_SIZES, SCORED_QUESTION_COUNT, stepOf } from "@/lib/masters/question-layout";
 
 interface QuestionItem {
   readonly questionNo: number;
@@ -21,13 +17,13 @@ const master = JSON.parse(
   ),
 ) as { readonly items: readonly QuestionItem[] };
 
-export const EXAM_PAGE_TOTAL =
-  QUESTION_PAGE_LAYOUT.stepCount * QUESTION_PAGE_LAYOUT.pageSizes.length;
+/** ステップの数（4） */
+export const EXAM_STEP_TOTAL = QUESTION_STEP_SIZES.length;
 
-/** 通しページ番号 → 設問番号（昇順） */
-export function questionNosOfPage(pageNo: number): readonly number[] {
+/** ステップ番号 → 設問番号（昇順） */
+export function questionNosOfStep(stepNo: number): readonly number[] {
   return Array.from({ length: SCORED_QUESTION_COUNT }, (_, i) => i + 1).filter(
-    (q) => examPageNoOf(q) === pageNo,
+    (q) => stepOf(q) === stepNo,
   );
 }
 

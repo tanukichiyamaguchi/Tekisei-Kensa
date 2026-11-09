@@ -15,7 +15,7 @@ import { TRAIT_DEFINITIONS } from "@/lib/masters/indicators/traits";
 import {
   ACTIVE_QUESTIONS,
   QUESTION_BY_NO,
-  QUESTION_PAGE_LAYOUT,
+  QUESTION_STEP_SIZES,
   QUESTIONS,
   SCORED_QUESTION_NOS,
 } from "@/lib/masters/questions";
@@ -211,7 +211,7 @@ describe("M-05 16 タイプ", () => {
   });
 });
 
-describe("M-06 設問マスタ", () => {
+describe("M-06 設問マスタ（M7-exam-02 の設問マスタの分）", () => {
   it("204 件、1〜204 が欠落・重複なし", () => {
     expect(QUESTIONS).toHaveLength(204);
     expect(QUESTIONS.map((q) => q.questionNo)).toEqual(
@@ -219,31 +219,29 @@ describe("M-06 設問マスタ", () => {
     );
     expect(QUESTION_BY_NO.size).toBe(204);
   });
-  it("1〜144 は出題・採点対象、145〜204 は対象外で step・page が null", () => {
+  it("1〜144 は出題・採点対象、145〜204 は対象外で step が null", () => {
     for (const q of QUESTIONS) {
       const scored = q.questionNo <= 144;
       expect(q.isActive).toBe(scored);
       expect(q.isScored).toBe(scored);
-      if (!scored) {
-        expect(q.step).toBeNull();
-        expect(q.page).toBeNull();
-      }
+      if (!scored) expect(q.step).toBeNull();
     }
     expect(ACTIVE_QUESTIONS).toHaveLength(144);
     expect(SCORED_QUESTION_NOS).toEqual(Array.from({ length: 144 }, (_, i) => i + 1));
   });
-  it("1〜144 の step・page が QUESTION_PAGE_LAYOUT（36 問 × 4、7・7・7・7・8）と一致", () => {
-    const expected: Array<[number, number]> = [];
-    for (let step = 1; step <= QUESTION_PAGE_LAYOUT.stepCount; step += 1) {
-      QUESTION_PAGE_LAYOUT.pageSizes.forEach((size, i) => {
-        for (let n = 0; n < size; n += 1) expected.push([step, i + 1]);
-      });
-    }
-    expect(ACTIVE_QUESTIONS.map((q) => [q.step, q.page])).toEqual(expected);
-    expect(QUESTION_BY_NO.get(1)).toMatchObject({ step: 1, page: 1 });
-    expect(QUESTION_BY_NO.get(36)).toMatchObject({ step: 1, page: 5 });
-    expect(QUESTION_BY_NO.get(37)).toMatchObject({ step: 2, page: 1 });
-    expect(QUESTION_BY_NO.get(144)).toMatchObject({ step: 4, page: 5 });
+  it("1〜144 の step が QUESTION_STEP_SIZES（41・41・41・21）と一致し、page は無い（11-1 §3.1）", () => {
+    const expected = QUESTION_STEP_SIZES.flatMap((size, i) =>
+      Array.from({ length: size }, () => i + 1),
+    );
+    expect(ACTIVE_QUESTIONS.map((q) => q.step)).toEqual(expected);
+    expect(QUESTION_BY_NO.get(1)?.step).toBe(1);
+    expect(QUESTION_BY_NO.get(41)?.step).toBe(1);
+    expect(QUESTION_BY_NO.get(42)?.step).toBe(2);
+    expect(QUESTION_BY_NO.get(123)?.step).toBe(3);
+    expect(QUESTION_BY_NO.get(124)?.step).toBe(4);
+    expect(QUESTION_BY_NO.get(144)?.step).toBe(4);
+    expect(QUESTION_BY_NO.get(145)?.step).toBeNull();
+    for (const q of QUESTIONS) expect(Object.keys(q)).not.toContain("page");
   });
   it("設問文は付録A の転記そのまま（代表例）", () => {
     expect(QUESTION_BY_NO.get(1)?.text).toBe("人の好き嫌いが多い");

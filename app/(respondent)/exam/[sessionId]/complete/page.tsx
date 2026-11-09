@@ -1,4 +1,4 @@
-// R-05 完了（05 §5.5、§11.4）。未送信なら /exam/{sessionId} へ
+// R-05 完了（11-1 §2.5）。未送信なら /exam/{sessionId} へ（11-1 §2.1.2）
 import { notFound, redirect } from "next/navigation";
 
 import { CompleteView } from "@/components/respondent/CompleteView";
