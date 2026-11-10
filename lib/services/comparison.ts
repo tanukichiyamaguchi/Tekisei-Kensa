@@ -1,4 +1,5 @@
-// 比較計算（04 §5.5）。保存せず呼び出しごとに計算する（要件定義書 §11 の 6 番）。母集団の条件は 02 の fetchPopulation() 1 か所
+// 比較計算（04 §5.5）。保存せず呼び出しごとに計算する（要件定義書 §11 の 6 番）。母集団の条件は 02 の fetchPopulation() と
+// selectPopulation() の組（00 §1.11）
 import { writeAuditLog } from "./audit";
 import type { ComparisonDto } from "./dto/result";
 import { ApiError } from "./errors";

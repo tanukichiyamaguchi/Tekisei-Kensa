@@ -22,7 +22,7 @@ export interface AssessmentLinkDto {
 export interface SessionCreatedDto {
   readonly sessionId: string;
   readonly organizationId: string;
-  readonly kind: RespondentKind;
+  readonly kind: RespondentKind; // 保存した受検者区分（前回の候補を受け付けたら executive。11-1 §3.4.1）
   readonly status: SessionStatus;
   readonly tokenExpiresAt: string;
   readonly nextUrl: string;

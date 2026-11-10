@@ -1,5 +1,5 @@
-// U-06 のうち受検者 API の入力（04 §4.1）、M7-exam-08 登録のスキーマ・M7-exam-09 保存のスキーマ（11-1 §3.4.1・§3.4.2）。
-// M7-exam-08 の previousResultId の観点は PR-7.4
+// U-06 のうち受検者 API の入力（04 §4.1）、M7-exam-08 登録のスキーマ（previousResultId を含む）・M7-exam-09 保存のスキーマ
+// （11-1 §3.4.1・§3.4.2）
 import { describe, expect, it } from "vitest";
 
 import {
@@ -66,10 +66,22 @@ describe("M7-exam-08 registerRespondentInputSchema", () => {
     ["診断経験の区分外", { diagnosisExperience: "yes" }, "diagnosisExperience"],
     ["区分の区分外", { kind: "executives" }, "kind"],
     ["組織 ID の形式不正", { organizationId: "" }, "organizationId"],
+    ["前回の結果の ID が 201 文字", { previousResultId: "a".repeat(201) }, "previousResultId"],
+    ["前回の結果の ID が数値", { previousResultId: 12345 }, "previousResultId"],
+    ["前回の結果の ID が null", { previousResultId: null }, "previousResultId"],
   ])("%s は拒否", (_, patch, path) => {
     expect(pathsOf(registerRespondentInputSchema.safeParse({ ...valid, ...patch }))).toContain(
       path,
     );
+  });
+
+  it("previousResultId（再受験リンクの prev）は省略でき、文字なら形を見ずに 200 文字まで通す（文書 ID の形は service が見る。422 にしない）", () => {
+    expect(registerRespondentInputSchema.parse(valid)).not.toHaveProperty("previousResultId");
+    for (const previousResultId of ["ResExample0000000001", "a/b", "", "a".repeat(200)]) {
+      expect(
+        registerRespondentInputSchema.parse({ ...valid, previousResultId }).previousResultId,
+      ).toBe(previousResultId);
+    }
   });
 
   it("職業 10（責任者。K-21）は受理する", () => {

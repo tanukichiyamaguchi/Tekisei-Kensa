@@ -1,9 +1,11 @@
-// results 文書 ↔ ScoreResult / PopulationMember（02 §5.5、03 §5.9）。値を変換・丸めしない
+// results 文書 ↔ ScoreResult / PopulationMember / PopulationSourceRow（02 §5.5、03 §5.9、11-5 §3.2）。値を変換・丸めしない
 import { MappingError, toDate, toNullableDate } from "./timestamp";
 import type { Result } from "@/lib/db/domain";
 import { initialEmploymentStatus } from "@/lib/db/employment-status";
+import type { PopulationSourceRow } from "@/lib/db/population";
 import { trainingContextSchema } from "@/lib/db/schemas/training-context";
-import type { ResultDoc } from "@/lib/db/types";
+import { docIdSchema, teamCodeSchema } from "@/lib/db/schemas/values";
+import type { ResultDoc, TeamCode } from "@/lib/db/types";
 import type { TrainingContext } from "@/lib/masters/training-context";
 import {
   APTITUDE_KEYS,
@@ -69,6 +71,31 @@ export function toPopulationMember(
   return {
     traits: numberMap(data.traits, TRAIT_KEYS, "traits"),
     compatibility: numberMap(data.compatibility, COMPATIBILITY_KEYS, "compatibility"),
+  };
+}
+
+/**
+ * 母集団を選ぶ前の 1 件（11-5 §3.2）。fetchPopulation() の select（traits・compatibility・isExcluded・scoringVersion・teamCode・
+ * previousResultId）の結果から変換する。traits・compatibility は toPopulationMember と同じ検証（キーの欠け・number 以外は
+ * MappingError）。isExcluded は true のときだけ真、teamCode は A〜Z の 1 文字か null（ほかは null）、previousResultId は
+ * 文書 ID の形の文字か null（項目が無い M7 より前の文書は null）。scoringVersion が文字でなければ、どの版にも当たらない空文字にする
+ * （今の版の母集団に入れない。比較全体は止めない）
+ */
+export function toPopulationSourceRow(
+  id: string,
+  data: Readonly<Record<string, unknown>>,
+): PopulationSourceRow {
+  const member = toPopulationMember(data as Pick<ResultDoc, "traits" | "compatibility">);
+  return {
+    resultId: id,
+    isExcluded: data.isExcluded === true,
+    scoringVersion: typeof data.scoringVersion === "string" ? data.scoringVersion : "",
+    teamCode: teamCodeSchema.safeParse(data.teamCode).success ? (data.teamCode as TeamCode) : null,
+    previousResultId: docIdSchema.safeParse(data.previousResultId).success
+      ? (data.previousResultId as string)
+      : null,
+    traits: member.traits,
+    compatibility: member.compatibility,
   };
 }
 

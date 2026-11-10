@@ -1,9 +1,11 @@
 // I-50 複合インデックスの過不足（08 §3.3、02 §7、09 §6.4 の 3）と、M7 のインデックス（M7-exam-34・M7-list-33・
-// M7-misc-25。11-1 §3.2.5、11-2 §3.4、11-8 §3.4）。
+// M7-misc-25・M7-compare-24。11-1 §3.2.5、11-2 §3.4、11-8 §3.4、11-5 §3.1）。
 // Firestore Emulator は未定義の複合インデックスを必要とするクエリでも失敗せず、ログにも警告を出さないことを確認した
 // （firestore-debug.log に該当出力なし）。そのため 08 の代替手順どおり、リポジトリ関数が実際に発行したクエリの形
 // （等価条件・不等号条件・並び順）を捕捉し、firestore.indexes.json の定義と機械的に照合する。
-// リポジトリの関数がまだ無い M7 のクエリ（Q-M7-1、Q5・Q6 の改め）は、Q7・Q12 と同じく直接のクエリで発行する
+// Q-M7-1 はリポジトリの canLinkAsPrevious() の発行で照合する（M7-exam-34。送信のトランザクションの中の同じ形のクエリは
+// tx.get() で読み、Query.prototype.get を通らないので捕捉されない）。リポジトリの関数がまだ無い M7 のクエリ（Q5・Q6 の改め。
+// PR-7.5 が置き換える）は、Q7・Q12 と同じく直接のクエリで発行する
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
@@ -18,6 +20,7 @@ import { countAiAnalysesSince } from "@/lib/db/repositories/ai-analyses-reposito
 import { countRecentAuditLogs } from "@/lib/db/repositories/audit-logs-repository";
 import { findOrganizationByInviteTokenHash } from "@/lib/db/repositories/organizations-repository";
 import {
+  canLinkAsPrevious,
   fetchPopulation,
   listResults,
   listResultsForClassification,
@@ -45,6 +48,18 @@ interface IndexFile {
   }>;
 }
 const indexFile = JSON.parse(readFileSync("firebase/firestore.indexes.json", "utf8")) as IndexFile;
+
+const indexKey = (index: IndexDef) =>
+  `${index.collectionGroup}(${index.fields.map((f) => `${f.fieldPath} ${f.order}`).join(", ")})`;
+
+/**
+ * M7 で使わなくなり、PR-7.17 で消す定義（11-5 §3.1・§3.11: 2.5 版までの Q1・Q2。fetchPopulation() は Q1（改）で読む）。
+ * 使うコードのデプロイの後に消す規則（08 §8.2 の 4）により、M7 の最後まで定義に残す
+ */
+const RETIRED_INDEXES = [
+  "results(organizationId ASCENDING, isExcluded ASCENDING, scoringVersion ASCENDING, deletedAt ASCENDING)",
+  "results(organizationId ASCENDING, isExcluded ASCENDING, scoringVersion ASCENDING, deletedAt ASCENDING, teamCode ASCENDING)",
+];
 
 /** 捕捉したクエリの形 */
 interface QueryShape {
@@ -145,16 +160,21 @@ beforeAll(async () => {
     return originalAggregateGet.apply(this, args);
   });
 
-  // リポジトリの全クエリを発行する（02 §7.1 の Q1〜Q14、Q-M7-2）
+  // リポジトリの全クエリを発行する（02 §7.1 の Q1（改）・Q3〜Q14、Q-M7-1、Q-M7-2）
   const { org, owner } = await createOrganizationWithOwner("インデックス歯科");
-  await submitAnswerSet(org, uniformAnswers(3));
+  const submitted = await submitAnswerSet(org, uniformAnswers(3));
   const ownerViewer: Viewer = { uid: owner.uid, organizationId: org.organizationId, role: "owner" };
   const adminViewer: Viewer = { ...ownerViewer, role: "admin" };
-  await fetchPopulation({ organizationId: org.organizationId, scope: { kind: "organization" } }); // Q1
+  // Q1（改。11-5 §3.1）: 組織の論理削除されていない全件。チームを選んでも同じ形（M7-compare-24 の Q1（改）の分）
+  await fetchPopulation({ organizationId: org.organizationId, scope: { kind: "organization" } });
   await fetchPopulation({
     organizationId: org.organizationId,
     scope: { kind: "team", teamCode: "A" },
-  }); // Q2
+  });
+  // Q-M7-1（11-1 §3.2.5）: 前回の候補の判定。生きている結果なので、文書の読み取りのあとクエリまで進む
+  expect(
+    await canLinkAsPrevious({ organizationId: org.organizationId, resultId: submitted.resultId }),
+  ).toBe(true);
   for (const viewer of [ownerViewer, adminViewer]) {
     await listResults({ viewer }); // Q3 / Q4
     await listResultsForClassification({ viewer }); // Q3 / Q4
@@ -192,14 +212,7 @@ beforeAll(async () => {
     .orderBy("createdAt", "desc")
     .limit(10)
     .get();
-  // M7 で定義し、リポジトリの関数が後で使うクエリ（Q-M7-1: 前回の候補とつながり。Q5・Q6（改）: 利用履歴の submittedAt 順）
-  await adminFirestore()
-    .collection("results")
-    .where("organizationId", "==", org.organizationId)
-    .where("previousResultId", "==", "x")
-    .where("deletedAt", "==", null)
-    .limit(1)
-    .get(); // Q-M7-1（11-1 §3.2.5）
+  // M7 で定義し、リポジトリの関数が後で使うクエリ（Q5・Q6（改）: 利用履歴の submittedAt 順。PR-7.5 が置き換える）
   await adminFirestore()
     .collection("usageLogs")
     .where("organizationId", "==", org.organizationId)
@@ -227,17 +240,15 @@ describe("I-50 firestore.indexes.json とクエリの照合", () => {
     expect(missing).toEqual([]);
   });
 
-  it("定義済みの複合インデックスはすべていずれかのクエリで使われている（使わない定義が無い）", () => {
+  it("使われていない定義は、M7 で使わなくなり PR-7.17 で消す今の Q1・Q2 の 2 本だけ（ほかに使わない定義が無い）", () => {
     const unused = indexFile.indexes.filter(
       (index) => !captured.filter(needsComposite).some((shape) => indexServes(index, shape)),
     );
-    expect(unused).toEqual([]);
+    expect(unused.map(indexKey)).toEqual(RETIRED_INDEXES);
   });
 
   it("M7 の 4 本（Q-M7-1・Q-M7-2・Q5／Q6 の改め）と除外 2 つが定義にあり、複合 18 本・除外 14 件（02 §7.3）", () => {
-    const key = (index: IndexDef) =>
-      `${index.collectionGroup}(${index.fields.map((f) => `${f.fieldPath} ${f.order}`).join(", ")})`;
-    expect(indexFile.indexes.map(key)).toEqual(
+    expect(indexFile.indexes.map(indexKey)).toEqual(
       expect.arrayContaining([
         "results(organizationId ASCENDING, previousResultId ASCENDING, deletedAt ASCENDING)",
         "adminUsers(organizationId ASCENDING, role ASCENDING, deletedAt ASCENDING)",

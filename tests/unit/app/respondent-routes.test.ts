@@ -1,4 +1,4 @@
-// 受験者登録（/・/exam）の共通の処理と、M7 より前の受験画面の URL のリダイレクト（11-1 §2.1.1・§2.2.1・§3.6）。
+// 受験者登録（/・/exam）の共通の処理と、M7 より前の受験画面の URL のリダイレクト（11-1 §2.1.1・§2.2.1・§2.2.8・§3.6）。
 // 画面の E2E（M7-exam-43・45・47）の前提になるサーバ側の判定を、ページの関数を直接呼んで確かめる
 import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
@@ -47,6 +47,7 @@ describe("受験者登録（R-01）の共通の処理", () => {
     expect(await formProps("/exam", { q: "OrgExample0000000001", p: "user" })).toEqual({
       organizationId: "OrgExample0000000001",
       kind: "applicant",
+      previousResultId: null,
     });
     for (const q of [undefined, "", "a/b", "a".repeat(129), ["Abc", "Def"]]) {
       expect((await formProps("/exam", { q })).organizationId, String(q)).toBeNull();
@@ -59,7 +60,46 @@ describe("受験者登録（R-01）の共通の処理", () => {
     for (const p of [undefined, "user", "x", "EXECUTIVES", ["executives", "user"]]) {
       expect((await formProps("/exam", { q: "Abc", p })).kind, String(p)).toBe("applicant");
     }
-    expect(await formProps("/", {})).toEqual({ organizationId: null, kind: "applicant" });
+    expect(await formProps("/", {})).toEqual({
+      organizationId: null,
+      kind: "applicant",
+      previousResultId: null,
+    });
+  });
+
+  it("prev は文書 ID の形のときだけ前回の結果の ID として渡し（候補かは確かめない）、無い・空・形が違う・複数は null。/ でも同じ。見出しは p だけで決まる", async () => {
+    for (const path of ["/exam", "/"] as const) {
+      expect(
+        await formProps(path, { q: "Abc", p: "executives", prev: "ResExample0000000001" }),
+      ).toEqual({
+        organizationId: "Abc",
+        kind: "executive",
+        previousResultId: "ResExample0000000001",
+      });
+      for (const prev of [undefined, "", "a/b", "a".repeat(129), ["Res1", "Res2"]]) {
+        expect(
+          (await formProps(path, { q: "Abc", p: "executives", prev })).previousResultId,
+          `${path} ${String(prev)}`,
+        ).toBeNull();
+      }
+    }
+    // prev があっても p=user なら求職者の見出し（受検者区分は登録のときにサーバが決める。11-1 §2.2.8）
+    expect(await formProps("/exam", { q: "Abc", p: "user", prev: "Res1" })).toEqual({
+      organizationId: "Abc",
+      kind: "applicant",
+      previousResultId: "Res1",
+    });
+  });
+
+  it("「amp;prev」も「amp;」を取り除いてリダイレクトする（再受験リンクを &amp; に書き換えて貼った場合）", async () => {
+    expect(
+      await redirectedTo(
+        renderRegistrationPage(
+          "/exam",
+          Promise.resolve({ q: "Abc", "amp;p": "executives", "amp;prev": "Res1" }),
+        ),
+      ),
+    ).toBe("/exam?q=Abc&p=executives&prev=Res1");
   });
 });
 

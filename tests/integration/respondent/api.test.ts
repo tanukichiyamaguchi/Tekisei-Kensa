@@ -1,10 +1,12 @@
-// 受検者 API（04 §4、11-1 §3.4）: I-10、M7-exam-20〜25・31（API の分）・32、I-14・I-16・I-17、PF-03 と、
-// レート制限・進行状態・開始・再開判定。I-11〜I-13・I-15・I-18 は M7-exam-20〜25・32 に置き換えた（11-1 §5.5）
+// 受検者 API（04 §4、11-1 §3.4）: I-10、M7-exam-20〜25・27〜30（再受験のつながり。11-1 §2.2.8・§2.7.3、11-7 §2.2・§3.4）・
+// 31（API の分）・32、I-14・I-16・I-17、PF-03 と、レート制限・進行状態・開始・再開判定。
+// I-11〜I-13・I-15・I-18 は M7-exam-20〜25・32 に置き換えた（11-1 §5.5）
 import { createHash, randomBytes } from "node:crypto";
 
-import { Timestamp } from "firebase-admin/firestore";
-import { beforeAll, describe, expect, it } from "vitest";
+import { DocumentReference, Query, Timestamp } from "firebase-admin/firestore";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
+import { DELETE as deleteRespondentRoute } from "@/app/api/v1/admin/respondents/[respondentId]/route";
 import { RESPONDENT_COOKIE_NAME } from "@/lib/auth/respondent-token";
 import { COLLECTIONS } from "@/lib/db/collections";
 import { toResultDocFields } from "@/lib/db/mappers/result";
@@ -31,9 +33,12 @@ import {
 } from "@/lib/scoring/types";
 
 import {
+  createOrganizationWithOwner,
   createTestOrganization,
   cyclicAnswers,
+  submitAnswerSet,
   uniformAnswers,
+  type TestAdmin,
   type TestOrganization,
 } from "../helpers/fixtures";
 import { countDocs, getDocForTest, listDocs, writeDocForTest } from "../helpers/firestore";
@@ -43,8 +48,9 @@ import {
   registrationBody,
   respondentApi,
   saveAllStepsViaApi,
+  type RegisteredViaApi,
 } from "../helpers/respondent-api";
-import { cookieHeaderFrom, errorCode, setCookieLine } from "../helpers/routes";
+import { callRoute, cookieHeaderFrom, errorCode, setCookieLine } from "../helpers/routes";
 
 type Doc = Record<string, unknown>;
 
@@ -79,9 +85,13 @@ async function sessionDoc(sessionId: string): Promise<Doc> {
 }
 
 let org: TestOrganization;
+/** 再受験のつながりのテスト（M7-exam-27〜30）の組織。前回の論理削除にオーナーの API を使う */
+let linkOrg: TestOrganization;
+let linkOwner: TestAdmin;
 
 beforeAll(async () => {
   org = await createTestOrganization("受検テスト歯科");
+  ({ org: linkOrg, owner: linkOwner } = await createOrganizationWithOwner("再受験テストサロン"));
 });
 
 describe("I-10 受検リンクの検証 GET /respondent/organizations/{id}", () => {
@@ -879,6 +889,377 @@ describe("M7-exam-25 送信（既存スタッフ）", () => {
     expect(
       await countDocs(COLLECTIONS.usageLogs, [["respondentId", "==", session.respondentId]]),
     ).toBe(1);
+  });
+});
+
+/** 登録済みの受験を開始し、4 ステップを保存して送信する（200 を確かめる）。結果の ID を返す */
+async function finishViaApi(
+  registered: RegisteredViaApi,
+  answers: AnswerMap = uniformAnswers(3),
+): Promise<string> {
+  expect((await respondentApi.start(registered.sessionId, registered.cookieHeader)).status).toBe(
+    200,
+  );
+  await saveAllStepsViaApi(registered.sessionId, registered.cookieHeader, answers);
+  const res = await respondentApi.submit(registered.sessionId, registered.cookieHeader);
+  expect(res.status).toBe(200);
+  return (await sessionDoc(registered.sessionId)).resultId as string;
+}
+
+async function resultDoc(resultId: string): Promise<Doc> {
+  const doc = await getDocForTest(COLLECTIONS.results, resultId);
+  if (!doc) throw new Error("results が見つかりません");
+  return doc;
+}
+
+async function respondentOfSession(sessionId: string): Promise<Doc & { id: string }> {
+  const respondentId = (await sessionDoc(sessionId)).respondentId as string;
+  return { ...(await getDocForTest(COLLECTIONS.respondents, respondentId))!, id: respondentId };
+}
+
+/** action と対象の ID で 1 件の監査ログ */
+async function auditOf(action: string, targetId: string): Promise<Doc> {
+  const logs = (await listDocs(COLLECTIONS.auditLogs)).filter(
+    (a) => a.data.action === action && a.data.targetId === targetId,
+  );
+  expect(logs).toHaveLength(1);
+  return logs[0]!.data;
+}
+
+/** resultId を前回とする、論理削除されていない結果の数（Q-M7-1 と同じ条件） */
+const nextCount = (resultId: string) =>
+  countDocs(COLLECTIONS.results, [
+    ["organizationId", "==", linkOrg.organizationId],
+    ["previousResultId", "==", resultId],
+    ["deletedAt", "==", null],
+  ]);
+
+/** オーナーが回答一覧の削除（DELETE /admin/respondents/{id}）で受験を論理削除する */
+async function deleteByOwner(respondentId: string): Promise<void> {
+  const res = await callRoute(deleteRespondentRoute, {
+    method: "DELETE",
+    url: `/api/v1/admin/respondents/${respondentId}`,
+    params: { respondentId },
+    cookieHeader: linkOwner.cookieHeader,
+  });
+  expect(res.status).toBe(204);
+}
+
+describe("M7-exam-27 再受験（つながる。I-M7-1）", () => {
+  it("同じ組織の送信済みの P を前回にして求職者の区分で登録すると、候補を受け付けて既存スタッフになり、送信で results.previousResultId == P。P の updatedAt だけを同じトランザクションで書く", async () => {
+    const p = await submitAnswerSet(linkOrg, uniformAnswers(2));
+    const before = await resultDoc(p.resultId);
+
+    // 登録: 候補を受け付けた受験は p にかかわらず既存スタッフ（11-1 §1.4 の 7）。応答の kind は保存した値
+    const res = await respondentApi.register(
+      registrationBody({
+        organizationId: linkOrg.organizationId,
+        kind: "applicant",
+        previousResultId: p.resultId,
+      }),
+    );
+    expect(res.status).toBe(201);
+    const dto = (await res.json()) as SessionCreatedDto;
+    expect(dto.kind).toBe("executive");
+    expect(JSON.stringify(dto)).not.toContain(p.resultId);
+    const registered: RegisteredViaApi = {
+      sessionId: dto.sessionId,
+      cookieHeader: cookieHeaderFrom(res, RESPONDENT_COOKIE_NAME)!,
+      dto,
+    };
+    const respondent = await respondentOfSession(dto.sessionId);
+    expect(respondent).toMatchObject({
+      kind: "executive",
+      previousResultId: p.resultId,
+      teamCode: null,
+      isExcluded: false,
+    });
+    expect((await auditOf("respondent.register", respondent.id)).details).toEqual({
+      kind: "executive",
+      previousCandidate: true,
+    });
+
+    // 送信: つなぐ。区分は在籍、受検者区分の複製は既存スタッフ。応答にはつながりも結果の ID も入らない
+    expect((await respondentApi.start(registered.sessionId, registered.cookieHeader)).status).toBe(
+      200,
+    );
+    await saveAllStepsViaApi(registered.sessionId, registered.cookieHeader, uniformAnswers(4));
+    const submitted = await respondentApi.submit(registered.sessionId, registered.cookieHeader);
+    expect(submitted.status).toBe(200);
+    expect(JSON.stringify(await submitted.json())).not.toContain(p.resultId);
+    const resultId = (await sessionDoc(registered.sessionId)).resultId as string;
+    const result = await resultDoc(resultId);
+    expect(result).toMatchObject({
+      organizationId: linkOrg.organizationId,
+      previousResultId: p.resultId,
+      respondentKind: "executive",
+      employmentStatus: "employed",
+      teamCode: null,
+      isExcluded: false,
+    });
+    const usage = (await getDocForTest(
+      COLLECTIONS.usageLogs,
+      (await respondentOfSession(registered.sessionId)).usageLogId as string,
+    ))!;
+    expect(usage.respondentKind).toBe("executive");
+    expect((await auditOf("session.submit", resultId)).details).toEqual({
+      scoringVersion: "1.0.0",
+      linkedPrevious: true,
+    });
+
+    // 指される側の P: updatedAt だけが、新しい結果と同じコミットの時刻になる（同じトランザクションで書いた）
+    const after = await resultDoc(p.resultId);
+    const updatedAt = after.updatedAt as Timestamp;
+    expect(updatedAt.toMillis()).toBeGreaterThan((before.updatedAt as Timestamp).toMillis());
+    expect(updatedAt.isEqual(result.createdAt as Timestamp)).toBe(true);
+    expect(updatedAt.isEqual(result.updatedAt as Timestamp)).toBe(true);
+    expect({ ...after, updatedAt: null }).toEqual({ ...before, updatedAt: null });
+    // I-M7-1: 同じ組織の、論理削除されていない、自分より前に送信された結果を指す
+    expect(after.organizationId).toBe(result.organizationId);
+    expect(after.deletedAt).toBeNull();
+    expect((after.submittedAt as Timestamp).toMillis()).toBeLessThan(
+      (result.submittedAt as Timestamp).toMillis(),
+    );
+    // 前回の候補は送信で書き換えない（I-M7-3）
+    expect((await respondentOfSession(registered.sessionId)).previousResultId).toBe(p.resultId);
+  });
+});
+
+describe("M7-exam-28 再受験（つながらない）", () => {
+  it("P がほかの組織の結果・論理削除済み・存在しない ID・形の違う値・すでにほかの結果の前回のどれでも、通常の受験として登録し（応答の kind は入力どおり）、送信でもつながず P を書かない", async () => {
+    const other = await createTestOrganization("別のサロン");
+    const otherOrgResult = await submitAnswerSet(other, uniformAnswers(2));
+    const deleted = await submitAnswerSet(linkOrg, uniformAnswers(2));
+    await deleteByOwner(deleted.respondentId);
+    const linked = await submitAnswerSet(linkOrg, uniformAnswers(2));
+    const relinked = await submitAnswerSet(linkOrg, uniformAnswers(3), {
+      previousResultId: linked.resultId,
+    });
+    expect((await resultDoc(relinked.resultId)).previousResultId).toBe(linked.resultId);
+
+    const cases: Array<[string, string, string | null]> = [
+      ["ほかの組織の結果", otherOrgResult.resultId, otherOrgResult.resultId],
+      ["論理削除済みの結果", deleted.resultId, deleted.resultId],
+      ["すでにほかの論理削除されていない結果の前回", linked.resultId, linked.resultId],
+      ["存在しない文書 ID の形の値", "NoSuchResult00000000", null],
+      ["形の違う値（a/b）", "a/b", null],
+      ["形の違う値（記号）", "bad-id", null],
+      ["形の違う値（129 文字以上）", "a".repeat(200), null],
+      ["空の文字", "", null],
+    ];
+    for (const [label, previousResultId, existing] of cases) {
+      const before = existing === null ? null : await getDocForTest(COLLECTIONS.results, existing);
+      const res = await respondentApi.register(
+        registrationBody({ organizationId: linkOrg.organizationId, previousResultId }),
+      );
+      expect(res.status, label).toBe(201);
+      const dto = (await res.json()) as SessionCreatedDto;
+      expect(dto.kind, label).toBe("applicant");
+      const respondent = await respondentOfSession(dto.sessionId);
+      expect(respondent, label).toMatchObject({ kind: "applicant", previousResultId: null });
+      expect((await auditOf("respondent.register", respondent.id)).details, label).toEqual({
+        kind: "applicant",
+        previousCandidate: false,
+      });
+
+      const resultId = await finishViaApi({
+        sessionId: dto.sessionId,
+        cookieHeader: cookieHeaderFrom(res, RESPONDENT_COOKIE_NAME)!,
+        dto,
+      });
+      expect((await resultDoc(resultId)).previousResultId, label).toBeNull();
+      expect((await auditOf("session.submit", resultId)).details, label).toEqual({
+        scoringVersion: "1.0.0",
+        linkedPrevious: false,
+      });
+      if (existing !== null) {
+        const after = await getDocForTest(COLLECTIONS.results, existing);
+        expect((after!.updatedAt as Timestamp).isEqual(before!.updatedAt as Timestamp), label).toBe(
+          true,
+        );
+      }
+    }
+    // すでに前回になっていた結果を前回とする結果は、先につないだ 1 件のまま（I-M7-2）
+    expect(await nextCount(linked.resultId)).toBe(1);
+  });
+
+  it("ほかの組織の結果と存在しない ID で、応答（状態・本文の形・Cookie）と読み取り（文書 1 回。Q-M7-1 を読まない）が同じ。prev からほかの組織の結果の有無が分からない", async () => {
+    const other = await createTestOrganization("別のサロン");
+    const otherOrgResult = await submitAnswerSet(other, uniformAnswers(2));
+    const unlinked = await submitAnswerSet(linkOrg, uniformAnswers(2));
+
+    /** 登録 1 回の応答の形と、Firestore の読み取りの回数（文書の get と、クエリの get） */
+    const observe = async (previousResultId: string | undefined) => {
+      const documentGet = vi.spyOn(DocumentReference.prototype, "get");
+      const queryGet = vi.spyOn(Query.prototype, "get");
+      try {
+        const res = await respondentApi.register(
+          registrationBody({
+            organizationId: linkOrg.organizationId,
+            ...(previousResultId === undefined ? {} : { previousResultId }),
+          }),
+        );
+        const dto = (await res.json()) as SessionCreatedDto;
+        return {
+          status: res.status,
+          body: { ...dto, sessionId: "-", tokenExpiresAt: "-", nextUrl: "-" },
+          cookie: cookieHeaderFrom(res, RESPONDENT_COOKIE_NAME) !== null,
+          documentReads: documentGet.mock.calls.length,
+          queries: queryGet.mock.calls.length,
+        };
+      } finally {
+        documentGet.mockRestore();
+        queryGet.mockRestore();
+      }
+    };
+    const plain = await observe(undefined);
+    const otherOrg = await observe(otherOrgResult.resultId);
+    const missing = await observe("NoSuchResult00000000");
+    expect(otherOrg).toEqual(missing);
+    expect(otherOrg.body).toEqual(plain.body);
+    // results を 1 回読むだけで止まり、Q-M7-1 のクエリまで進まない（11-1 §2.2.8 の手順 2）
+    expect(otherOrg).toMatchObject({
+      status: 201,
+      cookie: true,
+      documentReads: plain.documentReads + 1,
+      queries: plain.queries,
+    });
+    // 同じ組織の、まだつながっていない結果なら Q-M7-1 を 1 回読んで候補にする（応答の kind は保存した値）
+    const candidate = await observe(unlinked.resultId);
+    expect(candidate).toMatchObject({
+      status: 201,
+      documentReads: plain.documentReads + 1,
+      queries: plain.queries + 1,
+    });
+    expect(candidate.body.kind).toBe("executive");
+  });
+
+  it("previousResultId が 201 文字・数値・null は 422 VALIDATION_ERROR（path が previousResultId）で何も書かない", async () => {
+    const before = await countDocs(COLLECTIONS.respondents);
+    for (const previousResultId of ["a".repeat(201), 12345, null]) {
+      const res = await respondentApi.register({
+        ...registrationBody({ organizationId: linkOrg.organizationId }),
+        previousResultId,
+      });
+      expect(res.status, String(previousResultId)).toBe(422);
+      expect(await errorCode(res)).toBe("VALIDATION_ERROR");
+      expect((await issuesOf(res)).map((i) => i.path)).toEqual(["previousResultId"]);
+      expect(setCookieLine(res, RESPONDENT_COOKIE_NAME)).toBeNull();
+    }
+    expect(await countDocs(COLLECTIONS.respondents)).toBe(before);
+  });
+});
+
+describe("M7-exam-29 同じ前回へ 2 人（I-M7-2・I-M7-3）", () => {
+  it("同じ P で 2 人を登録し（どちらも候補あり）、順に送信すると先の送信だけがつながる。後の受検者の前回の候補は P のまま", async () => {
+    const p = await submitAnswerSet(linkOrg, uniformAnswers(2));
+    const a = await registerViaApi({
+      organizationId: linkOrg.organizationId,
+      previousResultId: p.resultId,
+    });
+    const b = await registerViaApi({
+      organizationId: linkOrg.organizationId,
+      previousResultId: p.resultId,
+    });
+    expect([a.dto.kind, b.dto.kind]).toEqual(["executive", "executive"]);
+
+    const aResultId = await finishViaApi(a);
+    const bResultId = await finishViaApi(b);
+    expect((await resultDoc(aResultId)).previousResultId).toBe(p.resultId);
+    expect((await resultDoc(bResultId)).previousResultId).toBeNull();
+    expect((await auditOf("session.submit", aResultId)).details).toMatchObject({
+      linkedPrevious: true,
+    });
+    expect((await auditOf("session.submit", bResultId)).details).toMatchObject({
+      linkedPrevious: false,
+    });
+    // つながらなかった受験も既存スタッフ・在籍のまま（11-1 §2.7.3 の手順 5）。候補は書き換えない（I-M7-3）
+    expect(await resultDoc(bResultId)).toMatchObject({
+      respondentKind: "executive",
+      employmentStatus: "employed",
+    });
+    expect((await respondentOfSession(b.sessionId)).previousResultId).toBe(p.resultId);
+    expect(await nextCount(p.resultId)).toBe(1);
+  });
+
+  it("同じ P2 への 2 件の送信を同時に（Promise.all）行うと、どちらも 200 で、P2 を前回とする論理削除されていない結果は 1 件だけ（枝分かれしない）", async () => {
+    const p2 = await submitAnswerSet(linkOrg, uniformAnswers(2));
+    const c = await registerViaApi({
+      organizationId: linkOrg.organizationId,
+      previousResultId: p2.resultId,
+    });
+    const d = await registerViaApi({
+      organizationId: linkOrg.organizationId,
+      previousResultId: p2.resultId,
+    });
+    for (const r of [c, d]) {
+      expect((await respondentApi.start(r.sessionId, r.cookieHeader)).status).toBe(200);
+      await saveAllStepsViaApi(r.sessionId, r.cookieHeader, uniformAnswers(5));
+    }
+    const responses = await Promise.all(
+      [c, d].map((r) => respondentApi.submit(r.sessionId, r.cookieHeader)),
+    );
+    expect(responses.map((x) => x.status)).toEqual([200, 200]);
+
+    const resultIds = await Promise.all(
+      [c, d].map(async (r) => (await sessionDoc(r.sessionId)).resultId as string),
+    );
+    const previous = await Promise.all(
+      resultIds.map(async (id) => (await resultDoc(id)).previousResultId),
+    );
+    expect(previous.filter((v) => v === p2.resultId)).toHaveLength(1);
+    expect(previous.filter((v) => v === null)).toHaveLength(1);
+    expect(await nextCount(p2.resultId)).toBe(1);
+    const linked = await Promise.all(
+      resultIds.map(async (id) => (await auditOf("session.submit", id)).details as Doc),
+    );
+    expect(linked.filter((d) => d.linkedPrevious === true)).toHaveLength(1);
+  });
+});
+
+describe("M7-exam-30 登録と送信の間の変化（K-39 Q-35・K-04）", () => {
+  it("登録のあとに P3 を論理削除してから送信すると、つながらない。受検者の前回の候補は P3 のまま（I-M7-3）", async () => {
+    const p3 = await submitAnswerSet(linkOrg, uniformAnswers(2));
+    const e = await registerViaApi({
+      organizationId: linkOrg.organizationId,
+      previousResultId: p3.resultId,
+    });
+    expect(e.dto.kind).toBe("executive");
+    await deleteByOwner(p3.respondentId);
+
+    const resultId = await finishViaApi(e);
+    expect((await resultDoc(resultId)).previousResultId).toBeNull();
+    expect((await auditOf("session.submit", resultId)).details).toMatchObject({
+      linkedPrevious: false,
+    });
+    expect((await respondentOfSession(e.sessionId)).previousResultId).toBe(p3.resultId);
+  });
+
+  it("登録のあとに P4 を前回とする G を論理削除すると、G は無いものとして F が P4 につながる。論理削除でどの previousResultId も書き換わらない", async () => {
+    const p4 = await submitAnswerSet(linkOrg, uniformAnswers(2));
+    const f = await registerViaApi({
+      organizationId: linkOrg.organizationId,
+      previousResultId: p4.resultId,
+    });
+    const g = await registerViaApi({
+      organizationId: linkOrg.organizationId,
+      previousResultId: p4.resultId,
+    });
+    const gResultId = await finishViaApi(g);
+    expect((await resultDoc(gResultId)).previousResultId).toBe(p4.resultId);
+    await deleteByOwner((await respondentOfSession(g.sessionId)).id);
+
+    const fResultId = await finishViaApi(f);
+    expect((await resultDoc(fResultId)).previousResultId).toBe(p4.resultId);
+    expect((await auditOf("session.submit", fResultId)).details).toMatchObject({
+      linkedPrevious: true,
+    });
+    // 論理削除はほかの受験の previousResultId を書き換えない（K-04。11-7 §2.2.3）
+    const gResult = await resultDoc(gResultId);
+    expect(gResult.deletedAt).toBeInstanceOf(Timestamp);
+    expect(gResult.previousResultId).toBe(p4.resultId);
+    expect((await resultDoc(p4.resultId)).previousResultId).toBeNull();
+    expect(await nextCount(p4.resultId)).toBe(1);
   });
 });
 

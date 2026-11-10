@@ -1,7 +1,7 @@
 {
   "generatedFrom": ["docs/付録B_採点ロジック仕様.md", "scripts/lib/labels.ts"],
   "sourceHash": {
-    "docs/付録B_採点ロジック仕様.md": "sha256:90d685fec69cd0e3f18c43e99f40aa9e24f19c7260bd83b750a59587f6583da2",
+    "docs/付録B_採点ロジック仕様.md": "sha256:bbb64fabb64b7eebb9bcf95c4039da354585a22df454ace4f5e7c7b6b0bec0de",
     "scripts/lib/labels.ts": "sha256:7d19c21be905d71f1e8f362dec3f9840dd3e4929ad6ca510bfffd1d5594bc19a"
   },
   "generatorVersion": "1",

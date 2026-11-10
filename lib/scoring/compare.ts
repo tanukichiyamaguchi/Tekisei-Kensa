@@ -112,7 +112,8 @@ export function decidePosition(deviationScore: number): PositionKey {
 
 /**
  * 閲覧対象 subject を母集団 population と比較する。population はフィルタも重複排除もせず、
- * そのまま母集団として扱う（取得条件は 02 の fetchPopulation() が担う）。0 件なら EmptyPopulationError。
+ * そのまま母集団として扱う（取得条件は 02 の fetchPopulation() と selectPopulation() の組が担う。00 §1.11）。
+ * 0 件なら EmptyPopulationError。
  */
 export function compareWithPopulation(
   subject: PopulationMember,

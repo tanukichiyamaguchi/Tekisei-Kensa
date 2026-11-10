@@ -188,17 +188,18 @@ async function checkFirestore(results: CheckResult[], runId: string): Promise<vo
     });
   }
 
-  // デプロイ済みの firestore.indexes.json でリポジトリの全クエリ（02 §7.1 の Q1〜Q14）が通ること（H-01 の補助）
+  // デプロイ済みの firestore.indexes.json でリポジトリの全クエリ（02 §7.1 の Q1（改）・Q3〜Q14。Q2 は 2.6 版でやめた）が通ること
+  // （H-01 の補助）
   const orgId = `verify${runId}`;
   const owner: Viewer = { uid: "verify", organizationId: orgId, role: "owner" };
   const admin: Viewer = { ...owner, role: "admin" };
   const queries: Array<[string, () => Promise<unknown>]> = [
     [
-      "Q1 fetchPopulation(組織)",
+      "Q1（改） fetchPopulation(組織)",
       () => fetchPopulation({ organizationId: orgId, scope: { kind: "organization" } }),
     ],
     [
-      "Q2 fetchPopulation(チーム)",
+      "Q1（改） fetchPopulation(チーム)",
       () => fetchPopulation({ organizationId: orgId, scope: { kind: "team", teamCode: "A" } }),
     ],
     ["Q3 listResults(owner)", () => listResults({ viewer: owner })],
