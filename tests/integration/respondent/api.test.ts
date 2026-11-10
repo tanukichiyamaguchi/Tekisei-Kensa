@@ -3,7 +3,14 @@
 // I-11〜I-13・I-15・I-18 は M7-exam-20〜25・32 に置き換えた（11-1 §5.5）
 import { createHash, randomBytes } from "node:crypto";
 
-import { Firestore, Query, Timestamp, Transaction } from "firebase-admin/firestore";
+import {
+  DocumentReference,
+  Firestore,
+  Query,
+  QuerySnapshot,
+  Timestamp,
+  Transaction,
+} from "firebase-admin/firestore";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { DELETE as deleteRespondentRoute } from "@/app/api/v1/admin/respondents/[respondentId]/route";
@@ -892,15 +899,23 @@ describe("M7-exam-25 送信（既存スタッフ）", () => {
   });
 });
 
+/** 登録済みの受験を開始し、4 ステップを保存する（送信はしない） */
+async function startAndSaveViaApi(
+  registered: RegisteredViaApi,
+  answers: AnswerMap = uniformAnswers(3),
+): Promise<void> {
+  expect((await respondentApi.start(registered.sessionId, registered.cookieHeader)).status).toBe(
+    200,
+  );
+  await saveAllStepsViaApi(registered.sessionId, registered.cookieHeader, answers);
+}
+
 /** 登録済みの受験を開始し、4 ステップを保存して送信する（200 を確かめる）。結果の ID を返す */
 async function finishViaApi(
   registered: RegisteredViaApi,
   answers: AnswerMap = uniformAnswers(3),
 ): Promise<string> {
-  expect((await respondentApi.start(registered.sessionId, registered.cookieHeader)).status).toBe(
-    200,
-  );
-  await saveAllStepsViaApi(registered.sessionId, registered.cookieHeader, answers);
+  await startAndSaveViaApi(registered, answers);
   const res = await respondentApi.submit(registered.sessionId, registered.cookieHeader);
   expect(res.status).toBe(200);
   return (await sessionDoc(registered.sessionId)).resultId as string;
@@ -935,6 +950,50 @@ function fieldMasksOf(calls: ReadonlyArray<ReadonlyArray<unknown>>): string[][] 
         : [],
     ),
   );
+}
+
+/** クエリが返した文書の数と、その文書に入っていた項目の名前（Q-M7-1 は有無だけを見るので文書名だけを読む。11-1 §3.4.1） */
+function queryReadsOf(snapshots: readonly QuerySnapshot[]): {
+  queryDocs: number;
+  queryFields: string[];
+} {
+  return {
+    queryDocs: snapshots.reduce((n, s) => n + s.size, 0),
+    queryFields: [
+      ...new Set(snapshots.flatMap((s) => s.docs.flatMap((d) => Object.keys(d.data())))),
+    ].sort(),
+  };
+}
+
+/**
+ * 送信 1 回で、トランザクションが results をどう読んだか（前回の候補とその次の受験の指標・氏名は読まない。11-1 §3.4.1、
+ * 04 §4 の冒頭）: Transaction.getAll の射影（fieldMask）、results の文書を Transaction.get で読んだ回数、
+ * Transaction.get のクエリ（Q-M7-1）が返した文書の数と項目の名前
+ */
+async function submitObserved(registered: RegisteredViaApi) {
+  const transactionGet = vi.spyOn(Transaction.prototype, "get");
+  const transactionGetAll = vi.spyOn(Transaction.prototype, "getAll");
+  try {
+    const res = await respondentApi.submit(registered.sessionId, registered.cookieHeader);
+    const reads = await Promise.all(
+      transactionGet.mock.calls.map(async ([target], i) => ({
+        target: target as unknown,
+        value: (await transactionGet.mock.results[i]!.value) as unknown,
+      })),
+    );
+    return {
+      res,
+      fieldMasks: fieldMasksOf(transactionGetAll.mock.calls),
+      resultDocumentGets: reads.filter(
+        (r) => r.target instanceof DocumentReference && r.target.parent.id === COLLECTIONS.results,
+      ).length,
+      queries: reads.filter((r) => r.target instanceof Query).length,
+      ...queryReadsOf(reads.flatMap((r) => (r.value instanceof QuerySnapshot ? [r.value] : []))),
+    };
+  } finally {
+    transactionGet.mockRestore();
+    transactionGetAll.mockRestore();
+  }
 }
 
 /** resultId を前回とする、論理削除されていない結果の数（Q-M7-1 と同じ条件） */
@@ -991,26 +1050,18 @@ describe("M7-exam-27 再受験（つながる。I-M7-1）", () => {
     });
 
     // 送信: つなぐ。区分は在籍、受検者区分の複製は既存スタッフ。応答にはつながりも結果の ID も入らない
-    expect((await respondentApi.start(registered.sessionId, registered.cookieHeader)).status).toBe(
-      200,
-    );
-    await saveAllStepsViaApi(registered.sessionId, registered.cookieHeader, uniformAnswers(4));
-    // 送信のトランザクションでも、前回の結果は判定に使う 2 項目だけを読む（指標・氏名は読まない。11-1 §3.4.1）
-    const transactionGetAll = vi.spyOn(Transaction.prototype, "getAll");
-    const { submitted, transactionFieldMasks } = await (async () => {
-      try {
-        const res = await respondentApi.submit(registered.sessionId, registered.cookieHeader);
-        return {
-          submitted: res,
-          transactionFieldMasks: fieldMasksOf(transactionGetAll.mock.calls),
-        };
-      } finally {
-        transactionGetAll.mockRestore();
-      }
-    })();
-    expect(submitted.status).toBe(200);
-    expect(transactionFieldMasks).toContainEqual(["organizationId", "deletedAt"]);
-    expect(JSON.stringify(await submitted.json())).not.toContain(p.resultId);
+    await startAndSaveViaApi(registered, uniformAnswers(4));
+    // 送信のトランザクションでも、前回の結果は判定に使う 2 項目だけを読み（Transaction.get で文書を読まない）、
+    // Q-M7-1 は文書名だけを読む（指標・氏名は読まない。11-1 §3.4.1）
+    const submitted = await submitObserved(registered);
+    expect(submitted.res.status).toBe(200);
+    expect(submitted).toMatchObject({
+      fieldMasks: [["organizationId", "deletedAt"]],
+      resultDocumentGets: 0,
+      queries: 1,
+      queryDocs: 0,
+    });
+    expect(JSON.stringify(await submitted.res.json())).not.toContain(p.resultId);
     const resultId = (await sessionDoc(registered.sessionId)).resultId as string;
     const result = await resultDoc(resultId);
     expect(result).toMatchObject({
@@ -1071,6 +1122,8 @@ describe("M7-exam-28 再受験（つながらない）", () => {
       ["形の違う値（129 文字以上）", "a".repeat(200), null],
       ["空の文字", "", null],
     ];
+    // どれも登録の時点で候補にならない（respondents.previousResultId == null）ので、送信は前回を読まない。送信のトランザクションで
+    // 候補を確かめてつながない場合は M7-exam-29・30 と、下の想定外の候補のテストで確かめる
     for (const [label, previousResultId, existing] of cases) {
       const before = existing === null ? null : await getDocForTest(COLLECTIONS.results, existing);
       const res = await respondentApi.register(
@@ -1107,14 +1160,17 @@ describe("M7-exam-28 再受験（つながらない）", () => {
     expect(await nextCount(linked.resultId)).toBe(1);
   });
 
-  it("ほかの組織の結果と存在しない ID で、応答（状態・本文の形・Cookie）と読み取り（文書 1 回。Q-M7-1 を読まない）が同じ。prev からほかの組織の結果の有無が分からない。前回の候補は organizationId・deletedAt だけを読む", async () => {
+  it("ほかの組織の結果と存在しない ID で、応答（状態・本文の形・Cookie）と読み取り（文書 1 回。Q-M7-1 を読まない）が同じ。prev からほかの組織の結果の有無が分からない。前回の候補は organizationId・deletedAt だけを読み、Q-M7-1 は次の受験があっても文書名だけを読む", async () => {
     const other = await createTestOrganization("別のサロン");
     const otherOrgResult = await submitAnswerSet(other, uniformAnswers(2));
     const unlinked = await submitAnswerSet(linkOrg, uniformAnswers(2));
+    const linked = await submitAnswerSet(linkOrg, uniformAnswers(2));
+    await submitAnswerSet(linkOrg, uniformAnswers(3), { previousResultId: linked.resultId });
 
     /**
      * 登録 1 回の応答の形と、Firestore の読み取りの回数（文書の読み取りと、クエリの get）。文書の読み取りは
-     * Firestore.getAll で数える（DocumentReference.get も内部で getAll を呼ぶ。前回の候補は射影して getAll で読む）
+     * Firestore.getAll で数える（DocumentReference.get も内部で getAll を呼ぶ。前回の候補は射影して getAll で読む）。
+     * クエリは返した文書の数と、その文書に入っていた項目の名前も見る
      */
     const observe = async (previousResultId: string | undefined) => {
       const documentGet = vi.spyOn(Firestore.prototype, "getAll");
@@ -1134,6 +1190,7 @@ describe("M7-exam-28 再受験（つながらない）", () => {
           documentReads: documentGet.mock.calls.length,
           fieldMasks: fieldMasksOf(documentGet.mock.calls),
           queries: queryGet.mock.calls.length,
+          ...queryReadsOf(await Promise.all(queryGet.mock.results.map((r) => r.value))),
         };
       } finally {
         documentGet.mockRestore();
@@ -1161,8 +1218,21 @@ describe("M7-exam-28 再受験（つながらない）", () => {
       documentReads: plain.documentReads + 1,
       fieldMasks: [["organizationId", "deletedAt"]],
       queries: plain.queries + 1,
+      queryDocs: 0,
     });
     expect(candidate.body.kind).toBe("executive");
+    // すでに次の受験がある結果: Q-M7-1 はその受験を見つけるが、有無だけを見るので文書名だけを読む（指標・氏名を読まない。
+    // 11-1 §3.4.1、04 §4 の冒頭）。候補にしない
+    const alreadyLinked = await observe(linked.resultId);
+    expect(alreadyLinked).toMatchObject({
+      status: 201,
+      documentReads: plain.documentReads + 1,
+      fieldMasks: [["organizationId", "deletedAt"]],
+      queries: plain.queries + 1,
+      queryDocs: 1,
+      queryFields: [],
+    });
+    expect(alreadyLinked.body).toEqual(plain.body);
   });
 
   it("previousResultId が 201 文字・数値・null は 422 VALIDATION_ERROR（path が previousResultId）で何も書かない", async () => {
@@ -1179,10 +1249,50 @@ describe("M7-exam-28 再受験（つながらない）", () => {
     }
     expect(await countDocs(COLLECTIONS.respondents)).toBe(before);
   });
+
+  it("writeDocForTest（直接の書き込みの例外: 登録の API が書かない前回の候補を書く。08 D08-18）で受検者の前回の候補を形の違う値（a/b）・存在しない文書 ID にしても、送信は 200 でつながず（previousResultId == null、linkedPrevious == false）、形の違う値は results を読まない。候補は書き換えない（I-M7-3）", async () => {
+    const cases: Array<[string, { fieldMasks: string[][]; queries: number }]> = [
+      // 文書 ID の形でない候補は読まずにつながない（想定外の値で送信全体を失敗させない守り。02 §8.4、04 §4.5 の手順 2）
+      ["a/b", { fieldMasks: [], queries: 0 }],
+      // 文書が無い候補は読んでつながない（11-1 §2.7.3 の手順 3・5。つながないので前回の文書は書かない）
+      ["NoSuchResult00000000", { fieldMasks: [["organizationId", "deletedAt"]], queries: 1 }],
+    ];
+    for (const [candidate, reads] of cases) {
+      const registered = await registerViaApi({
+        organizationId: linkOrg.organizationId,
+        kind: "executive",
+      });
+      const respondent = await respondentOfSession(registered.sessionId);
+      // 登録は形と存在を確かめた候補しか書かない（11-1 §2.2.8）ので、想定外の候補は受検者の文書に直接書いて作る
+      await writeDocForTest(COLLECTIONS.respondents, respondent.id, {
+        previousResultId: candidate,
+      });
+      await startAndSaveViaApi(registered);
+
+      const submitted = await submitObserved(registered);
+      expect(submitted.res.status, candidate).toBe(200);
+      expect(submitted, candidate).toMatchObject({ ...reads, resultDocumentGets: 0 });
+      const resultId = (await sessionDoc(registered.sessionId)).resultId as string;
+      expect(await resultDoc(resultId), candidate).toMatchObject({
+        previousResultId: null,
+        respondentKind: "executive",
+        employmentStatus: "employed",
+      });
+      expect((await auditOf("session.submit", resultId)).details, candidate).toEqual({
+        scoringVersion: "1.0.0",
+        linkedPrevious: false,
+      });
+      expect((await respondentOfSession(registered.sessionId)).previousResultId, candidate).toBe(
+        candidate,
+      );
+    }
+    // 存在しない候補の文書は作られない（つながない送信は前回の文書を書かない）
+    expect(await getDocForTest(COLLECTIONS.results, "NoSuchResult00000000")).toBeNull();
+  });
 });
 
 describe("M7-exam-29 同じ前回へ 2 人（I-M7-2・I-M7-3）", () => {
-  it("同じ P で 2 人を登録し（どちらも候補あり）、順に送信すると先の送信だけがつながる。後の受検者の前回の候補は P のまま", async () => {
+  it("同じ P で 2 人を登録し（どちらも候補あり）、順に送信すると先の送信だけがつながる。後の受検者の前回の候補は P のまま。後の送信は P を書かず、Q-M7-1 は先の送信の結果の文書名だけを読む", async () => {
     const p = await submitAnswerSet(linkOrg, uniformAnswers(2));
     const a = await registerViaApi({
       organizationId: linkOrg.organizationId,
@@ -1195,7 +1305,21 @@ describe("M7-exam-29 同じ前回へ 2 人（I-M7-2・I-M7-3）", () => {
     expect([a.dto.kind, b.dto.kind]).toEqual(["executive", "executive"]);
 
     const aResultId = await finishViaApi(a);
-    const bResultId = await finishViaApi(b);
+    // 後の送信は、トランザクションの中で候補を確かめてつながない（11-1 §2.7.3 の手順 5）。前回の結果を書くのはつなぐとき
+    // だけ（手順 4）なので、P は送信の前後で同じ。Q-M7-1 は先の送信の結果を見つけるが、文書名だけを読む（11-1 §3.4.1）
+    await startAndSaveViaApi(b);
+    const pBefore = await resultDoc(p.resultId);
+    const bSubmitted = await submitObserved(b);
+    expect(bSubmitted.res.status).toBe(200);
+    expect(bSubmitted).toMatchObject({
+      fieldMasks: [["organizationId", "deletedAt"]],
+      resultDocumentGets: 0,
+      queries: 1,
+      queryDocs: 1,
+      queryFields: [],
+    });
+    expect(await resultDoc(p.resultId)).toEqual(pBefore);
+    const bResultId = (await sessionDoc(b.sessionId)).resultId as string;
     expect((await resultDoc(aResultId)).previousResultId).toBe(p.resultId);
     expect((await resultDoc(bResultId)).previousResultId).toBeNull();
     expect((await auditOf("session.submit", aResultId)).details).toMatchObject({
@@ -1213,7 +1337,7 @@ describe("M7-exam-29 同じ前回へ 2 人（I-M7-2・I-M7-3）", () => {
     expect(await nextCount(p.resultId)).toBe(1);
   });
 
-  it("同じ P2 への 2 件の送信を同時に（Promise.all）行うと、どちらも 200 で、P2 を前回とする論理削除されていない結果は 1 件だけ（枝分かれしない）", async () => {
+  it("同じ P2 への 2 件の送信を同時に（Promise.all）行うと、どちらも 200 で、P2 を前回とする論理削除されていない結果は 1 件だけ（枝分かれしない）。P2 を書くのはつないだ送信だけ", async () => {
     const p2 = await submitAnswerSet(linkOrg, uniformAnswers(2));
     const c = await registerViaApi({
       organizationId: linkOrg.organizationId,
@@ -1245,11 +1369,19 @@ describe("M7-exam-29 同じ前回へ 2 人（I-M7-2・I-M7-3）", () => {
       resultIds.map(async (id) => (await auditOf("session.submit", id)).details as Doc),
     );
     expect(linked.filter((d) => d.linkedPrevious === true)).toHaveLength(1);
+    // P2 の updatedAt は、つないだ送信の結果と同じコミットの時刻のまま（つながなかった送信は P2 を書かない。
+    // 11-1 §2.7.3 の手順 4・5）
+    const linkedResult = await resultDoc(resultIds[previous.indexOf(p2.resultId)]!);
+    expect(
+      ((await resultDoc(p2.resultId)).updatedAt as Timestamp).isEqual(
+        linkedResult.createdAt as Timestamp,
+      ),
+    ).toBe(true);
   });
 });
 
 describe("M7-exam-30 登録と送信の間の変化（K-39 Q-35・K-04）", () => {
-  it("登録のあとに P3 を論理削除してから送信すると、つながらない。受検者の前回の候補は P3 のまま（I-M7-3）", async () => {
+  it("登録のあとに P3 を論理削除してから送信すると、つながらない。受検者の前回の候補は P3 のまま（I-M7-3）。つながない送信は P3 を書かない", async () => {
     const p3 = await submitAnswerSet(linkOrg, uniformAnswers(2));
     const e = await registerViaApi({
       organizationId: linkOrg.organizationId,
@@ -1258,7 +1390,12 @@ describe("M7-exam-30 登録と送信の間の変化（K-39 Q-35・K-04）", () =
     expect(e.dto.kind).toBe("executive");
     await deleteByOwner(p3.respondentId);
 
+    // 送信のトランザクションで論理削除済みの P3 を読んでつながない。P3 は論理削除のときの updatedAt・deletedAt のまま
+    // （前回の結果を書くのはつなぐときだけ。11-1 §2.7.3 の手順 4・5）
+    const p3Before = await resultDoc(p3.resultId);
+    expect(p3Before.deletedAt).toBeInstanceOf(Timestamp);
     const resultId = await finishViaApi(e);
+    expect(await resultDoc(p3.resultId)).toEqual(p3Before);
     expect((await resultDoc(resultId)).previousResultId).toBeNull();
     expect((await auditOf("session.submit", resultId)).details).toMatchObject({
       linkedPrevious: false,

@@ -31,7 +31,8 @@ export async function getResult(input: {
 /**
  * Q-M7-1（11-1 §3.2.5）: 同じ組織で previousResultId == resultId かつ deletedAt == null の results（その結果の次の受験。
  * 11-7 §2.2.4）を limit 件まで。登録の canLinkAsPrevious() と送信のトランザクション（submitSession()）が使う
- * （11-7 の組み合わせは limit 2。つなぐ条件を 1 か所に置く。11-7 6 章の 9）
+ * （11-7 の組み合わせは limit 2。つなぐ条件を 1 か所に置く。11-7 6 章の 9）。射影は付けない: 有無だけを見る
+ * canLinkAsPrevious() と submitSession() は select() で文書名だけを読む（指標・氏名は読まない。11-1 §3.4.1、04 §4 の冒頭）
  */
 export function nextResultsQuery(input: {
   readonly organizationId: string;
@@ -75,12 +76,15 @@ export async function canLinkAsPrevious(input: {
     fieldMask: [...PREVIOUS_DOC_FIELD_MASK],
   });
   if (!isValidPreviousDoc(snapshot?.data(), input.organizationId)) return false;
-  // すでにほかの論理削除されていない結果の前回になっていれば候補にしない（I-M7-2）
+  // すでにほかの論理削除されていない結果の前回になっていれば候補にしない（I-M7-2）。有無だけを見るので、次の受験は
+  // select() で文書名だけを読む（指標・氏名は読まない）
   const next = await nextResultsQuery({
     organizationId: input.organizationId,
     resultId: input.resultId,
     limit: 1,
-  }).get();
+  })
+    .select()
+    .get();
   return next.empty;
 }
 

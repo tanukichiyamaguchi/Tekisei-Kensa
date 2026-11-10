@@ -188,7 +188,7 @@ const DEFAULT_DEPS: SubmitSessionDeps = {
 /**
  * 送信の確定（1 トランザクション。02 §8.4、11-1 §3.4.3）。読み取り（session・respondent・respondents.usageLogId が null でなければ
  * その利用履歴・respondents.previousResultId（前回の候補）が null でなく文書 ID の形なら results/{previousResultId}（organizationId・
- * deletedAt だけ）と Q-M7-1）→ 検査 → 採点（永続化済みの回答）→ results 作成 + session・respondent 更新 + 利用履歴の作成
+ * deletedAt だけ）と Q-M7-1（文書名だけ））→ 検査 → 採点（永続化済みの回答）→ results 作成 + session・respondent 更新 + 利用履歴の作成
  * （M7 より前の登録で文書があればその更新。11-1 §2.7.4）+ 前回の結果の updatedAt（つなぐときだけ。11-1 §2.7.3）+ auditLogs
  * （session.submit）。書き込みは 5 件（つなぐときは 6 件）。同時に 2 回呼ばれても、再実行された側が status == "submitted" を
  * 読み SESSION_ALREADY_SUBMITTED になる。同じ前回につなごうとする 2 つの送信は、どちらも前回の結果を書くので片方がやり直しに
@@ -229,7 +229,8 @@ export async function submitSession(
     // 前回の候補（11-1 §2.7.3）。候補の無い受験と M7 より前の受検者（項目が無く null）は読まない。
     // 文書 ID の形でない候補も読まずにつながない（登録は形を確かめた値しか書かないが、想定外の値で送信全体を失敗させない守り）。
     // つなぐのは、前回の文書があり同じ組織で論理削除されておらず、ほかの論理削除されていない結果の前回になっていないときだけ（K-31 ①）。
-    // 前回の文書は判定に使う 2 項目だけを読む（PREVIOUS_DOC_FIELD_MASK）。射影しても読んだ文書はトランザクションに入る
+    // 前回の文書は判定に使う 2 項目だけを読み（PREVIOUS_DOC_FIELD_MASK）、Q-M7-1 は有無だけを見るので select() で文書名だけを
+    // 読む（指標・氏名は読まない。11-1 §3.4.1）。射影しても読んだ文書はトランザクションに入る
     const candidateId = respondent.previousResultId;
     let linkedPreviousId: string | null = null;
     if (candidateId !== null && docIdSchema.safeParse(candidateId).success) {
@@ -238,7 +239,11 @@ export async function submitSession(
         { fieldMask: [...PREVIOUS_DOC_FIELD_MASK] },
       );
       const nextSnapshot = await tx.get(
-        nextResultsQuery({ organizationId: s.organizationId, resultId: candidateId, limit: 1 }),
+        nextResultsQuery({
+          organizationId: s.organizationId,
+          resultId: candidateId,
+          limit: 1,
+        }).select(),
       );
       if (isValidPreviousDoc(previousSnapshot?.data(), s.organizationId) && nextSnapshot.empty) {
         linkedPreviousId = candidateId;
