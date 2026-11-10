@@ -24,7 +24,11 @@ import {
 } from "@/lib/db/mappers/documents";
 import { toResultDocFields } from "@/lib/db/mappers/result";
 import { toTimestamp } from "@/lib/db/mappers/timestamp";
-import { isValidPreviousDoc, nextResultsQuery } from "@/lib/db/repositories/results-repository";
+import {
+  isValidPreviousDoc,
+  nextResultsQuery,
+  PREVIOUS_DOC_FIELD_MASK,
+} from "@/lib/db/repositories/results-repository";
 import { answersPatchSchema, saveAnswersInputSchema } from "@/lib/db/schemas/assessment-session";
 import { resultCreateSchema } from "@/lib/db/schemas/result";
 import { usageLogCreateSchema } from "@/lib/db/schemas/usage-log";
@@ -183,12 +187,12 @@ const DEFAULT_DEPS: SubmitSessionDeps = {
 
 /**
  * 送信の確定（1 トランザクション。02 §8.4、11-1 §3.4.3）。読み取り（session・respondent・respondents.usageLogId が null でなければ
- * その利用履歴・respondents.previousResultId（前回の候補）が null でなければ results/{previousResultId} と Q-M7-1）→ 検査 →
- * 採点（永続化済みの回答）→ results 作成 + session・respondent 更新 + 利用履歴の作成（M7 より前の登録で文書があればその更新。
- * 11-1 §2.7.4）+ 前回の結果の updatedAt（つなぐときだけ。11-1 §2.7.3）+ auditLogs（session.submit）。書き込みは 5 件
- * （つなぐときは 6 件）。同時に 2 回呼ばれても、再実行された側が status == "submitted" を読み SESSION_ALREADY_SUBMITTED になる。
- * 同じ前回につなごうとする 2 つの送信は、どちらも前回の結果を書くので片方がやり直しになり、やり直した側は Q-M7-1 で
- * 先の送信の結果を読んでつながない（I-M7-2）。results.previousResultId を書くのは、作成のときの本関数だけ（I-M7-K1。手動の
+ * その利用履歴・respondents.previousResultId（前回の候補）が null でなく文書 ID の形なら results/{previousResultId}（organizationId・
+ * deletedAt だけ）と Q-M7-1）→ 検査 → 採点（永続化済みの回答）→ results 作成 + session・respondent 更新 + 利用履歴の作成
+ * （M7 より前の登録で文書があればその更新。11-1 §2.7.4）+ 前回の結果の updatedAt（つなぐときだけ。11-1 §2.7.3）+ auditLogs
+ * （session.submit）。書き込みは 5 件（つなぐときは 6 件）。同時に 2 回呼ばれても、再実行された側が status == "submitted" を
+ * 読み SESSION_ALREADY_SUBMITTED になる。同じ前回につなごうとする 2 つの送信は、どちらも前回の結果を書くので片方がやり直しに
+ * なり、やり直した側は Q-M7-1 で先の送信の結果を読んでつながない（I-M7-2）。results.previousResultId を書くのは、作成のときの本関数だけ（I-M7-K1。手動の
  * 組み合わせは 11-7）。respondents.previousResultId は書き換えない（I-M7-3）
  */
 export async function submitSession(
@@ -223,15 +227,20 @@ export async function submitSession(
         ? null
         : fromSnapshot(await tx.get(usageLogsRef().doc(respondent.usageLogId)), toUsageLog);
     // 前回の候補（11-1 §2.7.3）。候補の無い受験と M7 より前の受検者（項目が無く null）は読まない。
-    // つなぐのは、前回の文書があり同じ組織で論理削除されておらず、ほかの論理削除されていない結果の前回になっていないときだけ（K-31 ①）
+    // 文書 ID の形でない候補も読まずにつながない（登録は形を確かめた値しか書かないが、想定外の値で送信全体を失敗させない守り）。
+    // つなぐのは、前回の文書があり同じ組織で論理削除されておらず、ほかの論理削除されていない結果の前回になっていないときだけ（K-31 ①）。
+    // 前回の文書は判定に使う 2 項目だけを読む（PREVIOUS_DOC_FIELD_MASK）。射影しても読んだ文書はトランザクションに入る
     const candidateId = respondent.previousResultId;
     let linkedPreviousId: string | null = null;
     if (candidateId !== null && docIdSchema.safeParse(candidateId).success) {
-      const previousSnapshot = await tx.get(rawCollection(COLLECTIONS.results).doc(candidateId));
+      const [previousSnapshot] = await tx.getAll(
+        rawCollection(COLLECTIONS.results).doc(candidateId),
+        { fieldMask: [...PREVIOUS_DOC_FIELD_MASK] },
+      );
       const nextSnapshot = await tx.get(
         nextResultsQuery({ organizationId: s.organizationId, resultId: candidateId, limit: 1 }),
       );
-      if (isValidPreviousDoc(previousSnapshot.data(), s.organizationId) && nextSnapshot.empty) {
+      if (isValidPreviousDoc(previousSnapshot?.data(), s.organizationId) && nextSnapshot.empty) {
         linkedPreviousId = candidateId;
       }
     }

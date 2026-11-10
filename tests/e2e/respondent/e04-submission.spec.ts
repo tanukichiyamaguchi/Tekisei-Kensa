@@ -139,7 +139,9 @@ test.describe("M7-exam-52 続けられないとき", () => {
 
     emulatorTask("expire-session", sessionId);
     const q = questionNosOfStep(1)[5] ?? 6;
-    await page.getByTestId(`choice-${q}-2`).check();
+    // check() は押したあとで選択を確かめ直すが、自動保存が 401 を受けると画面が「回答を続けられません」に
+    // 切り替わってラジオボタンが無くなり、確かめ直しが時間切れになることがある。押すだけにし、画面は次の行で確かめる
+    await page.getByTestId(`choice-${q}-2`).click();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("回答を続けられません");
     await expect(page.locator("main")).toContainText(
       "回答の有効期限が切れました。受験リンクからもう一度登録してください。",

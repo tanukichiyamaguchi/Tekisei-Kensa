@@ -3,7 +3,7 @@ import type { DocumentData, Query } from "firebase-admin/firestore";
 
 import { canViewExecutives } from "@/lib/auth/claims";
 import type { Viewer } from "@/lib/auth/claims";
-import { COLLECTIONS, rawCollection, resultsRef } from "@/lib/db/collections";
+import { COLLECTIONS, db, rawCollection, resultsRef } from "@/lib/db/collections";
 import type { Result } from "@/lib/db/domain";
 import { fromSnapshot } from "@/lib/db/mappers/documents";
 import { toPopulationSourceRow, toResult } from "@/lib/db/mappers/result";
@@ -57,6 +57,12 @@ export function isValidPreviousDoc(
 }
 
 /**
+ * 前回の候補の文書を読むときの射影（getAll() の fieldMask）。isValidPreviousDoc() が見る 2 項目だけを読み、
+ * 指標・氏名は読まない（11-1 §3.4.1、04 §4 の冒頭）。canLinkAsPrevious() と submitSession() が使う
+ */
+export const PREVIOUS_DOC_FIELD_MASK: readonly string[] = ["organizationId", "deletedAt"];
+
+/**
  * 前回の候補の判定（11-1 §2.2.8 の手順 2・3）。つなげるなら true。
  * 文書が無い・別の組織・論理削除済みなら Q-M7-1 を読まずに false（ほかの組織の結果と存在しない ID が同じ読み取り 1 回で止まる）
  */
@@ -65,8 +71,10 @@ export async function canLinkAsPrevious(input: {
   readonly resultId: string;
 }): Promise<boolean> {
   if (!docIdSchema.safeParse(input.resultId).success) return false;
-  const snapshot = await rawCollection(COLLECTIONS.results).doc(input.resultId).get();
-  if (!isValidPreviousDoc(snapshot.data(), input.organizationId)) return false;
+  const [snapshot] = await db().getAll(rawCollection(COLLECTIONS.results).doc(input.resultId), {
+    fieldMask: [...PREVIOUS_DOC_FIELD_MASK],
+  });
+  if (!isValidPreviousDoc(snapshot?.data(), input.organizationId)) return false;
   // すでにほかの論理削除されていない結果の前回になっていれば候補にしない（I-M7-2）
   const next = await nextResultsQuery({
     organizationId: input.organizationId,

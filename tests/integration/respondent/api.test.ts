@@ -3,7 +3,7 @@
 // I-11〜I-13・I-15・I-18 は M7-exam-20〜25・32 に置き換えた（11-1 §5.5）
 import { createHash, randomBytes } from "node:crypto";
 
-import { DocumentReference, Query, Timestamp } from "firebase-admin/firestore";
+import { Firestore, Query, Timestamp, Transaction } from "firebase-admin/firestore";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { DELETE as deleteRespondentRoute } from "@/app/api/v1/admin/respondents/[respondentId]/route";
@@ -926,6 +926,17 @@ async function auditOf(action: string, targetId: string): Promise<Doc> {
   return logs[0]!.data;
 }
 
+/** getAll の呼び出しの引数から、射影（fieldMask）した項目を取り出す（前回の候補は指標・氏名を読まない。11-1 §3.4.1） */
+function fieldMasksOf(calls: ReadonlyArray<ReadonlyArray<unknown>>): string[][] {
+  return calls.flatMap((args) =>
+    args.flatMap((arg) =>
+      typeof arg === "object" && arg !== null && "fieldMask" in arg && Array.isArray(arg.fieldMask)
+        ? [arg.fieldMask.map(String)]
+        : [],
+    ),
+  );
+}
+
 /** resultId を前回とする、論理削除されていない結果の数（Q-M7-1 と同じ条件） */
 const nextCount = (resultId: string) =>
   countDocs(COLLECTIONS.results, [
@@ -984,8 +995,21 @@ describe("M7-exam-27 再受験（つながる。I-M7-1）", () => {
       200,
     );
     await saveAllStepsViaApi(registered.sessionId, registered.cookieHeader, uniformAnswers(4));
-    const submitted = await respondentApi.submit(registered.sessionId, registered.cookieHeader);
+    // 送信のトランザクションでも、前回の結果は判定に使う 2 項目だけを読む（指標・氏名は読まない。11-1 §3.4.1）
+    const transactionGetAll = vi.spyOn(Transaction.prototype, "getAll");
+    const { submitted, transactionFieldMasks } = await (async () => {
+      try {
+        const res = await respondentApi.submit(registered.sessionId, registered.cookieHeader);
+        return {
+          submitted: res,
+          transactionFieldMasks: fieldMasksOf(transactionGetAll.mock.calls),
+        };
+      } finally {
+        transactionGetAll.mockRestore();
+      }
+    })();
     expect(submitted.status).toBe(200);
+    expect(transactionFieldMasks).toContainEqual(["organizationId", "deletedAt"]);
     expect(JSON.stringify(await submitted.json())).not.toContain(p.resultId);
     const resultId = (await sessionDoc(registered.sessionId)).resultId as string;
     const result = await resultDoc(resultId);
@@ -1083,14 +1107,17 @@ describe("M7-exam-28 再受験（つながらない）", () => {
     expect(await nextCount(linked.resultId)).toBe(1);
   });
 
-  it("ほかの組織の結果と存在しない ID で、応答（状態・本文の形・Cookie）と読み取り（文書 1 回。Q-M7-1 を読まない）が同じ。prev からほかの組織の結果の有無が分からない", async () => {
+  it("ほかの組織の結果と存在しない ID で、応答（状態・本文の形・Cookie）と読み取り（文書 1 回。Q-M7-1 を読まない）が同じ。prev からほかの組織の結果の有無が分からない。前回の候補は organizationId・deletedAt だけを読む", async () => {
     const other = await createTestOrganization("別のサロン");
     const otherOrgResult = await submitAnswerSet(other, uniformAnswers(2));
     const unlinked = await submitAnswerSet(linkOrg, uniformAnswers(2));
 
-    /** 登録 1 回の応答の形と、Firestore の読み取りの回数（文書の get と、クエリの get） */
+    /**
+     * 登録 1 回の応答の形と、Firestore の読み取りの回数（文書の読み取りと、クエリの get）。文書の読み取りは
+     * Firestore.getAll で数える（DocumentReference.get も内部で getAll を呼ぶ。前回の候補は射影して getAll で読む）
+     */
     const observe = async (previousResultId: string | undefined) => {
-      const documentGet = vi.spyOn(DocumentReference.prototype, "get");
+      const documentGet = vi.spyOn(Firestore.prototype, "getAll");
       const queryGet = vi.spyOn(Query.prototype, "get");
       try {
         const res = await respondentApi.register(
@@ -1105,6 +1132,7 @@ describe("M7-exam-28 再受験（つながらない）", () => {
           body: { ...dto, sessionId: "-", tokenExpiresAt: "-", nextUrl: "-" },
           cookie: cookieHeaderFrom(res, RESPONDENT_COOKIE_NAME) !== null,
           documentReads: documentGet.mock.calls.length,
+          fieldMasks: fieldMasksOf(documentGet.mock.calls),
           queries: queryGet.mock.calls.length,
         };
       } finally {
@@ -1118,10 +1146,12 @@ describe("M7-exam-28 再受験（つながらない）", () => {
     expect(otherOrg).toEqual(missing);
     expect(otherOrg.body).toEqual(plain.body);
     // results を 1 回読むだけで止まり、Q-M7-1 のクエリまで進まない（11-1 §2.2.8 の手順 2）
+    expect(plain.fieldMasks).toEqual([]);
     expect(otherOrg).toMatchObject({
       status: 201,
       cookie: true,
       documentReads: plain.documentReads + 1,
+      fieldMasks: [["organizationId", "deletedAt"]],
       queries: plain.queries,
     });
     // 同じ組織の、まだつながっていない結果なら Q-M7-1 を 1 回読んで候補にする（応答の kind は保存した値）
@@ -1129,6 +1159,7 @@ describe("M7-exam-28 再受験（つながらない）", () => {
     expect(candidate).toMatchObject({
       status: 201,
       documentReads: plain.documentReads + 1,
+      fieldMasks: [["organizationId", "deletedAt"]],
       queries: plain.queries + 1,
     });
     expect(candidate.body.kind).toBe("executive");
