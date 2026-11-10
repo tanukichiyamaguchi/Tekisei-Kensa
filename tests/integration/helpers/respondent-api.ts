@@ -120,7 +120,7 @@ export async function saveAllStepsViaApi(
 /** previousResultId を渡すと再受験リンクで受けた受験になる（つながりは results に直接書かずに作る。08 §3.3.1） */
 export type SubmitOptions = Pick<
   RegistrationBody,
-  "kind" | "name" | "phoneNumber" | "previousResultId"
+  "kind" | "name" | "phoneNumber" | "occupationCode" | "previousResultId"
 >;
 
 /** 登録 → 開始 → 4 ステップ保存 → 送信（API 経由）。sessionId と Cookie を返す */

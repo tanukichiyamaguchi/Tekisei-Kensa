@@ -1,4 +1,5 @@
-// 管理画面の E2E の共通操作（08 §3.4.3 E-10〜E-18、11-2 §5.3 M7-list-34〜52）。ログインは画面から行い、Cookie の注入はしない（08 §3.4.1）
+// 管理画面の E2E の共通操作（08 §3.4.3 E-10〜E-18、11-2 §5.3 M7-list-34〜52、11-3 §5.3 M7-zaiseki-31〜36・41〜43・48）。
+// ログインは画面から行い、Cookie の注入はしない（08 §3.4.1）
 import AxeBuilder from "@axe-core/playwright";
 import {
   test as base,
@@ -9,6 +10,7 @@ import {
 } from "@playwright/test";
 
 import { emulatorTask } from "./admin";
+import type { AptitudeTypeKey, SocialStyleKey } from "@/lib/scoring/types";
 
 export const E2E_ADMIN_PASSWORD = "e2e-admin-pass-1234";
 
@@ -72,6 +74,14 @@ export interface ManyRowsOrg {
 /** 101 行以上の組織（オーナーと求職者 count 人。氏名はテストテスト 101〜。M7-list-38・46・50） */
 export function seedManyRows(count = 105): ManyRowsOrg {
   return emulatorTask<ManyRowsOrg>("seed-many-rows", E2E_ADMIN_PASSWORD, String(count));
+}
+
+/** 指定の適性タイプになる受験を 1 件送信する（求職者・チームなし・テストテスト 50。M7-zaiseki-31 のチームが 1 種類の組織） */
+export function submitType(
+  organizationId: string,
+  aptitudeType: AptitudeTypeKey,
+): { readonly resultId: string; readonly respondentId: string } {
+  return emulatorTask("submit-type", organizationId, aptitudeType);
 }
 
 /** 受験が 0 件の組織（組織・オーナー・管理者だけ。M7-list-47） */
@@ -188,6 +198,66 @@ export function todayInTokyo(): { readonly ymd: string; readonly iso: string } {
   const [y, m, d] = [parts.year ?? "", parts.month ?? "", parts.day ?? ""];
   return { ymd: `${y}/${m}/${d}`, iso: `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}` };
 }
+
+// ---- 組織内分類（11-3 §2.5〜§2.12。data-testid は 11-3 §3.8）の要素
+
+/** 組織内分類の根（.ob-root。見出し行・集計カード・説明文・マップ） */
+export const obRoot = (page: Page): Locator => page.locator(".ob-root");
+
+/** 詳細パネル（dialog。分類のパネルとキャラクターのパネル） */
+export const obPanel = (page: Page): Locator => page.getByTestId("ob-panel");
+
+/** 「組織内分類とは」のポップアップ（dialog） */
+export const obAbout = (page: Page): Locator => page.getByTestId("ob-about");
+
+/** 見出し行の「組織内分類とは？」 */
+export const obHelp = (page: Page): Locator =>
+  page.getByRole("button", { name: "組織内分類とは？", exact: true });
+
+/** 凡例の項目 */
+export const obLegend = (page: Page, quadrant: SocialStyleKey): Locator =>
+  page.getByTestId(`ob-legend-${quadrant}`);
+
+/** 象限の箱 */
+export const obQuadrant = (page: Page, quadrant: SocialStyleKey): Locator =>
+  page.getByTestId(`ob-quadrant-${quadrant}`);
+
+/** 象限の見出しのボタン */
+export const obHeading = (page: Page, quadrant: SocialStyleKey): Locator =>
+  obQuadrant(page, quadrant).locator(".ob-qh");
+
+/** 象限の折りたたみのボタン */
+export const obFold = (page: Page, quadrant: SocialStyleKey): Locator =>
+  obQuadrant(page, quadrant).locator(".ob-fold");
+
+/** キャラクターの枠 */
+export const obCell = (page: Page, type: AptitudeTypeKey): Locator =>
+  page.getByTestId(`ob-cell-${type}`);
+
+/** 人数の要素（集計カードの数・象限のピルの数・枠の数）。親の要素から引く */
+export const obCount = (scope: Locator): Locator => scope.getByTestId("ob-count");
+
+/** 集計カードの人数とそのラベル */
+export const obTotal = (page: Page) => ({
+  count: obCount(page.locator(".ob-total")),
+  label: page.locator(".ob-total .l"),
+});
+
+/** 全員／在籍／退職のボタン */
+export const obSeg = (page: Page, mode: "all" | "stay" | "left"): Locator =>
+  page.getByTestId(`ob-seg-${mode}`);
+
+/** チームの選択欄（チームが 2 種類以上のときだけある） */
+export const obTeam = (page: Page): Locator => page.locator(".ob-team select");
+
+/** .ob-root の輪郭（参照元の ob-map の焦点の指定。#1F2933 の 2px を 2px 外側） */
+export const OB_ROOT_OUTLINE = {
+  focusVisible: true,
+  style: "solid",
+  color: "rgb(31, 41, 51)",
+  width: "2px",
+  offset: "2px",
+} as const;
 
 // ---- クリップボード（回答リンクのコピー。11-2 §2.17）
 

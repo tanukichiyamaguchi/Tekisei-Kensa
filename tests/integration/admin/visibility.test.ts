@@ -1,5 +1,5 @@
 // I-20〜I-22 幹部データの可視性（00 §5、04 D04-07・D04-31）と、回答一覧・組織内分類・利用履歴の応答（04 §5.3・§5.7・§5.8、
-// 11-2 §3.5・§3.8）。M7-list-30（利用履歴: 送信済みの全件を回答日時の新しい順、オーナー以外に既存スタッフの履歴を出さない）。
+// 11-2 §3.5・§3.8、11-3 §3.2）。M7-list-30（利用履歴: 送信済みの全件を回答日時の新しい順、オーナー以外に既存スタッフの履歴を出さない）。
 // 回答一覧の絞り込み・検索・並び替え・表示の上限は画面で行う（11-2 §3.5）ので、画面の単体テスト（M7-list-06〜09）で確かめる
 import { beforeAll, describe, expect, it } from "vitest";
 
@@ -15,8 +15,6 @@ import { GET as listUsageLogsRoute } from "@/app/api/v1/admin/usage-logs/route";
 import { COLLECTIONS } from "@/lib/db/collections";
 import { adminFirestore } from "@/lib/firebase/admin";
 import type { ClassificationDto, ResultListDto, UsageLogListDto } from "@/lib/services/dto/admin";
-import { APTITUDE_TYPE_DEFINITIONS } from "@/lib/masters/indicators/aptitude-types";
-import { SOCIAL_STYLE_KEYS } from "@/lib/scoring/types";
 
 import {
   createAdmin,
@@ -206,33 +204,24 @@ describe("I-21 admin は幹部の詳細・比較・更新・削除が 404", () =
 });
 
 describe("I-22 組織内分類・利用履歴の幹部の可視性", () => {
-  it("組織内分類: admin は 3 人、owner は 4 人。16 タイプ × 4 分類の枠を人数 0 でも返す", async () => {
-    const byAdmin = await getJson<ClassificationDto>(
-      getClassificationRoute,
-      "/api/v1/admin/classification",
-      admin,
-    );
-    const byOwner = await getJson<ClassificationDto>(
-      getClassificationRoute,
-      "/api/v1/admin/classification",
-      owner,
-    );
-    expect(byAdmin.total).toBe(3);
-    expect(byOwner.total).toBe(4);
-    const members = (c: ClassificationDto) =>
-      c.styles.flatMap((s) => s.types.flatMap((t) => t.members.map((m) => m.resultId)));
-    expect(members(byAdmin)).not.toContain(executive.resultId);
-    expect(members(byOwner)).toContain(executive.resultId);
+  const classification = (who: TestAdmin, query = "") =>
+    getJson<ClassificationDto>(getClassificationRoute, `/api/v1/admin/classification${query}`, who);
+  const resultIdsOf = (c: ClassificationDto) => c.people.map((p) => p.resultId);
 
-    expect(byOwner.styles.map((s) => s.socialStyle)).toEqual([...SOCIAL_STYLE_KEYS]);
-    expect(byOwner.styles.flatMap((s) => s.types)).toHaveLength(APTITUDE_TYPE_DEFINITIONS.length);
-    for (const style of byOwner.styles) {
-      expect(style.count).toBe(style.types.reduce((sum, t) => sum + t.count, 0));
-      for (const type of style.types) expect(type.count).toBe(type.members.length);
-    }
+  it("組織内分類: admin は 3 人（既存スタッフが無い）、owner は既存スタッフを含む 4 人（11-3 §3.2、K-29）", async () => {
+    const byAdmin = await classification(admin);
+    const byOwner = await classification(owner);
+    // 代表の submittedAt の降順（送信順の逆）
+    expect(resultIdsOf(byAdmin)).toEqual([
+      applicants[2]!.resultId,
+      applicants[1]!.resultId,
+      applicants[0]!.resultId,
+    ]);
+    expect(resultIdsOf(byAdmin)).not.toContain(executive.resultId);
+    expect(resultIdsOf(byOwner)).toEqual([executive.resultId, ...resultIdsOf(byAdmin)]);
   });
 
-  it("組織内分類の includeExcluded=false は除外者を数えない。true/false 以外は 422", async () => {
+  it("組織内分類: 除外した人は数えない（除外の後 admin は 2 人）。includeExcluded（true・false・yes）を付けても 200 で同じ応答", async () => {
     const target = applicants[1]!;
     const patch = await callRoute(patchRespondentRoute, {
       method: "PATCH",
@@ -243,24 +232,12 @@ describe("I-22 組織内分類・利用履歴の幹部の可視性", () => {
     });
     expect(patch.status).toBe(200);
     try {
-      const withExcluded = await getJson<ClassificationDto>(
-        getClassificationRoute,
-        "/api/v1/admin/classification?includeExcluded=true",
-        admin,
-      );
-      const withoutExcluded = await getJson<ClassificationDto>(
-        getClassificationRoute,
-        "/api/v1/admin/classification?includeExcluded=false",
-        admin,
-      );
-      expect(withExcluded.total).toBe(3);
-      expect(withoutExcluded.total).toBe(2);
-      const bad = await get(
-        getClassificationRoute,
-        "/api/v1/admin/classification?includeExcluded=yes",
-        admin,
-      );
-      expect(bad.status).toBe(422);
+      const plain = await classification(admin);
+      expect(plain.people).toHaveLength(2);
+      expect(resultIdsOf(plain)).not.toContain(target.resultId);
+      for (const value of ["true", "false", "yes"]) {
+        expect(await classification(admin, `?includeExcluded=${value}`), value).toEqual(plain);
+      }
     } finally {
       await callRoute(patchRespondentRoute, {
         method: "PATCH",

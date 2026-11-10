@@ -21,7 +21,6 @@ import { findOrganizationByInviteTokenHash } from "../lib/db/repositories/organi
 import {
   fetchPopulation,
   listResults,
-  listResultsForClassification,
   nextResultsQuery,
 } from "../lib/db/repositories/results-repository";
 import { listUsageLogs } from "../lib/db/repositories/usage-logs-repository";
@@ -216,7 +215,6 @@ async function checkFirestore(results: CheckResult[], runId: string): Promise<vo
     ],
     ["Q3 listResults(owner)", () => listResults({ viewer: owner })],
     ["Q4 listResults(admin)", () => listResults({ viewer: admin })],
-    ["Q3 listResultsForClassification", () => listResultsForClassification({ viewer: owner })],
     ["Q5（改） listUsageLogs(owner)", () => listUsageLogs({ viewer: owner })],
     ["Q6（改） listUsageLogs(admin)", () => listUsageLogs({ viewer: admin })],
     ["Q8 listAdminUsers", () => listAdminUsers(orgId)],

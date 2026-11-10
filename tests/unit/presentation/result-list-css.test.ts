@@ -386,9 +386,11 @@ describe("M7-list-51 焦点の見た目（§2.4・§2.6・§2.7、総論 8.3 の
   });
 
   it("一覧の輪郭 #1F2933 は部品ごとのクラスに当て、区分チップと「絞り込みを解除」には当てない（共通の焦点の枠が効く）", () => {
+    // 組織内分類の節（11-3。.ob-root の輪郭と詳細パネルの ×。同じ値）は classification-css.test.ts で確かめる
     const outlined = rulesWith("outline")
       .filter((r) => r.declarations.get("outline") === LIST_OUTLINE)
-      .flatMap((r) => r.selectors);
+      .flatMap((r) => r.selectors)
+      .filter((selector) => !selector.startsWith(".ob-"));
     for (const selector of [
       ".rl-btn:focus-visible",
       ".rl-card--alert:focus-visible",

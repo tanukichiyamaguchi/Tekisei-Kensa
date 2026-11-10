@@ -1,4 +1,4 @@
-// 日時整形（06 §10.3、11-2 §3.11）。API は ISO 8601（UTC）で返し、画面は Asia/Tokyo で表示する
+// 日時整形（06 §10.3、11-2 §3.11、11-3 §3.7）。API は ISO 8601（UTC）で返し、画面は Asia/Tokyo で表示する
 const FORMATTER = new Intl.DateTimeFormat("ja-JP", {
   timeZone: "Asia/Tokyo",
   year: "numeric",
@@ -48,6 +48,12 @@ export function formatDateTime(iso: string): string {
 export function formatYmd(iso: string): string {
   const p = tokyoParts(iso);
   return `${p.year}/${unpadded(p.month)}/${unpadded(p.day)}`;
+}
+
+/** ISO 8601（UTC）→ Asia/Tokyo の暦日 "2026/09/07"（月日を 0 で埋める。組織内分類の回答者の一覧の受験日。11-3 §2.12） */
+export function formatDateSlashPadded(iso: string): string {
+  const p = tokyoParts(iso);
+  return `${p.year}/${p.month}/${p.day}`;
 }
 
 /** ISO 8601（UTC）→ Asia/Tokyo の時刻 "09:05"（時と分を 2 けた。回答一覧の最新の受験。11-2 §2.8） */

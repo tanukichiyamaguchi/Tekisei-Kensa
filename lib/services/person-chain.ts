@@ -1,7 +1,9 @@
 // 同じ人の受験を 1 行にまとめる（11-2 §2.2。list-01・keinen-18）。純関数で、Firestore・Next.js に触れない。
 // 回答一覧（listResultRows）と受検者の更新（updatePerson）が同じ関数を使い、在籍・退職と組織内分類（11-3）・
 // 比較（11-5）・経年比較（11-7）も使う。同じ人とみなすのは前回の結果（previousResultId）でつながった受験だけで、
-// 氏名・電話番号の一致は使わない（参照元どおり）
+// 氏名・電話番号の一致は使わない（参照元どおり）。
+// 組織内分類と在籍・退職（11-3 §2.2）は除外した受験を先に除いてから同じ関数でまとめる（selectCountedHeads）。
+// 回答一覧との違いは除外の扱いだけ（zaiseki-M1）
 
 export interface PersonChainNode {
   readonly resultId: string;
@@ -73,6 +75,22 @@ export function buildPersonRows<N extends PersonChainNode>(
   }
   // 6. 行を代表の submittedAt の降順（同じなら resultId の昇順）に並べる
   return rows.sort((a, b) => newestFirst(a.head, b.head));
+}
+
+/**
+ * 組織内分類と在籍・退職で数える人の代表の受験（11-3 §2.2 の手順 2。zaiseki-08・09・M1）。
+ * 1. isExcluded が true の受験を先に除く（K-39 Q-24）。
+ * 2. 残りを buildPersonRows() でまとめる。ほかの受験の前回になっている受験は代表にならない（K-39 Q-10）。
+ * 3. 各行の代表を行の順（代表の submittedAt の降順、同じなら resultId の昇順）のまま返す。
+ * 代表だけが除外されていると、その前回が代表になる（参照元どおり。回答一覧は除外をつながった全受験に書くので、通常は起きない）
+ */
+export function selectCountedHeads<N extends PersonChainNode & { readonly isExcluded: boolean }>(
+  nodes: readonly N[],
+): readonly N[] {
+  // 1.
+  const counted = nodes.filter((node) => !node.isExcluded);
+  // 2〜3.
+  return buildPersonRows(counted).map((row) => row.head);
 }
 
 /** resultId をつながり（代表・前回のどこか）に含む行。無ければ null */

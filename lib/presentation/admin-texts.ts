@@ -43,7 +43,6 @@ export const ADMIN_TEXTS = {
   comparisonRequired: "比較組織を選択すると表示されます", // T-04
   downloadFull: "全画面ダウンロード", // T-05
   downloadRestricted: "評価・組織との合致度・リスクを非表示にしてダウンロード", // T-06
-  classificationEmpty: "本タイプの回答者はいません。", // T-07（付録C §8）
   ownerOnly: "責任者のみ回答データを閲覧できます", // T-08
   aiDisclaimer:
     "※ 診断スコア（16特性・ソーシャルスタイル・リスク指標）をもとにAIが自動生成しています。生成結果は責任者が内容をご確認のうえご活用ください。", // T-09
@@ -70,7 +69,6 @@ export const ADMIN_TEXTS = {
   pdfComparisonNone: "比較組織: 未選択", // 06 §3.5.11
   pdfComparisonEmpty: "比較組織: 未選択（比較対象がいないため比較なしで出力します）", // 06 §3.5.11
   networkError: "通信に失敗しました。ネットワーク接続を確認して再度お試しください", // T-33
-  excludedBadge: "除外中", // T-34
   signupDone:
     "登録しました。パスワード設定用のメールを送信しました。メール内のリンクからパスワードを設定してください", // T-35
   passwordResetDone: "パスワードを変更しました。ログインしてください", // T-36
