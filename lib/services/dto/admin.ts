@@ -1,5 +1,4 @@
 // 管理者 API の応答 Dto（04 §8.2）。AI 解説・結果詳細・比較は dto/result.ts
-import type { AiGenerationStatus } from "@/lib/ai/types";
 import type {
   AdminRole,
   DiagnosisExperience,
@@ -51,17 +50,6 @@ export interface InviteRotatedDto {
   readonly rotatedAt: string;
 }
 
-/**
- * ページ付きの一覧。API は返さない。PR-7.6 まで今の回答一覧の画面（旧レイアウト）の Server Component が旧 listResults の
- * 戻り値として使い、PR-7.6 で消す（11-2 §4.3）
- */
-export interface PagedDto<T> {
-  readonly items: readonly T[];
-  readonly total: number;
-  readonly page: number;
-  readonly pageSize: number;
-}
-
 /** GET /api/v1/admin/results（04 §5.3、11-2 §3.5）。クエリを受け取らず、閲覧範囲の全行を返す */
 export interface ResultListDto {
   readonly generatedAt: string; // 基準時刻（ISO 8601。一覧のデータをサーバで読んだ時刻）
@@ -95,25 +83,6 @@ export interface ResultListExamDto {
   readonly respondentId: string;
   readonly submittedAt: string;
   readonly hasLongitudinalReport: boolean;
-}
-
-/**
- * 受験 1 件ごとの一覧の行（受検者区分を含む）。API は返さない。PR-7.6 まで今の回答一覧の画面（旧レイアウト）の
- * Server Component が旧 listResults の戻り値として使い、PR-7.6 で消す（11-2 §4.3）。職業名は画面が lib/masters/occupations.ts で引く
- */
-export interface ResultListItemDto {
-  readonly resultId: string;
-  readonly respondentId: string;
-  readonly name: string;
-  readonly phoneNumber: string;
-  readonly occupationCode: number;
-  readonly kind: RespondentKind;
-  readonly teamCode: TeamCode | null;
-  readonly isExcluded: boolean;
-  readonly submittedAt: string;
-  readonly aptitudeType: AptitudeTypeKey;
-  readonly socialStyle: SocialStyleKey;
-  readonly aiGenerationStatus: AiGenerationStatus;
 }
 
 /** GET /api/v1/admin/admin-users（04 §5.11）。Auth に無い uid の email は null */

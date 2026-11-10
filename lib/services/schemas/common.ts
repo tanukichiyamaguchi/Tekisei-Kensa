@@ -27,15 +27,6 @@ export const requiredText = (max: number) =>
     .refine((s) => s.length > 0, { message: "必須項目です" })
     .refine((s) => cpLength(s) <= max, { message: `${max} 文字以内で入力してください` });
 
-/**
- * PR-7.6 まで今の回答一覧の画面（旧レイアウト）の URL のクエリの解釈（listResultsQuerySchema）だけが使う。PR-7.6 で消す
- * （04 §2.2、11-2 §4.3。回答一覧・利用履歴の API はクエリを受け取らない）
- */
-export const pagingSchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(200).default(50),
-});
-
 /** 比較範囲のクエリ。ComparisonScope に変換する（04 §2.10 の推奨: transform で変換する） */
 export const comparisonScopeQuerySchema = z
   .object({

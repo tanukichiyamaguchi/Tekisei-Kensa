@@ -1,50 +1,33 @@
-// M-04 回答一覧（06 §3.4）。/admin?q=&kind=&teamCode=&sort=&order=&page=
+// M-04 回答一覧（11-2 §2.1・§3.12）。サーバで listResultRows（GET /api/v1/admin/results と同じ ResultListDto）を呼び、一覧の本体
+// ResultsView に渡す。URL のクエリは読まない（絞り込みの状態は画面と sessionStorage。11-2 §2.21）。取得に失敗したとき
+// （503 SERVICE_UNAVAILABLE・500 ほか）はログに残し（個人情報なし）、一覧の代わりに取得の失敗の文言を出す
 import { renderAdminPage } from "@/components/admin/admin-page";
 import { ResultsView } from "@/components/admin/ResultsView";
-import { resultListHref, type ResultListUrlState } from "@/lib/presentation/admin-navigation";
-import { listResults } from "@/lib/services/result-list";
-import { listResultsQuerySchema } from "@/lib/services/schemas/admin-results";
+import type { ResultListDto } from "@/lib/services/dto/admin";
+import { listResultRows } from "@/lib/services/result-list";
+import { errorFields, logger } from "@/lib/utils/logger";
 
-type SearchParams = Promise<Record<string, string | string[] | undefined>>;
-
-/** URL クエリ → 一覧の条件。不正な値は既定値に戻す（画面は壊さない） */
-function parseState(params: Record<string, string | string[] | undefined>): ResultListUrlState {
-  const flat = Object.fromEntries(
-    Object.entries(params).filter((e): e is [string, string] => typeof e[1] === "string"),
-  );
-  const parsed = listResultsQuerySchema.safeParse(flat);
-  const query = parsed.success ? parsed.data : listResultsQuerySchema.parse({});
-  return {
-    q: query.q === "" ? undefined : query.q,
-    kind: query.kind,
-    teamCode: query.teamCode,
-    sort: query.sort === "name" ? "name" : "submittedAt",
-    order: query.order,
-    page: query.page,
-    pageSize: query.pageSize,
-  };
-}
-
-export default async function ResultsPage({
-  searchParams,
-}: {
-  readonly searchParams: SearchParams;
-}) {
-  const state = parseState(await searchParams);
-  const path = resultListHref(state);
+export default async function ResultsPage() {
   return renderAdminPage({
-    path,
+    path: "/admin",
     current: "results",
-    render: async (ctx) => {
-      const data = await listResults(ctx, { ...state, excluded: "all" });
-      // URL が変わったとき（検索・ページ移動）と再取得（router.refresh）で内容が変わったときに一覧の状態を作り直す
-      const key = `${path}#${data.total}#${data.items.map((i) => i.resultId).join(",")}`;
+    render: async (ctx, me) => {
+      let initial: ResultListDto | null;
+      try {
+        initial = await listResultRows(ctx);
+      } catch (error) {
+        logger.error("result_list.load_failed", {
+          requestId: ctx.request.requestId,
+          ...errorFields(error),
+        });
+        initial = null;
+      }
       return (
         <ResultsView
-          key={key}
-          data={data}
-          state={state}
-          canViewExecutives={ctx.canViewExecutives}
+          initial={initial}
+          canViewExecutives={me.canViewExecutives}
+          organizationName={me.organization.name}
+          links={{ applicant: me.links.applicant, executive: me.links.executive }}
         />
       );
     },

@@ -1,4 +1,5 @@
-// 管理画面の文言（06 §10.5）。要件定義書・付録に文言があるものはそのまま、それ以外は 06 の設計判断
+// 管理画面の文言（06 §10.5）。要件定義書・付録に文言があるものはそのまま、それ以外は 06 の設計判断。
+// 回答一覧と利用履歴の文言は result-list-texts.ts（11-2 §2.27。利用履歴・削除する・キャンセル・過去の受講経験・T-26・T-33 はここを使う）
 import type { AiFailureReason } from "@/lib/ai/errors";
 import type { RespondentKind } from "@/lib/db/types";
 
@@ -23,15 +24,10 @@ export const ADMIN_TEXTS = {
   showAllTraits: "他項目のポジティブ・ネガティブを確認", // B-09
   copy: "コピーする", // B-10
   login: "ログイン", // B-11
-  exclude: "除外する", // B-12
   delete: "削除する", // B-13
   cancel: "キャンセル", // B-14
   rotateInvite: "招待リンクを再発行する", // B-15
   logout: "ログアウト", // 06 §2.3（ヘッダー右）
-  deleted: "削除しました", // 06 §3.4.5
-  noMatchingResults: "条件に一致する回答データがありません。", // 06 §3.4.6
-  reload: "再読み込み", // 06 §3.4.6
-  unassignedTeam: "未設定", // 06 §3.4.2（チームのプルダウン）
   resetMailSent: "入力したメールアドレス宛に案内を送信しました", // 06 §3.3
   signupInviteRequired: "管理者追加用リンクから登録してください", // 06 §3.1 D06-05
   changed: "変更しました", // 06 §3.7
@@ -56,15 +52,12 @@ export const ADMIN_TEXTS = {
   populationSubjectOnly: "比較対象は本人のみのため、合致度・偏差値は参考値です", // T-11
   negativeValueNote: "※ 計算値が 0 未満のため左端に表示しています", // T-12
   allTraitsEqual: "すべての尺度が同じ値です", // T-13
-  confirmDelete: "回答データを削除しますか？", // T-14
   accountUnavailable: "このアカウントは現在利用できません。組織の管理者にお問い合わせください。", // T-15
   resultNotFound: "回答データが見つかりません", // T-16
   aiGenerating: "AI解説を生成しています。1〜2 分かかることがあります。", // T-17
   aiFailed: "AI解説の生成に失敗しました。", // T-18
   aiGeneratedAt: (at: string) => `生成日時 ${at}`, // 06 §3.5.9
-  notSubmitted: "未回答", // T-19
   diagnosisExperience: { first_time: "初めて診断する", experienced: "過去に診断したことがある" }, // T-20
-  noResults: "まだ回答データがありません。アカウント画面の受検リンクを受検者に送付してください。", // T-21
   inviteInvalid: "このリンクは無効です。管理者追加用リンクを組織の管理者から受け取ってください。", // T-22
   resetLinkInvalid: "認証リンクが無効か期限切れです。もう一度お試しください", // T-23
   loginFailed: "メールアドレスまたはパスワードが正しくありません", // T-24

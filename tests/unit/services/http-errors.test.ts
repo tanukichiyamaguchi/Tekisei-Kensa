@@ -13,7 +13,6 @@ import { startOfTokyoDay } from "@/lib/services/rate-limit";
 import { acceptInviteInputSchema, createSessionInputSchema } from "@/lib/services/schemas/auth";
 import {
   comparisonScopeQuerySchema,
-  pagingSchema,
   requiredText,
   teamCodeSchema,
 } from "@/lib/services/schemas/common";
@@ -221,12 +220,6 @@ describe("U-06 入力スキーマ（M2 時点で存在するもの。受検者�
       comparisonScopeQuerySchema.safeParse({ scope: "organization", teamCode: "A" }).success,
     ).toBe(false);
     expect(comparisonScopeQuerySchema.safeParse({ scope: "all" }).success).toBe(false);
-  });
-  it("ページング: 既定値と上限", () => {
-    expect(pagingSchema.parse({})).toEqual({ page: 1, pageSize: 50 });
-    expect(pagingSchema.parse({ page: "2", pageSize: "200" })).toEqual({ page: 2, pageSize: 200 });
-    expect(pagingSchema.safeParse({ pageSize: "201" }).success).toBe(false);
-    expect(pagingSchema.safeParse({ page: "0" }).success).toBe(false);
   });
   it("必須文字列: 前後空白を除去し、空白のみ・上限超過（コードポイント単位）を拒否", () => {
     const s = requiredText(3);

@@ -1,7 +1,6 @@
 // I-20〜I-22 幹部データの可視性（00 §5、04 D04-07・D04-31）と、回答一覧・組織内分類・利用履歴の応答（04 §5.3・§5.7・§5.8、
 // 11-2 §3.5・§3.8）。M7-list-30（利用履歴: 送信済みの全件を回答日時の新しい順、オーナー以外に既存スタッフの履歴を出さない）。
-// 最後の節は、PR-7.6 まで今の回答一覧の画面（旧レイアウト）が使う旧サービス listResults(ctx, query)（受験ごとの行と URL の
-// クエリでの絞り込み・検索・並び替え・ページング）の互換の確かめで、PR-7.6 で旧サービスとともに消す（11-2 §4.3）
+// 回答一覧の絞り込み・検索・並び替え・表示の上限は画面で行う（11-2 §3.5）ので、画面の単体テスト（M7-list-06〜09）で確かめる
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { GET as getClassificationRoute } from "@/app/api/v1/admin/classification/route";
@@ -13,13 +12,10 @@ import { GET as getComparisonRoute } from "@/app/api/v1/admin/results/[resultId]
 import { GET as getResultRoute } from "@/app/api/v1/admin/results/[resultId]/route";
 import { GET as listResultsRoute } from "@/app/api/v1/admin/results/route";
 import { GET as listUsageLogsRoute } from "@/app/api/v1/admin/usage-logs/route";
-import type { AdminContext } from "@/lib/auth/admin-context";
 import { COLLECTIONS } from "@/lib/db/collections";
 import { adminFirestore } from "@/lib/firebase/admin";
 import type { ClassificationDto, ResultListDto, UsageLogListDto } from "@/lib/services/dto/admin";
 import { APTITUDE_TYPE_DEFINITIONS } from "@/lib/masters/indicators/aptitude-types";
-import { listResults as listResultsForCurrentScreen } from "@/lib/services/result-list";
-import { listResultsQuerySchema } from "@/lib/services/schemas/admin-results";
 import { SOCIAL_STYLE_KEYS } from "@/lib/scoring/types";
 
 import {
@@ -401,124 +397,5 @@ describe("M7-list-30 GET /admin/usage-logs（I-22 の改め。11-2 §3.3・§3.8
           d.actorUid === logAdmin.uid,
       );
     expect(logs.map((l) => l.details)).toContainEqual({ count: 3 });
-  });
-});
-
-describe("今の回答一覧の画面（旧レイアウト）の旧サービス listResults(ctx, query)（PR-7.6 で旧サービスとともに消す。11-2 §4.3）", () => {
-  /** Server Component（app/(admin)/admin/page.tsx）が渡すのと同じ AdminContext と、URL のクエリの解釈 */
-  const ctxOf = (who: TestAdmin, role: "owner" | "admin"): AdminContext => ({
-    uid: who.uid,
-    organizationId: org.organizationId,
-    role,
-    canViewExecutives: role === "owner",
-    email: who.email,
-    displayName: "テスト管理者",
-    request: { requestId: "visibility-test", ipAddress: null, userAgent: null },
-  });
-  const legacyList = (query: Record<string, string> = {}, role: "owner" | "admin" = "admin") =>
-    listResultsForCurrentScreen(
-      ctxOf(role === "owner" ? owner : admin, role),
-      listResultsQuerySchema.parse(query),
-    );
-
-  it("既定は submittedAt 降順・page 1・pageSize 50。受験ごとの行で、owner は区分（kind）付き", async () => {
-    const res = await legacyList();
-    expect(res.page).toBe(1);
-    expect(res.pageSize).toBe(50);
-    expect(res.total).toBe(3);
-    expect(res.items.map((i) => i.name)).toEqual(["阿部 次郎", "鈴木 花子", "佐藤 一郎"]);
-    const first = res.items[0]!;
-    expect(first).toMatchObject({
-      resultId: applicants[2]!.resultId,
-      respondentId: applicants[2]!.respondentId,
-      phoneNumber: "070-3333-3333",
-      kind: "applicant",
-      teamCode: null,
-      isExcluded: false,
-      aiGenerationStatus: "not_generated",
-    });
-    expect(typeof first.aptitudeType).toBe("string");
-    expect(typeof first.socialStyle).toBe("string");
-    const byOwner = await legacyList({}, "owner");
-    expect(byOwner.total).toBe(4);
-    expect(byOwner.items.find((i) => i.resultId === executive.resultId)?.kind).toBe("executive");
-    expect((await legacyList({ kind: "executive" })).total).toBe(0);
-    expect((await legacyList({ kind: "executive" }, "owner")).total).toBe(1);
-  });
-
-  it("氏名・電話番号の部分一致（q）", async () => {
-    expect((await legacyList({ q: "鈴木" })).items.map((i) => i.name)).toEqual(["鈴木 花子"]);
-    expect((await legacyList({ q: "3333" })).items.map((i) => i.name)).toEqual(["阿部 次郎"]);
-    expect((await legacyList({ q: "nomatch" })).total).toBe(0);
-  });
-
-  it("チーム（none = 未設定）・除外で絞り込み、sort=teamCode は未設定を後ろに置く（チーム・除外は今の画面と同じ PATCH で変える）", async () => {
-    const [sato, suzuki] = applicants;
-    const patch = (respondentId: string, body: unknown) =>
-      callRoute(patchRespondentRoute, {
-        method: "PATCH",
-        url: `/api/v1/admin/respondents/${respondentId}`,
-        params: { respondentId },
-        body,
-        cookieHeader: admin.cookieHeader,
-      });
-    expect((await patch(sato!.respondentId, { teamCode: "B" })).status).toBe(200);
-    expect((await patch(suzuki!.respondentId, { teamCode: "A", isExcluded: true })).status).toBe(
-      200,
-    );
-    try {
-      expect((await legacyList({ teamCode: "A" })).items.map((i) => i.name)).toEqual(["鈴木 花子"]);
-      expect((await legacyList({ teamCode: "none" })).items.map((i) => i.name)).toEqual([
-        "阿部 次郎",
-      ]);
-      expect((await legacyList({ excluded: "only" })).items.map((i) => i.name)).toEqual([
-        "鈴木 花子",
-      ]);
-      expect((await legacyList({ excluded: "none" })).total).toBe(2);
-      expect((await legacyList({ sort: "teamCode" })).items.map((i) => i.teamCode)).toEqual([
-        "A",
-        "B",
-        null,
-      ]);
-      expect(
-        (await legacyList({ sort: "teamCode", order: "desc" })).items.map((i) => i.teamCode),
-      ).toEqual([null, "B", "A"]);
-    } finally {
-      await patch(sato!.respondentId, { teamCode: null });
-      await patch(suzuki!.respondentId, { teamCode: null, isExcluded: false });
-    }
-  });
-
-  it("sort=name は日本語の照合順、ページングは total を保つ", async () => {
-    const names = (await legacyList({ sort: "name" })).items.map((i) => i.name);
-    expect(names).toEqual([...names].sort(new Intl.Collator("ja").compare));
-    const page2 = await legacyList({ page: "2", pageSize: "2" });
-    expect(page2.total).toBe(3);
-    expect(page2.items.map((i) => i.name)).toEqual(["佐藤 一郎"]);
-    const beyond = await legacyList({ page: "9", pageSize: "2" });
-    expect(beyond.items).toEqual([]);
-    expect(beyond.total).toBe(3);
-  });
-
-  it("URL のクエリの不正は safeParse が失敗する（画面は既定値に戻す）", () => {
-    for (const query of [
-      { page: "0" },
-      { pageSize: "201" },
-      { sort: "phone" },
-      { teamCode: "a" },
-      { excluded: "yes" },
-      { kind: "staff" },
-      { order: "up" },
-    ]) {
-      expect(listResultsQuerySchema.safeParse(query).success, JSON.stringify(query)).toBe(false);
-    }
-  });
-
-  it("監査ログ result.list の details は今のまま { count, page }", async () => {
-    await legacyList({ page: "1" });
-    const logs = (await listDocs(COLLECTIONS.auditLogs))
-      .map((d) => d.data)
-      .filter((d) => d.organizationId === org.organizationId && d.action === "result.list");
-    expect(logs.map((l) => l.details)).toContainEqual({ count: 3, page: 1 });
   });
 });

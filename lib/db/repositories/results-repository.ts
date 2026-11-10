@@ -109,7 +109,7 @@ function visibleResultsQuery(viewer: Viewer): Query {
 
 /**
  * 回答一覧の 1 行（受験 1 件。指標 map は含まない）。回答一覧（listResultRows）・受検者の更新（updatePerson）・
- * PR-7.6 までの今の回答一覧の画面の旧サービス（listResults）・11-7 の組み合わせの候補が使う。
+ * 11-7 の組み合わせの候補が使う。
  * M7 で足した 8 項目（11-2 §3.5 の手順 1・§3.11、11-6 §3.1、11-7 §4.5 の (5)）は、M7 より前の文書に無ければ toResult と
  * 同じ規則で補う（02 §5.5）
  */
@@ -137,7 +137,7 @@ export interface ResultListRow {
 
 /**
  * 閲覧範囲の受験の全件（Q3 / Q4）。select() で上記の列に射影して submittedAt の降順で返す（D04-55）。
- * 検索・絞り込み・並び替え・表示の上限は画面で行う（11-2 §3.5。PR-7.6 までの今の画面は旧サービスがメモリ上で行う）
+ * 検索・絞り込み・並び替え・表示の上限は画面で行う（11-2 §3.5。lib/presentation/result-list-view.ts）
  */
 export async function listResults(input: {
   readonly viewer: Viewer;
