@@ -5,7 +5,10 @@ import type { ReactElement } from "react";
 
 import { RegistrationForm } from "@/components/respondent/RegistrationForm";
 import { stripAmpFromSearchParams } from "@/lib/presentation/exam-url";
-import { kindFromLinkParam } from "@/lib/presentation/registration-rules";
+import {
+  kindFromLinkParam,
+  previousResultIdFromParam,
+} from "@/lib/presentation/registration-rules";
 import { docIdSchema } from "@/lib/services/schemas/common";
 
 export type RegistrationSearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -16,7 +19,8 @@ const single = (v: string | string[] | undefined): string | undefined =>
 
 /**
  * URL のクエリに「amp;」があれば、取り除いた URL（同じパス）へリダイレクトする。
- * q は文書 ID の形のときだけ組織 ID として渡し（存在は確かめない）、p は executives のときだけ既存スタッフ
+ * q は文書 ID の形のときだけ組織 ID として渡し（存在は確かめない）、p は executives のときだけ既存スタッフ。
+ * 再受験リンクの prev は文書 ID の形のときだけ前回の結果の ID として渡し、画面には出さない（見出しは p だけで決まる。11-1 §2.2.8）
  */
 export async function renderRegistrationPage(
   path: "/" | "/exam",
@@ -28,6 +32,10 @@ export async function renderRegistrationPage(
   const q = single(params.q);
   const organizationId = q !== undefined && docIdSchema.safeParse(q).success ? q : null;
   return (
-    <RegistrationForm organizationId={organizationId} kind={kindFromLinkParam(single(params.p))} />
+    <RegistrationForm
+      organizationId={organizationId}
+      kind={kindFromLinkParam(single(params.p))}
+      previousResultId={previousResultIdFromParam(single(params.prev)) ?? null}
+    />
   );
 }

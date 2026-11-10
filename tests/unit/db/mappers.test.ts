@@ -1,5 +1,6 @@
 // U-01 lib/db/mappers（02 §5.5、03 §5.9）と、M7 で足した項目の読み取りの補い（11-1 §3.2、11-2 §3.1、11-6 §3.1・§3.2、
-// 11-7 §3.1、11-8 §3.2・§3.3。M7-misc-06・07）。Emulator 不要（Admin SDK の Timestamp は Node で生成できる）
+// 11-7 §3.1、11-8 §3.2・§3.3。M7-misc-06・07）、母集団を選ぶ前の行の変換（M7-compare-02。11-5 §3.2）。
+// Emulator 不要（Admin SDK の Timestamp は Node で生成できる）
 import { Timestamp, type DocumentSnapshot } from "firebase-admin/firestore";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -14,6 +15,7 @@ import {
 } from "@/lib/db/mappers/documents";
 import {
   toPopulationMember,
+  toPopulationSourceRow,
   toResult,
   toResultDocFields,
   toScoreResult,
@@ -120,6 +122,82 @@ describe("ScoreResult ↔ results 文書", () => {
     expect(Object.keys(member).sort()).toEqual(["compatibility", "traits"]);
     expect(member.traits).toStrictEqual(T06.traits);
     expect(member.compatibility).toStrictEqual(T06.compatibility);
+  });
+});
+
+describe("M7-compare-02 toPopulationSourceRow（11-5 §3.2）", () => {
+  /** fetchPopulation() の select の 6 項目（M7 より前の文書は previousResultId が無い） */
+  const selected = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
+    traits: { ...T06.traits },
+    compatibility: { ...T06.compatibility },
+    isExcluded: false,
+    scoringVersion: "1.0.0",
+    teamCode: null,
+    previousResultId: null,
+    ...overrides,
+  });
+
+  it("6 項目を変換する（traits・compatibility は文書の値のまま）", () => {
+    expect(
+      toPopulationSourceRow(
+        "res2",
+        selected({ teamCode: "B", previousResultId: "ResExample0000000001" }),
+      ),
+    ).toStrictEqual({
+      resultId: "res2",
+      isExcluded: false,
+      scoringVersion: "1.0.0",
+      teamCode: "B",
+      previousResultId: "ResExample0000000001",
+      traits: T06.traits,
+      compatibility: T06.compatibility,
+    });
+  });
+
+  it("previousResultId は、項目が無い（M7 より前の文書）・null・文書 ID の形でない値（a/b・数値・129 文字）なら null", () => {
+    const legacy = selected();
+    delete legacy.previousResultId;
+    expect(toPopulationSourceRow("res1", legacy).previousResultId).toBeNull();
+    for (const value of [null, "a/b", "", 12345, "a".repeat(129), { id: "x" }]) {
+      expect(
+        toPopulationSourceRow("res1", selected({ previousResultId: value })).previousResultId,
+        String(value),
+      ).toBeNull();
+    }
+  });
+
+  it('isExcluded は true のときだけ真（false・無い・文字の "true" は偽）', () => {
+    expect(toPopulationSourceRow("r", selected({ isExcluded: true })).isExcluded).toBe(true);
+    for (const value of [false, undefined, "true", 1]) {
+      expect(toPopulationSourceRow("r", selected({ isExcluded: value })).isExcluded).toBe(false);
+    }
+  });
+
+  it("teamCode は A〜Z の 1 文字だけ（小文字・2 文字・数値は null）", () => {
+    expect(toPopulationSourceRow("r", selected({ teamCode: "Z" })).teamCode).toBe("Z");
+    for (const value of ["a", "AB", 1, undefined, null]) {
+      expect(toPopulationSourceRow("r", selected({ teamCode: value })).teamCode).toBeNull();
+    }
+  });
+
+  it("scoringVersion が文字でなければ、どの版にも当たらない空文字（母集団に入れない）", () => {
+    expect(toPopulationSourceRow("r", selected({ scoringVersion: 1 })).scoringVersion).toBe("");
+    expect(toPopulationSourceRow("r", selected({ scoringVersion: undefined })).scoringVersion).toBe(
+      "",
+    );
+  });
+
+  it("traits・compatibility のキーの欠け・number 以外は MappingError（toPopulationMember と同じ検証）", () => {
+    const traits: Record<string, number> = { ...T06.traits };
+    delete traits.deliberateness;
+    expect(() => toPopulationSourceRow("r", selected({ traits }))).toThrow(MappingError);
+    expect(() =>
+      toPopulationSourceRow(
+        "r",
+        selected({ compatibility: { ...T06.compatibility, decision_making: "1" } }),
+      ),
+    ).toThrow(MappingError);
+    expect(() => toPopulationSourceRow("r", selected({ traits: undefined }))).toThrow(Error);
   });
 });
 

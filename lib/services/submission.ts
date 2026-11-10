@@ -1,5 +1,6 @@
-// 送信・採点・結果保存（04 §4.5、11-1 §3.4.3）。採点と、結果・利用履歴の保存はリポジトリの 1 つのトランザクションで行い、
-// 結果は受検者に返さない。完了画面へ移る前の 2 秒の待ちは画面が行い、API は採点が終わったらすぐ応答する（11-1 §2.4.7）
+// 送信・採点・結果保存（04 §4.5、11-1 §3.4.3）。採点と、結果・利用履歴の保存と、再受験の前回の結果のつながりの確定（11-1 §2.7.3）は
+// リポジトリの 1 つのトランザクションで行い、結果もつながりも受検者に返さない。完了画面へ移る前の 2 秒の待ちは画面が行い、
+// API は採点が終わったらすぐ応答する（11-1 §2.4.7）
 import { examUrls, type SessionSubmittedDto } from "./dto/respondent";
 import { assertDraft } from "./session-progress";
 import type { RespondentSessionContext } from "@/lib/auth/respondent-session";

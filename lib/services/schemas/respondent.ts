@@ -24,6 +24,7 @@ export const registerRespondentInputSchema = z.object({
   phoneNumber: requiredText(PHONE_MAX_LENGTH), // 前後の空白を除いて 1〜30 文字（K-42）。書式は検査しない（K-39 Q-17）
   occupationCode: occupationCodeSchema, // 1〜8、10（K-21）
   diagnosisExperience: z.enum(DIAGNOSIS_EXPERIENCES, { error: "過去の診断経験を選択してください" }),
+  previousResultId: z.string().max(200).optional(), // 再受験リンクの prev。文書 ID の形でなければ service が無視する（422 にしない。11-1 §3.4.1）
 });
 export type RegisterRespondentInput = z.infer<typeof registerRespondentInputSchema>;
 

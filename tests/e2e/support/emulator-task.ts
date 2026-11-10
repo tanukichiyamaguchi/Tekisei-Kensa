@@ -61,7 +61,8 @@ async function run(task: string | undefined, args: string[]): Promise<unknown> {
       };
     }
     case "result-of-session": {
-      // 受験のデータ（11-1 §2.7.2・§2.7.4）: 結果の受検者区分の複製と区分、利用履歴の件数（M7-exam-41 ほか）
+      // 受験のデータ（11-1 §2.7.2〜§2.7.4）: 結果の ID、前回の結果、受検者区分の複製と区分、利用履歴の件数
+      // （M7-exam-41・49 ほか。読むだけ）
       const sessionId = args[0] ?? "";
       const results = await db
         .collection(COLLECTIONS.results)
@@ -76,6 +77,8 @@ async function run(task: string | undefined, args: string[]): Promise<unknown> {
         .get();
       return {
         resultCount: results.size,
+        resultId: result.id,
+        previousResultId: (result.get("previousResultId") as string | null | undefined) ?? null,
         respondentKind: result.get("respondentKind") as string,
         employmentStatus: result.get("employmentStatus") as string,
         usageLogCount: usageLogs.size,

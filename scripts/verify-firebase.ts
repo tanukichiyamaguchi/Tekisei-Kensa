@@ -22,6 +22,7 @@ import {
   fetchPopulation,
   listResults,
   listResultsForClassification,
+  nextResultsQuery,
 } from "../lib/db/repositories/results-repository";
 import { listUsageLogs } from "../lib/db/repositories/usage-logs-repository";
 import { adminAuth, adminFirestore } from "../lib/firebase/admin";
@@ -188,18 +189,29 @@ async function checkFirestore(results: CheckResult[], runId: string): Promise<vo
     });
   }
 
-  // デプロイ済みの firestore.indexes.json でリポジトリの全クエリ（02 §7.1 の Q1〜Q14）が通ること（H-01 の補助）
+  // デプロイ済みの firestore.indexes.json でリポジトリの全クエリ（02 §7.1 の Q1（改）・Q3〜Q14・Q-M7-1。Q2 は 2.6 版でやめた。
+  // Q-M7-2 はアプリが発行し始める PR で足す）が通ること（H-01 の補助）
   const orgId = `verify${runId}`;
   const owner: Viewer = { uid: "verify", organizationId: orgId, role: "owner" };
   const admin: Viewer = { ...owner, role: "admin" };
+  // Q-M7-1 の対象の結果（無い文書。canLinkAsPrevious() は無い結果では文書の読み取りで止まりクエリまで進まないので、
+  // 登録と送信が発行するのと同じ形のクエリを直接発行する）
+  const nextOfProbe = () =>
+    nextResultsQuery({ organizationId: orgId, resultId: `verify${runId}`, limit: 1 }).select();
   const queries: Array<[string, () => Promise<unknown>]> = [
     [
-      "Q1 fetchPopulation(組織)",
+      "Q1（改） fetchPopulation(組織)",
       () => fetchPopulation({ organizationId: orgId, scope: { kind: "organization" } }),
     ],
     [
-      "Q2 fetchPopulation(チーム)",
+      "Q1（改） fetchPopulation(チーム)",
       () => fetchPopulation({ organizationId: orgId, scope: { kind: "team", teamCode: "A" } }),
+    ],
+    // 登録の canLinkAsPrevious() と送信のトランザクション（submitSession()）の形。有無だけを見るので文書名だけを読む
+    ["Q-M7-1 nextResultsQuery(登録)", () => nextOfProbe().get()],
+    [
+      "Q-M7-1 nextResultsQuery(送信のトランザクション)",
+      () => adminFirestore().runTransaction((tx) => tx.get(nextOfProbe())),
     ],
     ["Q3 listResults(owner)", () => listResults({ viewer: owner })],
     ["Q4 listResults(admin)", () => listResults({ viewer: admin })],
@@ -259,7 +271,8 @@ async function checkFirestore(results: CheckResult[], runId: string): Promise<vo
   }
   results.push({
     id: "3c",
-    title: "デプロイ済みのインデックスでリポジトリの全クエリ（Q1〜Q14）が実行できる",
+    title:
+      "デプロイ済みのインデックスでリポジトリの全クエリ（Q1（改）・Q3〜Q14・Q-M7-1）が実行できる",
     status: failed.length === 0 ? "成立" : "不成立",
     detail: failed.length === 0 ? `${queries.length} 件すべて成功` : `失敗: ${failed.join(" / ")}`,
   });

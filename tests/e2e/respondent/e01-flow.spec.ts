@@ -1,4 +1,4 @@
-// M7-exam-40 受験の流れ、M7-exam-41 幹部用の見出しと p、M7-exam-45 ログインのリンク（11-1 §5.3）
+// M7-exam-40 受験の流れ、M7-exam-41 幹部用の見出しと p、M7-exam-45 ログインのリンク、M7-exam-49 再受験リンク（11-1 §5.3）
 import { expect, test } from "../support/fixtures";
 
 import { emulatorTask } from "../support/admin";
@@ -13,9 +13,12 @@ import {
   linkUrl,
   questionsUrl,
   recordApiCalls,
+  registerViaApi,
   registerViaUi,
   saveStepsViaApi,
   SAMPLE_PHONE,
+  sessionIdFromUrl,
+  startViaApi,
 } from "../support/respondent";
 
 test("M7-exam-40 受験の流れ（求職者）: 登録 → 開始 → 4 ステップ → 送信 → 完了", async ({
@@ -154,4 +157,78 @@ test("M7-exam-45 「すでに受験された方・ログインはこちら」で
   await expect(link).toHaveAttribute("href", "/admin/login");
   await link.click();
   await page.waitForURL((url) => url.pathname === "/admin/login");
+});
+
+test("M7-exam-49 再受験リンク（prev）で受けると前回の結果がつながり、同じリンクの 2 人目はつながらない", async ({
+  page,
+  organizationId,
+}) => {
+  type ResultOfSession = {
+    resultId: string;
+    previousResultId: string | null;
+    respondentKind: string;
+    employmentStatus: string;
+  };
+  /** 受験画面の「開始する」から先を API で済ませて送信する（つながりは送信のときに決まる。11-1 §2.7.3） */
+  const startAndSubmit = async (sessionId: string) => {
+    await page.getByTestId("start-button").click();
+    await page.waitForURL(questionsUrl(sessionId));
+    await saveStepsViaApi(page, sessionId, 4);
+    const submitted = await page.request.post(`/api/v1/respondent/sessions/${sessionId}/submit`);
+    expect(submitted.status()).toBe(200);
+    return emulatorTask<ResultOfSession>("result-of-session", sessionId);
+  };
+
+  // 前回の受験 P（同じ組織の送信済みの求職者の受験）
+  const previousSessionId = await registerViaApi(page, organizationId);
+  await startViaApi(page, previousSessionId);
+  await saveStepsViaApi(page, previousSessionId, 4);
+  expect(
+    (await page.request.post(`/api/v1/respondent/sessions/${previousSessionId}/submit`)).status(),
+  ).toBe(200);
+  const previous = emulatorTask<ResultOfSession>("result-of-session", previousSessionId);
+  expect(previous.previousResultId).toBeNull();
+
+  // 再受験リンク: 見た目は既存スタッフ用リンクと同じ。prev は画面に出さない
+  const registrations: Array<Record<string, unknown>> = [];
+  page.on("request", (req) => {
+    if (req.method() === "POST" && new URL(req.url()).pathname === "/api/v1/respondent/sessions") {
+      registrations.push(req.postDataJSON() as Record<string, unknown>);
+    }
+  });
+  await page.goto(linkUrl(organizationId, "executives", previous.resultId));
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("受験者登録(幹部用)");
+  expect(await page.locator("body").innerText()).not.toContain(previous.resultId);
+  await expect(page.locator(`[value="${previous.resultId}"]`)).toHaveCount(0);
+  await fillRegistration(page);
+  await page.getByTestId("register-submit").click();
+  await page.waitForURL(/\/exam\/[A-Za-z0-9]+$/);
+  const sessionId = sessionIdFromUrl(page.url());
+  // 登録の本文に前回の結果の ID を付ける（prev が文書 ID の形のときだけ。11-1 §2.2.6 の手順 4）
+  expect(registrations).toEqual([
+    expect.objectContaining({ kind: "executive", previousResultId: previous.resultId }),
+  ]);
+  const linked = await startAndSubmit(sessionId);
+  expect(linked).toMatchObject({
+    previousResultId: previous.resultId,
+    respondentKind: "executive",
+    employmentStatus: "employed",
+  });
+
+  // 同じ再受験リンクでもう 1 人受けると、P はすでにほかの結果の前回なのでつながらない（通常の既存スタッフの受験。K-31 ①）
+  const secondSessionId = await registerViaUi(
+    page,
+    organizationId,
+    {},
+    "executives",
+    previous.resultId,
+  );
+  expect(registrations).toHaveLength(2);
+  expect(registrations[1]).toMatchObject({ previousResultId: previous.resultId });
+  const second = await startAndSubmit(secondSessionId);
+  expect(second).toMatchObject({
+    previousResultId: null,
+    respondentKind: "executive",
+    employmentStatus: "employed",
+  });
 });

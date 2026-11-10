@@ -10,9 +10,11 @@ export const e2eName = (): string => `E2E-${Date.now()}-${++seq}`;
 /** 見本の電話番号（実在しない値） */
 export const SAMPLE_PHONE = "00000000000";
 
-/** 受験リンク。p を省くと p の無いリンク */
-export const linkUrl = (organizationId: string, p?: string): string =>
-  p === undefined ? `/exam?q=${organizationId}` : `/exam?q=${organizationId}&p=${p}`;
+/** 受験リンク。p を省くと p の無いリンク。prev を付けると再受験リンク（11-1 §2.2.8） */
+export const linkUrl = (organizationId: string, p?: string, prev?: string): string => {
+  const base = p === undefined ? `/exam?q=${organizationId}` : `/exam?q=${organizationId}&p=${p}`;
+  return prev === undefined ? base : `${base}&prev=${prev}`;
+};
 
 export function sessionIdFromUrl(url: string): string {
   const match = /\/exam\/([A-Za-z0-9]+)/.exec(new URL(url).pathname);
@@ -79,8 +81,9 @@ export async function registerViaUi(
   organizationId: string,
   values: RegistrationValues = {},
   p: string | undefined = "user",
+  prev?: string,
 ): Promise<string> {
-  await page.goto(linkUrl(organizationId, p));
+  await page.goto(linkUrl(organizationId, p, prev));
   await fillRegistration(page, values);
   await page.getByTestId("register-submit").click();
   await page.waitForURL(/\/exam\/[A-Za-z0-9]+$/);

@@ -100,6 +100,7 @@ export async function registerAndSave(
     phoneNumber: `090-0000-${String(index).padStart(4, "0")}`,
     occupationCode: OCCUPATION_CODES[index % OCCUPATION_CODES.length]!, // マスタのコードを順に選ぶ（9 は欠番）
     diagnosisExperience: index % 3 === 0 ? "experienced" : "first_time",
+    previousResultId: null, // 再受験のつながりは作らない
     sessionTokenHash: token.tokenHash,
     tokenExpiresAt: token.expiresAt,
     meta,

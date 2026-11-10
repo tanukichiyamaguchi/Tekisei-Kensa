@@ -1,7 +1,8 @@
-// M7-exam-05 のうち p の判定（prev の観点は PR-7.4）、M7-exam-07 入力の規則（11-1 §2.2.1・§2.2.5・§3.5、K-42）。
+// M7-exam-05 p と prev の判定、M7-exam-07 入力の規則（11-1 §2.2.1・§2.2.5・§2.2.8・§3.5、K-42）。
 // U-03 の登録の入力規則と電話番号の部分は、この 2 つに置き換えた（11-1 §5.5）
 import { describe, expect, it } from "vitest";
 
+import { docIdSchema } from "@/lib/db/schemas/values";
 import { OCCUPATIONS } from "@/lib/masters/occupations";
 import { CHOICE_OPTIONS, isChoiceCode } from "@/lib/presentation/exam-choices";
 import {
@@ -13,6 +14,7 @@ import {
   normalizeText,
   OCCUPATION_OPTIONS,
   PHONE_MAX_LENGTH,
+  previousResultIdFromParam,
   validateRegistration,
   validateRegistrationField,
   type RegistrationDraft,
@@ -37,6 +39,40 @@ describe("M7-exam-05 p の判定（kindFromLinkParam）", () => {
       expect(kindFromLinkParam(p)).toBe("applicant");
     },
   );
+});
+
+describe("M7-exam-05 prev の判定（previousResultIdFromParam。11-1 §2.2.8）", () => {
+  /** 文書 ID の形の見本（架空の ID） */
+  const accepted = ["ResExample0000000001", "a", "Z9", "a".repeat(128)];
+  /** 形の違う見本と、その説明 */
+  const rejected: ReadonlyArray<readonly [string | undefined, string]> = [
+    [undefined, "無い"],
+    ["", "空"],
+    ["a/b", "区切りの記号"],
+    ["a".repeat(129), "129 文字"],
+    ["bad-id", "記号"],
+    ["Res Example", "空白"],
+    ["Res%2FExample", "符号化した記号"],
+    ["結果0000000001", "全角の文字"],
+    ["ＲｅｓＥｘａｍｐｌｅ", "全角の英字"],
+  ];
+
+  it("英数字 1〜128 文字だけをそのまま返す", () => {
+    for (const prev of accepted) expect(previousResultIdFromParam(prev)).toBe(prev);
+  });
+
+  it("無い・空・a/b・129 文字・記号や空白や全角を含む値は undefined", () => {
+    for (const [prev, label] of rejected) {
+      expect(previousResultIdFromParam(prev), label).toBeUndefined();
+    }
+  });
+
+  it("サーバの docIdSchema（04 §2.1）と同じ判定（同じ見本の値で一致）", () => {
+    for (const prev of accepted) expect(docIdSchema.safeParse(prev).success, prev).toBe(true);
+    for (const [prev, label] of rejected) {
+      if (prev !== undefined) expect(docIdSchema.safeParse(prev).success, label).toBe(false);
+    }
+  });
 });
 
 describe("M7-exam-07 入力の規則", () => {

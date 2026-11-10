@@ -23,6 +23,7 @@ export interface RegisterRespondentInput {
   readonly phoneNumber: string; // 前後の空白を除いた入力のまま（正規化しない。11-1 §2.2.5）
   readonly occupationCode: number;
   readonly diagnosisExperience: DiagnosisExperience;
+  readonly previousResultId: string | null; // 前回の候補（service が判定済み。11-1 §2.2.8）
   readonly sessionTokenHash: string;
   readonly tokenExpiresAt: Date;
   readonly meta: RequestMeta;
@@ -36,7 +37,8 @@ export interface RegisteredRespondent {
 /**
  * 受検者登録。respondents / assessmentSessions / auditLogs（respondent.register）を 1 バッチで作成する（11-1 §3.4.1）。
  * 利用履歴（usageLogs）は作らず、送信のときに作る（respondents.usageLogId は null。11-1 §2.7.4）。
- * 2 文書の ID は事前に採番し相互参照フィールドに入れる（I-1）
+ * kind と前回の候補 previousResultId は service が判定した値をそのまま書く（候補を受け付けたら kind は executive。11-1 §2.2.8）。
+ * チーム未設定・集計に含むで登録し、前回の値は引き継がない（K-39 Q-34）。2 文書の ID は事前に採番し相互参照フィールドに入れる（I-1）
  */
 export async function registerRespondent(
   input: RegisterRespondentInput,
@@ -66,7 +68,7 @@ export async function registerRespondent(
       sessionId: sessionRef.id,
       usageLogId: null, // 利用履歴は送信のときに作る（11-1 §2.7.4）
       resultId: null,
-      previousResultId: null, // 前回の候補（11-1 §3.2.1）。候補の判定（11-1 §2.2.8）はまだ行わない
+      previousResultId: input.previousResultId, // 前回の候補（11-1 §3.2.1）。送信のあとも変えない（I-M7-3）
       deletedAt: null,
     },
     "respondents",
@@ -101,8 +103,8 @@ export async function registerRespondent(
     action: "respondent.register",
     targetCollection: COLLECTIONS.respondents,
     targetId: respondentRef.id,
-    // 前回の候補を受け付けたら true（11-1 §2.7.5）。候補の判定（11-1 §2.2.8）を入れるまでは常に false
-    details: { kind: input.kind, previousCandidate: false },
+    // kind は保存した受検者区分。previousCandidate は前回の候補を受け付けたら true（11-1 §2.7.5）。前回の結果の ID は書かない
+    details: { kind: input.kind, previousCandidate: input.previousResultId !== null },
     ipAddress: input.meta.ipAddress,
     userAgent: input.meta.userAgent,
   });

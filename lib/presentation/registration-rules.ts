@@ -122,6 +122,20 @@ export function kindFromLinkParam(p: string | undefined): RespondentKind {
   return p === "executives" ? "executive" : "applicant";
 }
 
+/**
+ * 文書 ID の形（英数字 1〜128 文字）。lib/db/schemas/values.ts の docIdSchema と同じ規則
+ * （values.ts は firebase-admin を読むため、Client の RegistrationForm も読む本ファイルからは import しない）
+ */
+const DOC_ID_PATTERN = /^[A-Za-z0-9]{1,128}$/;
+
+/**
+ * 再受験リンクの prev → 前回の結果の ID（11-1 §2.2.1・§2.2.8・§3.5）。文書 ID の形のときだけその値を返し、
+ * 無い・空・形が違うときは undefined（候補になるかは登録のときにサーバが判定する）
+ */
+export function previousResultIdFromParam(prev: string | undefined): string | undefined {
+  return prev !== undefined && DOC_ID_PATTERN.test(prev) ? prev : undefined;
+}
+
 /** 職業の選択肢（00 §1.10 の順、表示名そのまま。マスタ lib/masters/occupations.ts を正とする） */
 export const OCCUPATION_OPTIONS: ReadonlyArray<{ readonly code: number; readonly label: string }> =
   OCCUPATIONS.map((o) => ({ code: o.code, label: o.label }));

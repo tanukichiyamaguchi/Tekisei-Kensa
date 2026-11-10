@@ -3,8 +3,8 @@
 | 項目 | 内容 |
 |---|---|
 | 文書名 | 適性検査システム 基本設計 04 API・サーバ処理設計 |
-| 版 | 2.3 |
-| 作成日 | 2026-09-17（1.1 版: 2026-09-19、1.2 版: 2026-09-21、2.0 版: 2026-09-21。技術構成の変更（Supabase → Firebase。10 K-06）を反映した全面改版。2.1 版: 2026-09-21。Firebase 化後の分冊間整合（02 2.1 版の関数名・型名に統一）。2.2 版: 2026-09-24。本番デプロイで判明した事項の反映。2.3 版: 2026-11-09。M7 の PR-7.3（受検者画面。11 総論 5.4、11-1 §3.4）。改版履歴は §12） |
+| 版 | 2.4 |
+| 作成日 | 2026-09-17（1.1 版: 2026-09-19、1.2 版: 2026-09-21、2.0 版: 2026-09-21。技術構成の変更（Supabase → Firebase。10 K-06）を反映した全面改版。2.1 版: 2026-09-21。Firebase 化後の分冊間整合（02 2.1 版の関数名・型名に統一）。2.2 版: 2026-09-24。本番デプロイで判明した事項の反映。2.3 版: 2026-11-09。M7 の PR-7.3（受検者画面。11 総論 5.4、11-1 §3.4）。2.4 版: 2026-11-10。M7 の PR-7.4（再受験のつながりと母集団。11 総論 5.4、11-1 §3.4.1・§3.4.3、11-5 §2.1）。改版履歴は §12） |
 | 対象 | 実装者（Route Handler、`lib/services/`、`lib/auth/`、`lib/db/` の実装担当）、05〜08 分冊の設計者 |
 
 ## 0. 本書の位置づけ
@@ -777,7 +777,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ resu
 
 ## 4. 受検者 API
 
-受検者 API はすべて Admin SDK（`lib/db/`。サービスアカウント）で Firestore にアクセスします（00 D-23、D-28）。セキュリティルールは適用されないため、§2.5.2 のコンテキストが示す `sessionId`・`respondentId`・`organizationId` 以外の文書に触れないことを service の責任とします。複数文書の整合が必要な書き込み（登録・送信）は 02 のリポジトリ関数がバッチ／トランザクションで行い、service はそれを 1 回呼びます（00 §2.2、§6「複製フィールドの同期手順は 02 が定め、04 はそれを `lib/services/` から呼ぶ」）。受検者 API が書く文書（2.3 版。11-1 §3.4）: 登録は `respondents`・`assessmentSessions`・`auditLogs` の 3 文書（利用履歴は作らない）。送信は `results` の作成と `assessmentSessions`・`respondents` の更新、利用履歴の作成（M7 より前の登録で文書があればその更新）、`auditLogs`。
+受検者 API はすべて Admin SDK（`lib/db/`。サービスアカウント）で Firestore にアクセスします（00 D-23、D-28）。セキュリティルールは適用されないため、§2.5.2 のコンテキストが示す `sessionId`・`respondentId`・`organizationId` 以外の文書に触れないことを service の責任とします。複数文書の整合が必要な書き込み（登録・送信）は 02 のリポジトリ関数がバッチ／トランザクションで行い、service はそれを 1 回呼びます（00 §2.2、§6「複製フィールドの同期手順は 02 が定め、04 はそれを `lib/services/` から呼ぶ」）。受検者 API が書く文書（2.3 版。11-1 §3.4）: 登録は `respondents`・`assessmentSessions`・`auditLogs` の 3 文書（利用履歴は作らない）。送信は `results` の作成と `assessmentSessions`・`respondents` の更新、利用履歴の作成（M7 より前の登録で文書があればその更新）、前回の結果の `updatedAt`（再受験のつながりを確定するときだけ。2.4 版）、`auditLogs`。登録のとき、同じ組織の `results` を前回の候補の判定のためだけに読みます（指標・氏名は読まない。前回の結果は判定に使う `organizationId`・`deletedAt` だけを射影して読み、その結果を前回とする次の受験（Q-M7-1）は有無だけを見るので文書名だけを読む。送信で読むときも同じ。11-1 §3.4.1。2.4 版）。
 
 ### 4.1 受検リンクの検証 `GET /api/v1/respondent/organizations/{organizationId}`
 
@@ -823,21 +823,24 @@ export async function GET(request: Request, { params }: { params: Promise<{ resu
 |---|---|
 | 認可 | なし。レート制限あり（§2.8） |
 | 前提 | 組織が存在し論理削除されていない |
-| 処理 | 1 つの WriteBatch で `respondents`、`assessmentSessions`、`auditLogs` に 1 文書ずつ作成（§4.2.2）。利用履歴（`usageLogs`）は作らない（送信のときに作る。11-1 §2.7.4。2.3 版）。応答で Cookie `tk_session` を発行 |
-| 監査ログ | `respondent.register`（actor `respondent`、`details: { kind, previousCandidate }`。`previousCandidate` は前回の候補を受け付けたら `true`。候補の判定は PR-7.4 で、それまでは常に `false`。11-1 §2.7.5）。同じバッチに積む |
+| 処理 | 組織の確認・レート制限のあと、前回の候補を判定する（再受験リンクの `prev`。`results` の読み取り 1 回と Q-M7-1 のクエリ 1 回。11-1 §2.2.8。2.4 版。§4.2.1）。1 つの WriteBatch で `respondents`、`assessmentSessions`、`auditLogs` に 1 文書ずつ作成（§4.2.2）。利用履歴（`usageLogs`）は作らない（送信のときに作る。11-1 §2.7.4。2.3 版）。応答で Cookie `tk_session` を発行 |
+| 監査ログ | `respondent.register`（actor `respondent`、`details: { kind, previousCandidate }`。`kind` は保存した受検者区分（前回の候補を受け付けたら `executive`）、`previousCandidate` は前回の候補を受け付けたら `true`。前回の結果の ID は入れない。11-1 §2.7.5。2.4 版）。同じバッチに積む |
 
 リクエスト:
 
 ```json
 {
   "organizationId": "Org7Kq2mN4pR8sT1vW3x",
-  "kind": "applicant",
+  "kind": "executive",
   "name": "見本 花子",
   "phoneNumber": "00000000000",
   "occupationCode": 2,
-  "diagnosisExperience": "first_time"
+  "diagnosisExperience": "first_time",
+  "previousResultId": "ResExample0000000001"
 }
 ```
+
+- `previousResultId` は再受験リンク（`/exam?q={organizationId}&p=executives&prev={前回の resultId}`）の `prev` で、画面は文書 ID の形のときだけ付けます（任意。11-1 §2.2.6 の手順 4・§2.2.8。2.4 版）。上の例は再受験リンクで受けたときの本文です（`p=executives` なので `kind` は `executive`。11-1 §3.4.1 の例と同じ形）。受験リンク・既存スタッフ用リンクで受けたときは `previousResultId` を付けません。
 
 zod スキーマ:
 
@@ -858,12 +861,12 @@ export const registerRespondentInputSchema = z.object({
   phoneNumber: requiredText(PHONE_MAX_LENGTH),    // 前後の空白を除いて 1〜30 文字（K-42）。書式は検査せず、正規化しない（K-39 Q-17）
   occupationCode: occupationCodeSchema,           // 1〜8、10（K-21）。旧コード 9 は保存済み文書の検証（storedOccupationCodeSchema）だけが読み、新規登録では受け付けない
   diagnosisExperience: z.enum(DIAGNOSIS_EXPERIENCES),
+  previousResultId: z.string().max(200).optional(),  // 再受験リンクの prev。文書 ID の形でなければ service が無視する（422 にしない。11-1 §3.4.1。2.4 版）
 });
 export type RegisterRespondentInput = z.infer<typeof registerRespondentInputSchema>;
 ```
 
 - 2.2 版までの電話番号の正規化（`lib/utils/phone-number.ts` の `normalizePhoneNumber` と `PHONE_PATTERN`。05 と共有していた。D05-16）は、2.3 版で登録の検証から外しました（11-1 §2.2.5。ファイルは残す）。
-- 前回の候補 `previousResultId`（再受験リンクの `prev`）は PR-7.4 が足します（11-1 §3.4.1）。
 
 レスポンス（201）と `Set-Cookie`:
 
@@ -871,7 +874,7 @@ export type RegisterRespondentInput = z.infer<typeof registerRespondentInputSche
 {
   "sessionId": "Ses3aB5cD7eF9gH1jK2m",
   "organizationId": "Org7Kq2mN4pR8sT1vW3x",
-  "kind": "applicant",
+  "kind": "executive",
   "status": "draft",
   "tokenExpiresAt": "2026-09-24T01:23:45.678Z",
   "nextUrl": "/exam/Ses3aB5cD7eF9gH1jK2m"
@@ -882,11 +885,13 @@ export type RegisterRespondentInput = z.infer<typeof registerRespondentInputSche
 Set-Cookie: tk_session=<base64url 43 文字>; Path=/; Expires=<tokenExpiresAt>; HttpOnly; Secure; SameSite=Lax
 ```
 
+- 応答の `kind` は保存した受検者区分です（前回の候補を受け付けたら、入力が `applicant` でも `executive`。11-1 §3.4.1。2.4 版）。上の例は前回の候補を受け付けたとき、受け付けなかったときのどちらでも同じ形です（入力が `executive`）。候補の有無で応答の状態・Cookie・エラーを変えず、受験者に何も知らせません。形の違う値は `results` を読まずに候補なしとし、ほかの組織の結果・存在しない ID・論理削除済みは `results` の読み取り 1 回で止まります（Q-M7-1 は読まない。11-1 §2.2.8 の手順 1・2）。どれも候補なしとして同じ応答になります（`prev` からほかの組織の結果の有無は分からない）。
+
 エラー:
 
 | HTTP | code | 条件 |
 |---:|---|---|
-| 422 | `VALIDATION_ERROR` | 必須欠落、お名前 101 文字以上・電話番号 31 文字以上（前後の空白を除いて）、職業・過去の診断経験の値の不正、`organizationId` の形の不正（`path` が `organizationId`） |
+| 422 | `VALIDATION_ERROR` | 必須欠落、お名前 101 文字以上・電話番号 31 文字以上（前後の空白を除いて）、職業・過去の診断経験の値の不正、`organizationId` の形の不正（`path` が `organizationId`）、`previousResultId` が文字でない（`null`・数値など）・201 文字以上（`path` が `previousResultId`。2.4 版。200 文字以内の文字なら、文書 ID の形でなくても 422 にせず候補なしとして登録する） |
 | 404 | `ORGANIZATION_NOT_FOUND` | 組織なし・論理削除済み |
 | 429 | `RATE_LIMITED` | 同一組織・同一 IP で 10 分に 20 件超 |
 
@@ -901,9 +906,10 @@ export async function registerRespondent(input: RegisterRespondentInput, request
 
 1. `getOrganization(input.organizationId)` で組織を検証（§4.1 と同じ条件）。
 2. レート制限の判定（§2.8）。
-3. `issueRespondentToken(now)` でトークンを発行。
-4. 02 の `registerRespondent(input)`（§4.2.2）を呼び、`respondentId`・`sessionId` を得る（service の関数名も `registerRespondent` だが、モジュールが異なる（`lib/services/respondent-registration.ts` と `lib/db/repositories/respondents-repository.ts`）。service 側は import 時に `registerRespondent as registerRespondentDocs` の別名を付ける）。
-5. 応答に Cookie を付けて返す。**生のトークンは応答ボディに含めない**（Cookie のみ。00 D-32）。
+3. 前回の候補の判定（11-1 §2.2.8。2.4 版）: `input.previousResultId` が無い、または文書 ID の形（`docIdSchema`）でなければ候補なし。形が合えば 02 の `canLinkAsPrevious({ organizationId, resultId })` が真のときだけ候補（同じ組織の論理削除されていない結果で、まだほかの結果の前回になっていないもの。10 K-31 ①）。候補ありなら受検者区分を `executive` にする（入力が `applicant` でも。11-1 §1.4 の 7）。候補の有無を受験者に知らせず、前回の結果の ID をログに出さない。
+4. `issueRespondentToken(now)` でトークンを発行。
+5. 02 の `registerRespondent(input)`（§4.2.2。前回の候補と、それに合わせた受検者区分を渡す）を呼び、`respondentId`・`sessionId` を得る（service の関数名も `registerRespondent` だが、モジュールが異なる（`lib/services/respondent-registration.ts` と `lib/db/repositories/respondents-repository.ts`）。service 側は import 時に `registerRespondent as registerRespondentDocs` の別名を付ける）。
+6. 応答（`kind` は保存した値）に Cookie を付けて返す。**生のトークンは応答ボディに含めない**（Cookie のみ。00 D-32）。
 
 - 推定: 既存では受検者が登録のたびに User レコードとして作成される（要件定義書 §8.1）ため、同一人物の再登録は別レコードになると推定します（同一人物の再登録の扱いは要件定義書・付録に記載なし）。新システムでも 00 §1.1 の定義「1 文書 = 1 回の受検登録」に従い、同じ人が再度リンクから登録すれば別の受検者文書ができます。
 - 設計判断 D04-16: 重複登録の抑止（同一電話番号の検出など）は要件に無いため行いません。誤って二重に登録された受検者は管理者が一覧から削除できます（要件定義書 §6.2 A-05）。同じ端末・同じブラウザで受験画面を開き直すと、未回答の設問がある最初のステップから表示します（11-1 §2.4.8。2.3 版で、受験リンクを開き直したときの再開の案内（`resumable`）を画面から使わなくなった）。
@@ -921,6 +927,7 @@ export interface RegisterRespondentInput {
   readonly phoneNumber: string;             // 前後の空白を除いた入力のまま（正規化しない。11-1 §2.2.5）
   readonly occupationCode: number;
   readonly diagnosisExperience: DiagnosisExperience;
+  readonly previousResultId: string | null; // 前回の候補（service が判定済み。11-1 §2.2.8。2.4 版）
   readonly sessionTokenHash: string;        // sha256 hex
   readonly tokenExpiresAt: Date;
   readonly meta: RequestMeta;               // respondent.register の ipAddress / userAgent（監査ログはリポジトリが同じバッチに書く）
@@ -937,9 +944,9 @@ export function registerRespondent(input: RegisterRespondentInput): Promise<Regi
 
 | コレクション | 文書 ID | 主なフィールド |
 |---|---|---|
-| `respondents` | 採番 | `organizationId`、`kind`、`name`、`phoneNumber`、`occupationCode`、`diagnosisExperience`、`teamCode: null`、`isExcluded: false`、`sessionId`、`usageLogId: null`（送信のときに書く。02 D02-36）、`previousResultId: null`（前回の候補の判定は PR-7.4）、`resultId: null`、`deletedAt: null`、`createdAt`／`updatedAt`（`serverTimestamp()`） |
+| `respondents` | 採番 | `organizationId`、`kind`、`name`、`phoneNumber`、`occupationCode`、`diagnosisExperience`、`teamCode: null`、`isExcluded: false`、`sessionId`、`usageLogId: null`（送信のときに書く。02 D02-36）、`previousResultId`（前回の候補か `null`。2.4 版）、`resultId: null`、`deletedAt: null`、`createdAt`／`updatedAt`（`serverTimestamp()`） |
 | `assessmentSessions` | 採番（URL の `{sessionId}`） | `organizationId`、`respondentId`、`status: "draft"`、`sessionTokenHash`、`tokenExpiresAt`、`answers: {}`、`startedAt: null`、`lastSavedStepNo: null`（02 D02-37。`lastSavedPageNo` は書かない。2.3 版）、`lastAnsweredAt: null`、`submittedAt: null`、`resultId: null`、`deletedAt: null`、監査フィールド |
-| `auditLogs` | 採番 | §2.6 の `respondent.register`（`actorKind: "respondent"`、`actorUid` = 採番した `respondentId`、`targetCollection: "respondents"`、`targetId` = 同じ、`details: { kind, previousCandidate: false }`） |
+| `auditLogs` | 採番 | §2.6 の `respondent.register`（`actorKind: "respondent"`、`actorUid` = 採番した `respondentId`、`targetCollection: "respondents"`、`targetId` = 同じ、`details: { kind, previousCandidate }`。`kind` は保存した受検者区分、`previousCandidate` は前回の候補があれば `true`。2.4 版） |
 
 - `deletedAt: null` を作成時に明示的に書くのは、母集団クエリの `deletedAt == null` 条件に一致させるためです（00 §1.11、§2.1）。
 - `sessionTokenHash` の一意性: 32 バイトの乱数由来のため、存在確認は行いません（00 §2.1）。
@@ -1134,9 +1141,9 @@ export function questionNosOfStep(stepNo: number): ReadonlySet<QuestionNo> {
 |---|---|
 | 認可 | セッショントークン、`status == "draft"` |
 | リクエスト | 本文なし。**最終ページの回答は事前に §4.4 で保存されていること**（送信 API は回答を受け取らない。設計判断 D04-20: 保存と送信を分けることで、送信失敗時も回答が失われない） |
-| 処理 | トランザクション 1 回（02 の `submitSession({ sessionId, meta }, deps)`。02 §8.4）の中で、`assessmentSessions` を読み → `status` 検査 → `assertAnswerMap`（03）→ `scoreAnswers`（03。純関数、数十 ms）→ `results` 作成、`assessmentSessions.status = "submitted"`、`respondents`（`resultId`・`usageLogId`）、利用履歴の作成（M7 より前の登録で文書があれば `resultId`・`submittedAt` の更新。11-1 §2.7.4。2.3 版）、`auditLogs`（`session.submit`）の 5 書き込みをコミットする（00 §2.2）。前回の結果のつながり（`results.previousResultId` と前回の結果の `updatedAt`）は PR-7.4（11-1 §2.7.3） |
+| 処理 | トランザクション 1 回（02 の `submitSession({ sessionId, meta }, deps)`。02 §8.4）の中で、`assessmentSessions` を読み → `status` 検査 → `assertAnswerMap`（03）→ `scoreAnswers`（03。純関数、数十 ms）→ `results` 作成、`assessmentSessions.status = "submitted"`、`respondents`（`resultId`・`usageLogId`）、利用履歴の作成（M7 より前の登録で文書があれば `resultId`・`submittedAt` の更新。11-1 §2.7.4。2.3 版）、前回の結果の `updatedAt`（再受験のつながりを確定するときだけ）、`auditLogs`（`session.submit`）の 5 書き込み（つなぐときは 6）をコミットする（00 §2.2）。前回の候補（`respondents.previousResultId`）があれば、同じトランザクションの中で前回の結果と Q-M7-1 を読んでつなぐかを決める（11-1 §2.7.3。2.4 版） |
 | 二重送信防止 | (1) service がトランザクション前に `ctx.status` を確認し 409。(2) トランザクション内で読み直した `status != "draft"` なら中断して 409（楽観ロックにより、同時リクエストの片方だけがコミットに成功する。D04-59）。(3) 画面は送信中の印を立て、以後の「送信する」を無視する（11-1 §2.4.7） |
-| 監査ログ | `session.submit`（同じトランザクション。`details: { scoringVersion, linkedPrevious }`、`targetCollection: "results"`、`targetId` = 採番した `resultId`。`linkedPrevious` は前回の結果につないだら `true`。つなぐのは PR-7.4 で、それまでは常に `false`。11-1 §2.7.5） |
+| 監査ログ | `session.submit`（同じトランザクション。`details: { scoringVersion, linkedPrevious }`、`targetCollection: "results"`、`targetId` = 採番した `resultId`。`linkedPrevious` は前回の結果につないだら `true`。前回の結果の ID は入れない。11-1 §2.7.5。2.4 版） |
 
 処理手順（`lib/services/submission.ts`）:
 
@@ -1147,13 +1154,14 @@ export async function submitSession(ctx: RespondentSessionContext): Promise<{ re
 1. `ctx.status !== "draft"` なら 409 `SESSION_ALREADY_SUBMITTED`。
 2. 02 の `submitSession({ sessionId, meta: ctx.request }, { scoreAnswers, assertAnswerMap })`（02 §8.4。service の `submitSession` とは別モジュール。import 時に別名を付ける）を呼ぶ。採点関数（03）は `deps` として service が渡し、リポジトリはトランザクションの中で次を行う:
    1. `assessmentSessions/{sessionId}` を `transaction.get`。無い、または `deletedAt != null` なら `SESSION_NOT_FOUND`（トークン検証の直後に削除された場合のみ）。`status != "draft"` なら `SESSION_ALREADY_SUBMITTED`。
-   2. `respondents/{respondentId}` を `transaction.get`（`kind`・`teamCode`・`isExcluded` を `results` に複製するため。00 D-34）。`respondent.usageLogId` が `null` でなければ `usageLogs/{usageLogId}` を `transaction.get`（M7 より前の登録の利用履歴。02 D02-36。クエリではなく `get`。2.3 版）。**読み取りはすべて書き込みの前に行う**（Firestore のトランザクションの制約。実装時確認）。
+   2. `respondents/{respondentId}` を `transaction.get`（`kind`・`teamCode`・`isExcluded` を `results` に複製するため。00 D-34）。`respondent.usageLogId` が `null` でなければ `usageLogs/{usageLogId}` を `transaction.get`（M7 より前の登録の利用履歴。02 D02-36。クエリではなく `get`。2.3 版）。`respondent.previousResultId`（前回の候補）が `null` でなく文書 ID の形（`docIdSchema`）なら、`results/{previousResultId}`（判定に使う `organizationId`・`deletedAt` だけを射影して `transaction.getAll` で読む。指標・氏名は読まない）と Q-M7-1（同じ組織で `previousResultId == 前回の候補` かつ `deletedAt == null` の `results`、limit 1。02 の `nextResultsQuery()` に `select()` を付けて、有無だけを見るので文書名だけを読む）を `transaction.get`（候補の無い受験と M7 より前の受検者は読まない。文書 ID の形でない候補も読まずにつながない: 登録は形を確かめた値しか書かないが、想定外の値で送信全体を失敗させないための守り。2.4 版）。**読み取りはすべて書き込みの前に行う**（Firestore のトランザクションの制約。実装時確認）。つなぐのは、前回の文書があり、`organizationId` が同じで、`deletedAt == null`、かつ Q-M7-1 が 0 件のときだけ（11-1 §2.7.3 の手順 3。10 K-31 ①）。つながないときも受検者区分（`executive`）と区分（在籍）はそのままで、受験者に知らせない。
    3. `answers` map を `toAnswerMap()`（02 §5.5 の mapper。キーを数値に変換）で `Record<number, number>` にし、`assertAnswerMap(map)`（03 §2.3）。`InvalidAnswerMapError` はトランザクションを中断して 422 `ANSWERS_INCOMPLETE` に変換し、`details.missing` に欠落設問番号（昇順）を入れる。`invalid` が空でなければ同じコードで `details.invalid` に設問番号だけを入れる（値は入れない）。採点前の検証のため、例外による中断では何も書かれない。
    4. `scoreAnswers(map)` → `ScoreResult`。`scoringVersion` は `SCORING_VERSION`。純関数のためトランザクションが再試行されても結果は同じ。
-   5. `results` を採番して `create`: `organizationId`、`respondentId`、`sessionId`、`ScoreResult` の全フィールド（map のまま。`toResultDocFields(score)`。02 §5.5 `lib/db/mappers/`）、`submittedAt`（トランザクション内で採った `Timestamp.now()`。3 文書で同じ値。02 §8.1）、複製フィールド `respondentKind`・`teamCode`・`isExcluded`（`respondents` の値）、`aiGenerationStatus: "not_generated"`、`aiGenerationStartedAt: null`、`aiGenerationError: null`、`latestAiAnalysisId: null`、`deletedAt: null`、監査フィールド。M7 の項目: 区分 `employmentStatus = initialEmploymentStatus(respondent.kind)`（`applicant` → 求職者、`executive` → 在籍）、`hiredOn`・`leftOn`・`staffRole`・`previousResultId` = `null`、AI の 3 系統の作成時の値（11-1 §2.7.2、02 §8.4）。
+   5. `results` を採番して `create`: `organizationId`、`respondentId`、`sessionId`、`ScoreResult` の全フィールド（map のまま。`toResultDocFields(score)`。02 §5.5 `lib/db/mappers/`）、`submittedAt`（トランザクション内で採った `Timestamp.now()`。3 文書で同じ値。02 §8.1）、複製フィールド `respondentKind`・`teamCode`・`isExcluded`（`respondents` の値）、`aiGenerationStatus: "not_generated"`、`aiGenerationStartedAt: null`、`aiGenerationError: null`、`latestAiAnalysisId: null`、`deletedAt: null`、監査フィールド。M7 の項目: 区分 `employmentStatus = initialEmploymentStatus(respondent.kind)`（`applicant` → 求職者、`executive` → 在籍）、`hiredOn`・`leftOn`・`staffRole` = `null`、`previousResultId` = つないだ前回の結果の ID（つながなければ `null`。2.4 版）、AI の 3 系統の作成時の値（11-1 §2.7.2、02 §8.4）。
    6. `assessmentSessions` を `update`: `status: "submitted"`、`submittedAt: serverTimestamp()`、`resultId`。`answers` はそのまま残す（再採点や検証に使う）。
    7. `respondents` を `update`: `resultId`・`usageLogId`。利用履歴: `usageLogId` の文書があれば `update`（`resultId`、`submittedAt`。M7 より前の登録）、無ければ（`usageLogId` が `null`、または文書が無い）`create`（ID はトランザクションの外で採番。`organizationId`、`respondentId`、`resultId`、`respondentKind = respondent.kind`、`name`・`phoneNumber`・`diagnosisExperience` は受検者から写す、`registeredAt = respondents.createdAt`、`submittedAt`（結果と同じ値）。`usageLogCreateSchema` は `resultId`・`submittedAt` を必須にする。11-1 §2.7.4・§3.2.4。2.3 版）。
-   8. `auditLogs` を `create`（`session.submit`）。
+   8. つなぐときだけ、前回の結果に `updatedAt`（`serverTimestamp()`）だけを `update` する（同じ前回につなごうとする 2 つの送信を直列にし、やり直した側が Q-M7-1 で止まる。02 §10 の I-M7-2。2.4 版）。`respondents.previousResultId` は書き換えない（I-M7-3）。
+   9. `auditLogs` を `create`（`session.submit`。`linkedPrevious` はつないだら `true`）。
 3. リポジトリの例外を変換: `SESSION_ALREADY_SUBMITTED` → 409、`ANSWERS_INCOMPLETE` → 422、`SESSION_NOT_FOUND` → 404。Firestore の一時的な失敗は 503 `SERVICE_UNAVAILABLE`（§2.4）。
 4. 200 を返す。Cookie は削除しない（完了画面が `GET …/sessions/{sessionId}` で状態を確認できるように残す。期限は延長しない）。
 
@@ -1196,8 +1204,9 @@ sequenceDiagram
     participant SC as lib/scoring
     participant DB as Firestore（Admin SDK）
     Note over R: 受験者登録の画面は組織を読まない（「診断に進む」で確かめる。11-1 §2.2.1）
-    R->>API: POST sessions（氏名・電話・職業・診断経験）
+    R->>API: POST sessions（氏名・電話・職業・診断経験。再受験リンクなら previousResultId）
     API->>S: registerRespondent
+    S->>DB: 前回の候補の判定（previousResultId があるとき。canLinkAsPrevious: results 1 + Q-M7-1）
     S->>DB: registerRespondent（respondents, assessmentSessions, auditLogs を 1 バッチ）
     S-->>API: sessionId + トークン
     API-->>R: 201 + Set-Cookie tk_session
@@ -1211,9 +1220,9 @@ sequenceDiagram
     end
     R->>API: POST sessions/{id}/submit（確認なし。画面はロード中）
     API->>S: submitSession
-    S->>DB: トランザクション開始: assessmentSessions, respondents, usageLogs（usageLogId があれば）を読む
+    S->>DB: トランザクション開始: assessmentSessions, respondents, usageLogs（usageLogId があれば）、前回の結果と Q-M7-1（前回の候補があれば）を読む
     S->>SC: assertAnswerMap → scoreAnswers
-    S->>DB: results 作成, status=submitted, respondents（resultId・usageLogId）, usageLogs 作成（M7 より前の登録は更新）, auditLogs session.submit をコミット
+    S->>DB: results 作成（previousResultId）, status=submitted, respondents（resultId・usageLogId）, usageLogs 作成（M7 より前の登録は更新）, 前回の結果の updatedAt（つなぐときだけ）, auditLogs session.submit をコミット
     API-->>R: 200 nextUrl=/exam/{id}/complete
     Note over R: ロード中のまま 2,000 ミリ秒待って完了画面へ（11-1 §2.4.7）
 ```
@@ -1567,7 +1576,7 @@ export type ListResultsQuery = z.infer<typeof listResultsQuerySchema>;
 |---|---|
 | 認可 | admin 以上（対象結果が見えること） |
 | クエリ | `scope=organization` または `scope=team&teamCode=A`（§2.3 `comparisonScopeQuerySchema`） |
-| 処理 | (1) 対象 `results` 1 文書を取得し `assertVisibleToAdmin`。(2) `fetchPopulation({ organizationId: ctx.organizationId, scope })`（`results-repository.ts`。00 §1.11 のコピー用クエリ。02 §8.5）で母集団を 1 回取得（`PopulationRow[]`。`resultId` 付き、`toPopulationMember` 変換済み）。(3) `compareWithPopulation(subject, population, scope)`（03 §7）をメモリ上で実行（00 D-30。集計クエリは使わない）。(4) `EmptyPopulationError` は 409 `POPULATION_EMPTY`。結果は **保存しない**（00 §1.11 の 6 番） |
+| 処理 | (1) 対象 `results` 1 文書を取得し `assertVisibleToAdmin`。(2) `fetchPopulation({ organizationId: ctx.organizationId, scope })`（`results-repository.ts`。00 §1.11 のコピー用クエリ。02 §8.5）で母集団を 1 回取得（組織の論理削除されていない全件を射影して読み、`selectPopulation()` で置き換わった結果・除外・旧版・チーム外を除く。11-5 §3.2。2.4 版。`PopulationRow[]`。`resultId` 付き）。(3) `compareWithPopulation(subject, population, scope)`（03 §7）をメモリ上で実行（00 D-30。集計クエリは使わない）。(4) `EmptyPopulationError` は 409 `POPULATION_EMPTY`。結果は **保存しない**（00 §1.11 の 6 番） |
 | 監査ログ | `result.comparison`（`details: { scope, teamCode, populationSize }`） |
 
 レスポンス（200）:
@@ -1602,7 +1611,7 @@ export type ListResultsQuery = z.infer<typeof listResultsQuerySchema>;
 ```
 
 - `traitAverages` はレーダーの「比較対象」系列（付録E §1）にそのまま使い、`traitDiffs`・`axisDeviations`・`matchScore`・`deviationScore`・`grade`・`position` と **同じ母集団** から計算されています（要件定義書 §11 の 10 番）。
-- `includesSubject` は `fetchPopulation()` が返した文書 ID に対象の `resultId` が含まれるかどうかです（00 D-05。10 K-01 で「本人を含める」が確定したため、画面で説明できるようにする。設計判断 D04-29）。対象受検者が除外（`isExcluded == true`）または別チームなら `false` になります。`select("traits", "compatibility")` で射影しても文書 ID は返るため、判定に追加の読み取りは要りません。
+- `includesSubject` は `fetchPopulation()` が返した文書 ID に対象の `resultId` が含まれるかどうかです（00 D-05。10 K-01 で「本人を含める」が確定したため、画面で説明できるようにする。設計判断 D04-29）。対象受検者が除外（`isExcluded == true`）または別チームなら `false` になります。対象が置き換わった結果（再受験の前の受験。同じ組織の論理削除されていない結果の前回になっている）でも `false` です（11-5 §2.1.2。2.4 版）。`select()` で射影しても文書 ID は返るため、判定に追加の読み取りは要りません。
 - `populationSize = 1`（本人のみ）でも 200 で返します（03 D3-09）。06 分冊は `populationSize` と `includesSubject` を表示して注記します。
 - 上の数値例は検証用データ `sample`（tests/fixtures/README.md。比較組織「組織全体」選択時の観測値）を入力にした 03 §7.7 の期待値（思考の傾向の不具合修正後）です。そのため `scope` は `organization` にしています。`populationSize: 55` は README が示唆する差分の分母（55 件）に合わせた **例示** で、新システムで同じ件数になることを意味しません。母集団の平均そのものは新システムでは再現しません（03 D3-17）。`scope=team` の応答は `"scope": { "kind": "team", "teamCode": "A" }` になる以外は同じ形です。
 
@@ -1630,7 +1639,7 @@ export async function getComparison(ctx: AdminContext, input: { readonly resultI
 ```
 
 1. `getResult({ resultId, viewer: ctx })` → `assertVisibleToAdmin(ctx, doc)`。無ければ 404 `RESULT_NOT_FOUND`。
-2. `fetchPopulation({ organizationId: ctx.organizationId, scope })`（02 §8.5。`organizationId`、`isExcluded == false`、`scoringVersion == SCORING_VERSION`、`deletedAt == null`、チーム選択時は `teamCode` の等価条件。`traits`・`compatibility` に射影。00 §1.11）。戻り値は `PopulationRow[]`（`{ resultId, traits, compatibility }`）。
+2. `fetchPopulation({ organizationId: ctx.organizationId, scope })`（02 §8.5。00 §1.11。2.4 版）: `organizationId`・`deletedAt == null` の等価条件で組織の全件を `traits`・`compatibility`・`isExcluded`・`scoringVersion`・`teamCode`・`previousResultId` に射影して読み、`selectPopulation()` で、置き換わっていない（同じ組織の論理削除されていない結果のどれの前回にもなっていない。判定は絞る前の全件で行う）・`isExcluded == false`・`scoringVersion == SCORING_VERSION`・チーム選択時は `teamCode` が一致、で絞る（11-5 §2.1.2・§3.2）。戻り値は `PopulationRow[]`（`{ resultId, traits, compatibility }`）。
 3. `population = rows`（`PopulationRow` は `PopulationMember` を拡張した型のため、そのまま 03 に渡せる）、`includesSubject = rows.some((r) => r.resultId === resultId)`。
 4. `subject = { traits: score.traits, compatibility: score.compatibility }`（対象文書から）。
 5. `compareWithPopulation(subject, population, scope)`。`EmptyPopulationError` → 409。
@@ -1638,8 +1647,8 @@ export async function getComparison(ctx: AdminContext, input: { readonly resultI
 7. `ComparisonResult` を丸めずにそのまま返す。
 
 - 対象受検者自身の `scoringVersion` が `SCORING_VERSION` と異なる場合（将来のロジック改版後）も比較は実行します（対象側の条件は付けない）。応答の `scoringVersion` は母集団の条件に使った値です。
-- 母集団のクエリ条件は 02 の `fetchPopulation()` 1 箇所に置き、本書はそれを再定義しません（00 §1.11、03 §7.1）。`admin` が呼んだ場合も幹部を含めます（00 D-06。10 K-01）。
-- 性能: 1 回の比較で母集団の `results` 文書を全件読みます（数百件規模。00 D-30）。読み取りは `select()` により `traits`・`compatibility` の 2 map に絞られ、応答時間は Firestore の 1 クエリ分（数百 ms 以内。実装時確認）に採点エンジンの計算（数 ms）を加えたものです。件数が増えた場合の見直し（集計クエリ・平均のキャッシュ）は §5.3 と同じ 5,000 件を目安にします。
+- 母集団の条件は 02 の `fetchPopulation()` と `selectPopulation()` の組に置き、本書はそれを再定義しません（00 §1.11、03 §7.1）。`admin` が呼んだ場合も幹部を含めます（00 D-06。10 K-01）。
+- 性能: 1 回の比較で組織の論理削除されていない `results` 文書を全件読みます（除外・旧版・ほかのチームを含む。チームを選んでも組織の全件。置き換わったかの判定に全件が要る。11-5 §2.1.5。2.4 版。数百件規模。00 D-30）。読み取りは `select()` により `traits`・`compatibility` の 2 map と 4 項目に絞られ、応答時間は Firestore の 1 クエリ分（数百 ms 以内。実装時確認）に採点エンジンの計算（数 ms）を加えたものです。件数が増えた場合の見直し（集計クエリ・平均のキャッシュ）は §5.3 と同じ 5,000 件を目安にします。
 
 ### 5.6 受検者の更新・削除 `PATCH/DELETE /api/v1/admin/respondents/{respondentId}`
 
@@ -1704,7 +1713,7 @@ export type UpdateRespondentInput = z.infer<typeof updateRespondentInputSchema>;
 | 503 | `SERVICE_UNAVAILABLE` | Firestore の一時的な失敗（§2.4） |
 
 - 変更が無い（同じ値）場合も 200 を返し、監査ログは書きません（読み取りだけで終わる）。
-- 除外・チームの変更は次回の比較計算（§5.5）から反映されます。比較値を保存していないため再計算処理は不要です（要件定義書 §11 の 6 番）。`results` の複製フィールドを同一バッチで更新するため、母集団クエリ（`results` の `isExcluded` / `teamCode` 条件）と一覧の表示が食い違う時間は生じません。
+- 除外・チームの変更は次回の比較計算（§5.5）から反映されます。比較値を保存していないため再計算処理は不要です（要件定義書 §11 の 6 番）。`results` の複製フィールドを同一バッチで更新するため、母集団（`results` の `isExcluded` / `teamCode` を 02 の `selectPopulation()` が見る。2.4 版からクエリの条件ではない。§5.5）と一覧の表示が食い違う時間は生じません。
 - 送信前（結果が無い受検者）は回答一覧に出ないため、この API の対象になりません（一覧は `results` 基点。§5.3）。ただし `respondentId` を直接指定すれば更新できます（`resultId == null` なので `respondents` だけ更新される）。害はないため制限しません。
 
 #### `DELETE /api/v1/admin/respondents/{respondentId}`
@@ -1942,7 +1951,7 @@ internal_error   Firestore の書き込みエラーなど自システム側の�
 |---|---|
 | 認可 | admin 以上（対象結果が見えること） |
 | クエリ | `mode=full` / `mode=restricted`（§2.3 `pdfModeSchema`）。`restricted` は評価・組織との合致度・リスクを非表示（00 §1.8）。`scope` / `teamCode`（省略可）: 比較組織を選択した状態で出力するとき、§5.5 と同じ形式で渡す。省略時は比較セクションを「比較組織を選択すると表示されます」の表示のままにする |
-| 処理 | (1) `getResult(resultId)` → `assertVisibleToAdmin`。`scope` 指定時は `fetchPopulation` で母集団が 0 件でないことを確認（読み取りは印刷用ページ側でも行うため、ここでは `count()` 集計で件数だけを見てもよい。実装時確認）。(2) 07 の `lib/pdf/` に `resultId`、`mode`、`scope`、`AdminContext` を渡して PDF のバイト列を得る。(3) `application/pdf` でストリーム返却 |
+| 処理 | (1) `getResult(resultId)` → `assertVisibleToAdmin`。`scope` 指定時は `fetchPopulation` で母集団が 0 件でないことを確認（2.4 版から、置き換わった結果の判定に組織の論理削除されていない全件が要るので、`count()` 集計では数えられない。§5.5。409 をやめるのは 11-5 §3.4 の PR-7.12）。(2) 07 の `lib/pdf/` に `resultId`、`mode`、`scope`、`AdminContext` を渡して PDF のバイト列を得る。(3) `application/pdf` でストリーム返却 |
 | 応答ヘッダー | `Content-Type: application/pdf`、`Content-Disposition: attachment; filename="result-{resultId 先頭 8 文字}-{mode}.pdf"`（ファイル名に氏名を含めない。01）、`Cache-Control: no-store` |
 | 監査ログ | `result.pdf_export`（`details: { "mode": "restricted", "scope": "organization" }`） |
 | エラー | 404 `RESULT_NOT_FOUND`、409 `POPULATION_EMPTY`（`scope` 指定時に母集団 0 件。設計判断 D04-35: 比較セクションを空にして出力するのではなくエラーにし、画面側で `scope` を外して再要求させる）、500 `PDF_GENERATION_FAILED` |
@@ -2440,7 +2449,7 @@ export interface ComparisonDto extends ComparisonResult {
 | 関数 | 入力 | 出力 | 呼ぶアクセス層（02 参照。§8.4） | 監査ログ |
 |---|---|---|---|---|
 | `getOrganizationForAssessment(organizationId, kind, cookieToken)` | 文書 ID、区分（省略時 `applicant`）、Cookie `tk_session` の値（無ければ `null`） | `AssessmentLinkDto`（`resumable` を含む。2.3 版から `GET organizations/{id}` だけが使い、受験者登録の画面は呼ばない。D04-43） | `getOrganization`、`findResumableSession`（内部で `getSessionByTokenHash`、`getRespondentById`） | なし |
-| `registerRespondent(input, request)` | `RegisterRespondentInput` | `SessionCreatedDto` + 発行トークン | `getOrganization`、`countRecentAuditLogs`、02 の `registerRespondent`（バッチ） | 同バッチ（リポジトリが書く） |
+| `registerRespondent(input, request)` | `RegisterRespondentInput` | `SessionCreatedDto`（`kind` は保存した値）+ 発行トークン | `getOrganization`、`countRecentAuditLogs`、`canLinkAsPrevious`（前回の候補の判定。2.4 版）、02 の `registerRespondent`（バッチ） | 同バッチ（リポジトリが書く） |
 | `getSessionProgress(ctx)` | `RespondentSessionContext` | `SessionProgressDto` | `getSession`、`getOrganization` | なし |
 | `startSession(ctx)` | 同 | `SessionStartedDto` + 新しい期限（Cookie 再発行用） | `markSessionStarted`（トランザクション） | `session.start`（初回のみ。同トランザクション） |
 | `saveAnswers(ctx, input)` | `SaveAnswersInput`（`stepNo` 1〜4、1〜41 問。2.3 版） | `AnswersSavedDto` + 新しい期限 | `saveAnswers`（トランザクション。フィールドパス更新） | なし |
@@ -2454,7 +2463,7 @@ export interface ComparisonDto extends ComparisonResult {
 | `listAdminUsers(ctx)` | `AdminContext`（`requireOwner` 済み） | `AdminUserListDto` | `listAdminUsers`、Admin SDK `getUsers` | なし |
 | `listResults(ctx, query)` | `ListResultsQuery` | `PagedDto<ResultListItemDto>` | `listResults`（全件）、`getRespondentsByIds` | `result.list` |
 | `getResultDetail(ctx, resultId)` | 文書 ID | `ResultDetailDto` | `getResult`、`getRespondent`、`getAiAnalysis` | `result.view` |
-| `getComparison(ctx, { resultId, scope })` | | `ComparisonDto` | `getResult`、`fetchPopulation` | `result.comparison` |
+| `getComparison(ctx, { resultId, scope })` | | `ComparisonDto` | `getResult`、`fetchPopulation`（Q1（改）+ `selectPopulation`。2.4 版） | `result.comparison` |
 | `updateRespondent(ctx, respondentId, input)` | `UpdateRespondentInput` | `RespondentUpdatedDto` | `updateRespondentFlags`（バッチ。`respondents` + `results`） | `respondent.update_team` / `respondent.update_exclusion`（同バッチ） |
 | `deleteRespondent(ctx, respondentId)` | | void | `softDeleteRespondent`（バッチ。3 文書） | `respondent.delete`（同バッチ） |
 | `getClassification(ctx, { includeExcluded })` | | `ClassificationDto` | `listResultsForClassification`、`getRespondentsByIds` | `classification.view` |
@@ -2496,7 +2505,7 @@ updateAdminUserDisplayName({ uid, organizationId, displayName }): Promise<void>
 createAdminUser({ uid, organizationId, role, displayName }): Promise<void>                              // createAdminAccount() 経由でのみ呼ぶ
 
 // 02 §8.4 respondents-repository.ts / assessment-sessions-repository.ts
-registerRespondent(input: RegisterRespondentInput): Promise<RegisteredRespondent>                       // バッチ 3 文書（respondent.register を含む。usageLogs は作らない）
+registerRespondent(input: RegisterRespondentInput): Promise<RegisteredRespondent>                       // バッチ 3 文書（respondent.register を含む。usageLogs は作らない）。前回の候補（previousResultId）を書く
 getRespondent({ respondentId, viewer }): Promise<Respondent | null>                                     // 幹部の可視性を判定
 getRespondentById({ respondentId, organizationId }): Promise<Respondent | null>                         // 受検者 API 用（可視性判定なし）
 getRespondentsByIds({ organizationId, respondentIds }): Promise<ReadonlyMap<string, Respondent>>        // getAll() 100 件ずつ
@@ -2506,13 +2515,14 @@ getSession(sessionId): Promise<AssessmentSession | null>
 getSessionByTokenHash({ organizationId, sessionTokenHash, now }): Promise<AssessmentSession | null>     // Q10
 markSessionStarted({ sessionId, tokenExpiresAt, meta }): Promise<{ startedAt, isFirstStart }>           // トランザクション + session.start（初回）
 saveAnswers({ sessionId, answers, lastSavedStepNo, tokenExpiresAt }): Promise<{ answeredCount }>        // トランザクション。answers.{n} をフィールドパスで update（1 ステップ分 1〜41 問）
-submitSession({ sessionId, meta }, deps: { scoreAnswers, assertAnswerMap }): Promise<SubmittedSession>  // トランザクション（§4.5）。利用履歴の作成か更新 + session.submit
+submitSession({ sessionId, meta }, deps: { scoreAnswers, assertAnswerMap }): Promise<SubmittedSession>  // トランザクション（§4.5）。前回の結果と Q-M7-1 の読み取り、利用履歴の作成か更新、つなぐときは前回の updatedAt + session.submit
 
 // 02 §8.5 results-repository.ts
 getResult({ resultId, viewer }): Promise<Result | null>
 listResults({ viewer }): Promise<readonly ResultListRow[]>                                              // Q3 / Q4 全件。select() 射影
 listResultsForClassification({ viewer }): Promise<readonly ClassificationMember[]>                      // Q3 / Q4 全件
-fetchPopulation({ organizationId, scope }): Promise<readonly PopulationRow[]>                           // Q1 / Q2。PopulationRow = PopulationMember + resultId
+canLinkAsPrevious({ organizationId, resultId }): Promise<boolean>                                     // 前回の候補の判定（results 1（organizationId・deletedAt だけ）+ Q-M7-1（文書名だけ）。2.4 版）
+fetchPopulation({ organizationId, scope }): Promise<readonly PopulationRow[]>                           // Q1（改）+ selectPopulation()（2.4 版）。PopulationRow = PopulationMember + resultId
 
 // 02 §8.6 ai-analyses-repository.ts / usage-logs-repository.ts / audit-logs-repository.ts
 markAiGenerationStarted({ resultId, viewer, staleAfterMs }): Promise<{ alreadyCompleted, latestAiAnalysisId }>   // トランザクション。AI_ALREADY_GENERATING
@@ -2529,6 +2539,7 @@ countRecentAuditLogs({ organizationId, action, ipAddress, since }): Promise<numb
 toScoreResult(doc: ResultDoc): ScoreResult              // results 文書の map をそのまま ScoreResult に（キーの存在と number 型を検証）
 toResultDocFields(score: ScoreResult): ResultScoreFields // 保存形（map のまま。丸めない。03 §5.9）
 toPopulationMember(doc): PopulationMember
+toPopulationSourceRow(id, data): PopulationSourceRow    // fetchPopulation() の 6 項目の射影から（2.4 版。11-5 §3.2）
 toAnswerMap(answers: AssessmentSessionDoc["answers"]): Record<number, number>   // 文字列キー → 数値キー（03 の assertAnswerMap に渡す）
 ```
 
@@ -2618,7 +2629,7 @@ sequenceDiagram
     A->>API: GET ?scope=team&teamCode=A
     API->>S: getComparison
     S->>DB: results（対象。organizationId 照合）
-    S->>DB: fetchPopulation({ organizationId, scope: { kind: "team", teamCode: "A" } })（select traits, compatibility）
+    S->>DB: fetchPopulation({ organizationId, scope: { kind: "team", teamCode: "A" } })（組織の論理削除されていない全件を 6 項目に select し、selectPopulation で絞る。2.4 版）
     S->>SCO: compareWithPopulation（メモリ上）
     S->>DB: auditLogs result.comparison
     API-->>A: ComparisonDto（保存しない）
@@ -2772,5 +2783,6 @@ sequenceDiagram
 | 1.1 | 2026-09-19 | レビュー指摘への対応。must: (1) `middleware.ts` の認証不要パスに `/admin/results/[resultId]/print` を追加（§7.2、§8.5、D04-41）。(2) `login-events` の `admin.signup` 補完を取り下げ、招待受理がサービスロールで書く（§2.6、§5.1、§6.2、§8.3、D04-36 改）。(3) 回答保存の入力を `pageNo`（1〜20）に変更し、ページ所属をサーバで検証（§4.4、§8.2、D04-18 改、D04-46）。(4) `GET /api/v1/admin/admin-users` を追加（§3.2、§5.11、§8.1〜§8.3、D04-49）。should: 管理者追加方式の整合確認（§6.2、D04-51）、エラー表の追加と表内 JSON のコードブロック化（§4.1、§4.3、§5.1、§5.2、§5.6〜§5.9）、05・06・08 への読み替えを §10 に列挙（D04-42、D04-44、D04-45、D04-48、D04-52）、再開判定 `findResumableSession` と Server Component からの認可ヘルパーの呼び方（§2.5.2、§4.1、§8.3、D04-43）、`PDF_TOKEN_SECRET` の 00 §3.2 追記依頼（§7.2、§10、D04-40）、役割変更 API の不提供（§3.3、§5.12、D04-50）、パスワード検証の一時クライアント（§5.1、D04-47）、`AuditDetails` に配列を許容（§2.6）、比較応答例の `scope` を `organization` に・結果詳細例に `reliability` を追加（§5.4、§5.5）、D04-16 の既存挙動を推定に改める（§4.2.1）。あわせて `ai_generation_error` の語彙を 07 §4.6 に合わせ（§5.9）、§0.2 の節番号を訂正 |
 | 2.2 | 2026-09-24 | 本番デプロイで判明した事項の反映（職業コードを 1〜8 に。旧コード 9 は保存済み文書の検証だけが読む。§4.2 の `occupationCode`、§5.3・§7.1 の職業名の例。10 K-19、PR #13・#14） |
 | 2.3 | 2026-11-09 | M7 の PR-7.3（受検者画面。11 総論 5.4・6.1、11-1 §3.4・§4.1。冒頭の版の欄を 2.3 にそろえた。2.2 版の改版の記録は冒頭の版の欄に入っていなかった）。§0.2 の決定事項 6 と §3.1 の回答保存の用途をステップ単位（選んだ時点）に改めた。§2.3 の電話番号を必須と 30 文字の上限だけに（書式・正規化をやめた。D04-06）、氏名を前後の空白を除いて 1〜100 文字に。§4 の冒頭に受検者 API が書く文書（登録は 3 文書、送信で利用履歴を作るか M7 より前の文書を更新）を足した。§4.1 を受験者登録の画面から使わないことに（D04-43）。§4.2 の処理を 3 文書のバッチに、監査ログの `details` に `previousCandidate` を足し、リクエストの例を見本の値に、`lib/utils/phone-number.ts` のコードを消して `name`・`phoneNumber` を `requiredText(NAME_MAX_LENGTH)`・`requiredText(PHONE_MAX_LENGTH)` に、`occupationCodeSchema` のコメントを 1〜8・10 に、§4.2.1・§4.2.2 から `usageLogId` と利用履歴の文書を外した（前回の候補は PR-7.4）。§4.3 の応答を `lastSavedStepNo` に。§4.4 を 1 ステップ分の保存（`{ stepNo, answers }`、1〜41 問、`questionNosOfStep`、`lib/masters/exam-steps.ts`。`pageNo` の古い形は 422）に改めた。§4.5 に利用履歴の作成か更新、`linkedPrevious`、区分の作成時の値、2 秒の待ちは画面で行うことを足した（つながりは PR-7.4）。§4.6 のシーケンス、§8.2 の Dto（`SessionProgressDto.lastSavedStepNo`、`AnswersSavedDto.stepNo`・`lastSavedStepNo`）、§8.3・§8.4 の表、§10 の 03・05 宛て、§11 の D04-06・D04-18・D04-19・D04-43・D04-46（入力の上限の定数の例外を含む）・D04-62 を改めた |
+| 2.4 | 2026-11-10 | M7 の PR-7.4（再受験のつながりと母集団。11 総論 5.4・6.1、11-1 §3.4.1・§3.4.3・§4.1、11-5 §2.1.2・§2.1.5・§4.1）。§4 の冒頭に、登録のとき同じ組織の `results` を前回の候補の判定のためだけに読むことと、送信で前回の結果の `updatedAt` を書くことを足した。§4.2 の処理・監査ログ（`kind` は保存した受検者区分）・リクエストの例と zod（`previousResultId: z.string().max(200).optional()`）・応答の `kind`（保存した値。候補の有無を受験者に知らせない）・422 の条件を改め、「PR-7.4 が足します」の注記を消した。§4.2.1 に手順 3（前回の候補の判定。`canLinkAsPrevious`）を足して番号を送り、§4.2.2 の入力と `respondents.previousResultId`・監査ログの `details` を確定の形にした。§4.5 の処理・監査ログ（`linkedPrevious`）と手順（前回の結果と Q-M7-1 の読み取り、`previousResultId`、つなぐときの前回の `updatedAt`。書き込みは 5〜6 件）、§4.6 のシーケンス。§5.5 の処理（`fetchPopulation` は組織の論理削除されていない全件を射影して読み、`selectPopulation` で置き換わった結果・除外・旧版・チーム外を除く）、`includesSubject`（置き換わった結果なら `false`）、処理手順 2、母集団の条件の置き場所、読み取りの性能（チームを選んでも組織の全件。11-5 §2.1.5）。応答の形・エラーは変えない。§8.3 の `registerRespondent`・`getComparison`、§8.4 の `canLinkAsPrevious`・`fetchPopulation`・`registerRespondent`・`submitSession`・`toPopulationSourceRow`、§9.1 のシーケンス。§4.2 のリクエストとレスポンスの例を再受験リンクの形（`kind: "executive"`。11-1 §3.4.1 の例と同じ）にし、読み取りの注記を「形の違う値は `results` を読まない、ほかの組織の結果・存在しない ID・論理削除済みは読み取り 1 回で止まる」に分けた。§4 の冒頭と §4.5 の手順 2 に、前回の結果は判定に使う `organizationId`・`deletedAt` だけを射影して読む（指標・氏名は読まない）ことと、文書 ID の形でない候補は送信で読まずにつながないことを足した。§5.6 の母集団の条件（`isExcluded`・`teamCode` は `selectPopulation()` が見る）と §5.10 の `count()` の注記（置き換わった結果の判定に全件が要るので数えられない）を改めた。§4 の冒頭・§4.5 の手順 2・§8.4 に、Q-M7-1 は有無だけを見るので登録と送信のどちらでも文書名だけを読む（`select()`。次の受験の指標・氏名を読まない）ことを足した |
 
 以上。

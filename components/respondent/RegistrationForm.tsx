@@ -34,6 +34,8 @@ export interface RegistrationFormProps {
   readonly organizationId: string | null;
   /** URL の p から（executives のときだけ既存スタッフ） */
   readonly kind: RegisterRespondentInput["kind"];
+  /** 再受験リンクの prev（文書 ID の形のときだけ。画面には出さない。11-1 §2.2.8・§3.5）。無ければ null */
+  readonly previousResultId: string | null;
 }
 
 type Errors = Partial<Record<RegistrationField, RegistrationErrorCode>>;
@@ -71,7 +73,11 @@ function withoutField(errors: Errors, field: RegistrationField): Errors {
   return Object.fromEntries(Object.entries(errors).filter(([key]) => key !== field)) as Errors;
 }
 
-export function RegistrationForm({ organizationId, kind }: RegistrationFormProps) {
+export function RegistrationForm({
+  organizationId,
+  kind,
+  previousResultId,
+}: RegistrationFormProps) {
   const router = useRouter();
   const [draft, setDraft] = useState<RegistrationDraft>(EMPTY_DRAFT);
   const [errors, setErrors] = useState<Errors>({});
@@ -143,6 +149,8 @@ export function RegistrationForm({ organizationId, kind }: RegistrationFormProps
         phoneNumber: normalizeText(draft.phoneNumber),
         occupationCode: draft.occupationCode ?? 0,
         diagnosisExperience: draft.diagnosisExperience ?? "first_time",
+        // 再受験リンクの前回の結果（prev が文書 ID の形のときだけ付ける）。候補になったかは受験者に知らせない（11-1 §2.2.8）
+        ...(previousResultId === null ? {} : { previousResultId }),
       });
       // 戻るで登録フォームに戻らないよう replace。遷移が終わるまで押せない状態のまま（ロード中は出さない）
       router.replace(created.nextUrl);
