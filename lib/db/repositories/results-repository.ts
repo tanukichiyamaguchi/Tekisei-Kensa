@@ -109,7 +109,7 @@ function visibleResultsQuery(viewer: Viewer): Query {
 
 /**
  * 回答一覧の 1 行（受験 1 件。指標 map は含まない）。回答一覧（listResultRows）・受検者の更新（updatePerson）・
- * 11-7 の組み合わせの候補が使う。
+ * 組織内分類と在籍・退職の人（listOrganizationPeople。11-3 §2.2）・11-7 の組み合わせの候補が使う。
  * M7 で足した 8 項目（11-2 §3.5 の手順 1・§3.11、11-6 §3.1、11-7 §4.5 の (5)）は、M7 より前の文書に無ければ toResult と
  * 同じ規則で補う（02 §5.5）
  */
@@ -137,7 +137,8 @@ export interface ResultListRow {
 
 /**
  * 閲覧範囲の受験の全件（Q3 / Q4）。select() で上記の列に射影して submittedAt の降順で返す（D04-55）。
- * 検索・絞り込み・並び替え・表示の上限は画面で行う（11-2 §3.5。lib/presentation/result-list-view.ts）
+ * 検索・絞り込み・並び替え・表示の上限は画面で行う（11-2 §3.5。lib/presentation/result-list-view.ts）。
+ * 組織内分類と在籍・退職（listOrganizationPeople。11-3 §2.2）もこの関数で読み、除外とまとめ方は service が行う
  */
 export async function listResults(input: {
   readonly viewer: Viewer;
@@ -191,44 +192,6 @@ export async function listResults(input: {
         "longitudinalAiStartedAt",
       ),
       latestLongitudinalAiAnalysisId: d.latestLongitudinalAiAnalysisId ?? null,
-    };
-  });
-}
-
-export interface ClassificationMember {
-  readonly resultId: string;
-  readonly respondentId: string;
-  readonly respondentKind: RespondentKind;
-  readonly isExcluded: boolean;
-  readonly aptitudeType: AptitudeTypeKey;
-  readonly socialStyle: SocialStyleKey;
-  readonly submittedAt: Date;
-}
-
-/** 組織内分類用。Q3 / Q4 と同じ条件で全件を射影して読む。集計は呼び出し元（04）が行う */
-export async function listResultsForClassification(input: {
-  readonly viewer: Viewer;
-}): Promise<readonly ClassificationMember[]> {
-  const snapshot = await visibleResultsQuery(input.viewer)
-    .select(
-      "respondentId",
-      "respondentKind",
-      "isExcluded",
-      "aptitudeType",
-      "socialStyle",
-      "submittedAt",
-    )
-    .get();
-  return snapshot.docs.map((doc) => {
-    const d = doc.data() as Partial<ResultDoc>;
-    return {
-      resultId: doc.id,
-      respondentId: String(d.respondentId),
-      respondentKind: d.respondentKind as RespondentKind,
-      isExcluded: d.isExcluded === true,
-      aptitudeType: d.aptitudeType as AptitudeTypeKey,
-      socialStyle: d.socialStyle as SocialStyleKey,
-      submittedAt: toDate(d.submittedAt, "submittedAt"),
     };
   });
 }

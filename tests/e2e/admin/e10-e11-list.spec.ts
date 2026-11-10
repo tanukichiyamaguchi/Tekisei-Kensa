@@ -1,5 +1,6 @@
 // E-10 ログイン → 回答一覧 → ログアウト、E-11 既存スタッフの可視性（08 §3.4.3、06 §3.1、00 §5）。
-// M7-list-34 オーナーの表示、M7-list-35 オーナー以外の表示（11-2 §5.3。E-10・E-11 の改め。11-2 §2.4〜§2.9・§2.25）
+// M7-list-34 オーナーの表示、M7-list-35 オーナー以外の表示（11-2 §5.3。E-10・E-11 の改め。11-2 §2.4〜§2.9・§2.25）。
+// E-11 の組織内分類は集計カードの「回答者」の人数で確かめる（11-3 §5.5）
 import {
   answerLink,
   expect,
@@ -7,6 +8,7 @@ import {
   listTools,
   loginViaUi,
   logoutViaHeader,
+  obTotal,
   readClipboard,
   resultRows,
   rowNames,
@@ -63,8 +65,10 @@ test("E-11 admin には既存スタッフが一覧・組織内分類に出ず、
   await expect(rowOf(page, seedName(9))).toHaveCount(0);
   await expect(rowOf(page, seedName(10))).toHaveCount(0);
 
+  // 組織内分類の集計カードの「回答者」も 8 人（11-3 §5.5）
   await page.goto("/admin/classification");
-  await expect(page.getByText("全 8 名")).toBeVisible();
+  await expect(obTotal(page).label).toHaveText("回答者");
+  await expect(obTotal(page).count).toHaveText("8");
 
   await page.goto(`/admin/results/${executive.resultId}`);
   await expect(page.locator("main [role=alert]")).toHaveText("回答データが見つかりません");

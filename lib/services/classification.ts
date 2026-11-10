@@ -1,66 +1,35 @@
-// 組織内分類（04 §5.7）。適性タイプごとに数え、タイプの所属分類（ソーシャルスタイル）で束ねる（D04-33）
+// 組織内分類（04 §5.7、11-3 §3.2）。閲覧範囲の人（同じ人の受験は代表の受験で数え、除外した受験は数えない。11-3 §2.2）を
+// 全件返す。分類ごと・タイプごとの集計と絞り込みは画面で行う（参照元どおり。lib/presentation/classification-view.ts）
 import { writeAuditLog } from "./audit";
-import type { ClassificationDto, ClassificationMemberDto } from "./dto/admin";
-import type { ClassificationQuery } from "./schemas/admin-results";
+import type { ClassificationDto } from "./dto/admin";
+import { listOrganizationPeople } from "./organization-people";
 import type { AdminContext } from "@/lib/auth/admin-context";
 import { COLLECTIONS } from "@/lib/db/collections";
-import { getRespondentsByIds } from "@/lib/db/repositories/respondents-repository";
-import { listResultsForClassification } from "@/lib/db/repositories/results-repository";
-import { APTITUDE_TYPE_DEFINITIONS } from "@/lib/masters/indicators/aptitude-types";
-import { SOCIAL_STYLE_KEYS, type AptitudeTypeKey } from "@/lib/scoring/types";
-import { logger } from "@/lib/utils/logger";
 
-export async function getClassification(
-  ctx: AdminContext,
-  query: ClassificationQuery,
-): Promise<ClassificationDto> {
-  // 閲覧者の可視範囲で数える（admin は幹部を含まない。D04-31 改）
-  const rows = (await listResultsForClassification({ viewer: ctx })).filter(
-    (r) => query.includeExcluded || !r.isExcluded,
-  );
-  const respondents = await getRespondentsByIds({
-    organizationId: ctx.organizationId,
-    respondentIds: rows.map((r) => r.respondentId),
-  });
-  const byType = new Map<AptitudeTypeKey, ClassificationMemberDto[]>();
-  for (const row of rows) {
-    const respondent = respondents.get(row.respondentId);
-    if (!respondent || respondent.deletedAt !== null) {
-      logger.warn("classification.respondent_missing", {
-        requestId: ctx.request.requestId,
-        resultId: row.resultId,
-      });
-      continue;
-    }
-    const members = byType.get(row.aptitudeType) ?? [];
-    members.push({
-      resultId: row.resultId,
-      respondentId: respondent.id,
-      name: respondent.name,
-      kind: row.respondentKind,
-      isExcluded: row.isExcluded,
-      submittedAt: row.submittedAt.toISOString(),
-    });
-    byType.set(row.aptitudeType, members);
-  }
-  // 16 タイプ × 4 分類の枠は人数 0 でも返す。types は sort_order 順、members は submittedAt 降順
-  const types = [...APTITUDE_TYPE_DEFINITIONS].sort((a, b) => a.sortOrder - b.sortOrder);
-  const styles = SOCIAL_STYLE_KEYS.map((socialStyle) => {
-    const styleTypes = types
-      .filter((t) => t.socialStyle === socialStyle)
-      .map((t) => {
-        const members = [...(byType.get(t.key) ?? [])].sort((a, b) =>
-          b.submittedAt.localeCompare(a.submittedAt),
-        );
-        return { aptitudeType: t.key, count: members.length, members };
-      });
-    return {
-      socialStyle,
-      count: styleTypes.reduce((sum, t) => sum + t.count, 0),
-      types: styleTypes,
-    };
-  });
-  const total = styles.reduce((sum, s) => sum + s.count, 0);
+/**
+ * 組織内分類の人（11-3 §3.2）。API の GET /api/v1/admin/classification と、組織内分類の画面の Server Component
+ * （app/(admin)/admin/classification/page.tsx）が使う。
+ * 1. listOrganizationPeople() で閲覧範囲の人を読む（代表の submittedAt の降順。オーナー以外は既存スタッフを含まない。K-29）。
+ * 2. 応答の形に写す。受検者 ID・入社日・退職日は組織内分類で使わないので返さない。
+ * 3. 監査ログ classification.view（details は人数だけ）を書き、応答する
+ */
+export async function getClassification(ctx: AdminContext): Promise<ClassificationDto> {
+  // 1.
+  const people = await listOrganizationPeople(ctx);
+  // 2.
+  const dto: ClassificationDto = {
+    people: people.map((person) => ({
+      resultId: person.resultId,
+      aptitudeType: person.aptitudeType,
+      name: person.name,
+      phoneNumber: person.phoneNumber,
+      occupationLabel: person.occupationLabel,
+      teamCode: person.teamCode,
+      submittedAt: person.submittedAt.toISOString(),
+      employmentStatus: person.employmentStatus,
+    })),
+  };
+  // 3. 閲覧の監査ログ（失敗しても応答は変えない。D04-11）。count は人数（前回は結果の件数。11-3 §3.5）
   await writeAuditLog({
     organizationId: ctx.organizationId,
     actorKind: "admin",
@@ -69,8 +38,8 @@ export async function getClassification(
     action: "classification.view",
     targetCollection: COLLECTIONS.results,
     targetId: null,
-    details: { count: total },
+    details: { count: people.length },
     request: ctx.request,
   });
-  return { total, styles };
+  return dto;
 }

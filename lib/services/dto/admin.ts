@@ -6,7 +6,7 @@ import type {
   RespondentKind,
   StaffRole,
 } from "@/lib/db/types";
-import type { AptitudeTypeKey, SocialStyleKey, TeamCode } from "@/lib/scoring/types";
+import type { AptitudeTypeKey, TeamCode } from "@/lib/scoring/types";
 
 export interface MeDto {
   readonly adminUserId: string;
@@ -118,26 +118,24 @@ export interface PersonUpdatedDto {
   readonly updatedAt: string;
 }
 
-/** GET /api/v1/admin/classification（04 §5.7） */
-export interface ClassificationMemberDto {
-  readonly resultId: string;
-  readonly respondentId: string;
-  readonly name: string;
-  readonly kind: RespondentKind;
-  readonly isExcluded: boolean;
-  readonly submittedAt: string;
-}
+/**
+ * GET /api/v1/admin/classification（04 §5.7、11-3 §3.2）。クエリを受け取らず、閲覧範囲の人（同じ人の受験は代表の受験で数え、
+ * 除外した受験は数えない。11-3 §2.2）を返す。集計・絞り込みは画面で行い、16 タイプの枠は返さない
+ */
 export interface ClassificationDto {
-  readonly total: number;
-  readonly styles: ReadonlyArray<{
-    readonly socialStyle: SocialStyleKey;
-    readonly count: number;
-    readonly types: ReadonlyArray<{
-      readonly aptitudeType: AptitudeTypeKey;
-      readonly count: number;
-      readonly members: readonly ClassificationMemberDto[];
-    }>;
-  }>;
+  readonly people: readonly ClassificationPersonDto[]; // 代表の submittedAt の降順（同じなら resultId の昇順）
+}
+
+/** 組織内分類の人 1 人（11-3 §3.2）。個人情報は代表の受検者の氏名・電話番号だけ（入社日・退職日・受検者 ID は返さない） */
+export interface ClassificationPersonDto {
+  readonly resultId: string; // 代表の受験（画面の key）
+  readonly aptitudeType: AptitudeTypeKey;
+  readonly name: string;
+  readonly phoneNumber: string;
+  readonly occupationLabel: string | null; // 職業の表示名（00 §1.10。未知のコードは null）
+  readonly teamCode: TeamCode | null;
+  readonly submittedAt: string; // 代表の受験の送信日時（ISO 8601）
+  readonly employmentStatus: EmploymentStatus; // 代表の受験の区分
 }
 
 /** GET /api/v1/admin/usage-logs（04 §5.8、11-2 §3.8）。送信済みの全件（ページングなし）。total は items の件数 */

@@ -727,108 +727,1000 @@ body {
   overflow: visible;
 }
 
-/* ---- 組織内分類（06 §3.6） */
-.classification__axis--top {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  margin-left: 120px;
-  margin-bottom: 8px;
-  text-align: center;
-  font-weight: 700;
-}
-.classification__body {
-  display: flex;
-  gap: 8px;
-}
-.classification__axis--side {
-  display: grid;
-  grid-template-rows: 1fr 1fr;
-  width: 112px;
-  align-items: center;
-  font-weight: 700;
-}
-.classification__grid {
-  flex: 1;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-.classification-card {
-  --style-color: var(--admin-border);
-  padding: 16px;
-  background: var(--admin-surface);
-  border: 2px solid var(--admin-border);
-  border-radius: var(--admin-radius);
-  transition:
-    background 0.15s,
-    border-color 0.15s;
-}
-.classification-card--driving {
-  --style-color: var(--style-driving);
-}
-.classification-card--expressive {
-  --style-color: var(--style-expressive);
-}
-.classification-card--analytical {
-  --style-color: var(--style-analytical);
-}
-.classification-card--amiable {
-  --style-color: var(--style-amiable);
-}
-.classification-card:hover {
-  border-color: var(--style-color);
-  background: color-mix(in srgb, var(--style-color) 15%, var(--admin-surface));
-}
-.classification-card__title {
-  display: flex;
+/* ---- 組織内分類・在籍・退職（11-3 §2.22）。クラス名の接頭辞は ob-。参照元の ob-map の CSS を写し、セレクタを改めた（#obm → .ob-root、
+   #obd → .ob-panel）。参照元の CSS の指定と参照元の画面で効いている値が違う 6 か所は画面の値にし、K-49・K-50 の表の色（値の後ろに
+   参照元の色）と、参照元に定めの無い部品の焦点の枠と、象限の見出しのボタンの焦点の輪郭の位置だけを改めた。参照元に無い 3 つの規則
+   （取得の失敗の文、キャラクターのパネルの本文の焦点の枠、「組織内分類とは」の閉じるアイコンの表示）は 11-3 1.1 版で §2.22 に足した。
+   比は総論 8.3 の配色の取り決めで計算した。分類ごとの色は style 属性の CSS 変数（象限の --qc・--qbg・--qmid・--qsub、枠の --cbg・
+   --lc、パネルの上部の --qc・--qbg と本文の --qd・--qn。値は lib/presentation/classification-view.ts の QUADRANTS）。在籍・退職の
+   規則は PR-7.7b が足す */
+/* K-49: --mut は白の上の文字の色（参照元の値は #7A8592。K-49 の表の 28）。--mut-pale は足した変数（#F7F9FA・#FFF7E6・#F7F9FC の上の
+   文字。K-49 の表の 23・29・30） */
+.ob-root {
+  --ink: #1f2933;
+  --sub: #5f6b78;
+  --mut: #6c7784;
+  --mut-pale: #697380;
+  --line: #e3e8ee;
+  font-family: Inter, "Noto Sans JP", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--ink);
   width: 100%;
-  align-items: baseline;
-  justify-content: space-between;
-  padding: 0 0 8px;
-  border: none;
-  border-bottom: 4px solid var(--style-color);
-  background: none;
+  box-sizing: border-box;
+  container-type: inline-size;
+  -webkit-font-smoothing: antialiased;
+}
+.ob-root * {
+  box-sizing: border-box;
+}
+.ob-root button {
   font: inherit;
+  color: inherit;
+}
+.ob-root button:focus-visible,
+.ob-root select:focus-visible {
+  outline: 2px solid #1f2933;
+  outline-offset: 2px;
+}
+/* アプリ: 参照元に焦点の見た目の定めが無い部品（ダイアログの中の部品）は、管理画面に共通の焦点の枠と同じ指定。dialog の要素のクラスで
+   当て、.admin-root の外に描いても効くようにする（詳細パネルの「×」は下の .ob-panel .x の指定。変更ダイアログの .ob-edit は PR-7.7b） */
+.ob-panel :focus-visible,
+.ob-about :focus-visible {
+  outline: 2px solid #3f8da5;
+  outline-offset: 2px;
+}
+
+/* 見出し行（§2.5。参照元は Bubble の要素） */
+.ob-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-bottom: 16px;
+}
+.ob-head h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #1f2933;
+}
+.ob-help {
+  display: inline-flex;
+  align-items: center;
+  min-width: 40px;
+  padding: 5px 8px;
+  border: 1px solid #cccccc;
+  border-radius: 20px;
+  background: #fafafa;
   cursor: pointer;
-  color: var(--admin-text);
 }
-.classification-card__name {
-  font-size: 16px;
+.ob-help:hover {
+  border-color: #bbbbbb;
+  background: #ededed;
+}
+/* アプリ（参照元は Bubble の要素で焦点の見た目の定めが無い。管理画面に共通の焦点の枠と同じ指定を、.ob-root の輪郭より強く当てる） */
+.ob-head .ob-help:focus-visible {
+  outline: 2px solid #3f8da5;
+  outline-offset: 2px;
+}
+.ob-help .qm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-right: 12px;
+  border-radius: 50%;
+  background: #666666;
+  color: #f0f0f0;
+  font-size: 15px;
   font-weight: 700;
+  line-height: 1;
 }
-.classification-card__count {
-  font-size: 16px;
+.ob-help .tx {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #444444;
 }
-.classification-card__types {
+/* 取得の失敗（§2.1。11-2 §2.1 と同じ値。参照元に無い規則で、11-3 1.1 版で §2.22 に足した） */
+.ob-load-failed {
+  margin: 0;
+  padding: 40px 0;
+  font-size: 13px;
+  color: var(--sub);
+  text-align: center;
+}
+
+/* 上部の集計（§2.6〜§2.8） */
+.ob-sum {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 16px 20px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.ob-total {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+.ob-total .l {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sub);
+  margin-right: 6px;
+}
+.ob-total b {
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.5px;
+}
+.ob-total .u {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--sub);
+}
+.ob-bal {
+  flex: 1;
+  min-width: 0;
+}
+.ob-bar {
+  display: flex;
+  height: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #eef1f4;
+}
+.ob-bar i {
+  display: block;
+  height: 100%;
+}
+.ob-bar i + i {
+  border-left: 2px solid #ffffff;
+}
+.ob-leg {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  margin: 12px 0 0;
-  padding: 0;
-  list-style: none;
+  grid-template-columns: repeat(2, max-content);
+  gap: 4px 28px;
+  margin-top: 9px;
+  justify-items: start;
 }
-.character {
+.ob-leg button {
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 0;
+  padding: 2px 0;
+  cursor: pointer;
+  font-size: 16px;
+  color: var(--ink);
+  border-radius: 4px;
+}
+.ob-leg button:hover b {
+  text-decoration: underline;
+}
+.ob-leg .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: none;
+}
+.ob-leg b {
+  font-weight: 700;
+  color: var(--ink);
+}
+/* 「{p}%」の色は style 属性の分類の text（K-49 の表の 1・2。参照元は濃い色） */
+.ob-leg em {
+  font-style: normal;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.ob-team {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sub);
+  white-space: nowrap;
+}
+/* K-50（枠。参照元は #CDD5DD。K-50 の表の 1） */
+.ob-team select {
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink);
+  border: 1px solid #8397aa;
+  border-radius: 8px;
+  padding: 7px 30px 7px 10px;
+  background: #ffffff;
+  max-width: 200px;
+}
+.ob-seg {
+  display: inline-flex;
+  border: 1px solid #cdd5dd;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #ffffff;
+}
+.ob-seg button {
+  font-size: 16px;
+  font-weight: 400;
+  padding: 7px 14px;
+  border: 0;
+  background: #ffffff;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ob-seg button + button {
+  border-left: 1px solid #cdd5dd;
+}
+.ob-seg button b {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin-left: 2px;
+}
+.ob-seg button.on,
+.ob-seg button.on b {
+  background: #1f2d3a !important;
+  color: #ffffff !important;
+}
+/* K-50（縁から 1px あけて描き、隣のボタンとの間に縁を残す。K-50 の表の 3） */
+.ob-root .ob-seg button:focus-visible {
+  outline: 2px solid #1f2933;
+  outline-offset: -3px;
+}
+/* K-50（選択中のボタンの焦点。輪郭の外の 1px と内の 2px を白にする。K-50 の表の 3） */
+.ob-root .ob-seg button.on:focus-visible {
+  box-shadow: inset 0 0 0 5px #ffffff;
+}
+.ob-note {
+  margin: 12px 2px 18px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--sub);
+}
+
+/* マップ（§2.9・§2.10） */
+.ob-wrap {
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  grid-template-rows: auto 1fr;
+  gap: 8px 10px;
+}
+.ob-ax-x {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sub);
+  white-space: nowrap;
+}
+.ob-ax-x i {
+  flex: 1;
+  height: 2px;
+  background: linear-gradient(90deg, #b7c1cb, #e3e8ee 50%, #b7c1cb);
+}
+.ob-ax-y {
+  grid-column: 1;
+  grid-row: 2;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  width: 100%;
-  padding: 4px;
-  border: 1px solid transparent;
-  border-radius: var(--admin-radius);
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sub);
+}
+.ob-ax-y span {
+  flex: none;
+  width: 1em;
+  line-height: 1.3;
+  word-break: break-all;
+  text-align: center;
+}
+.ob-ax-y span:first-child::before {
+  content: "▲";
+  display: block;
+  font-size: 9px;
+  color: #9aa5b1;
+  margin-bottom: 4px;
+}
+.ob-ax-y span:last-child::after {
+  content: "▼";
+  display: block;
+  font-size: 9px;
+  color: #9aa5b1;
+  margin-top: 4px;
+}
+.ob-ax-y i {
+  flex: 1;
+  width: 2px;
+  background: linear-gradient(180deg, #b7c1cb, #e3e8ee 50%, #b7c1cb);
+}
+.ob-map {
+  grid-column: 2;
+  grid-row: 2;
+  position: relative;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  gap: 6px;
+}
+.ob-map::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 3px solid #9aa5b1;
+  pointer-events: none;
+}
+.ob-q {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: var(--qbg);
+  border-radius: 16px;
+  min-width: 0;
+}
+.ob-q.b {
+  flex-direction: column-reverse;
+}
+.ob-qhr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ob-q.r .ob-qhr {
+  flex-direction: row-reverse;
+}
+.ob-qh {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
   background: none;
-  font: inherit;
-  color: var(--admin-text);
+  border: 0;
+  padding: 4px 6px;
+  margin: -4px -6px;
+  border-radius: 10px;
   cursor: pointer;
+  text-align: left;
 }
-.character:hover {
-  border-color: var(--style-color);
+.ob-q.r .ob-qh {
+  flex-direction: row-reverse;
+  text-align: right;
 }
-.character__name {
+.ob-qh:hover {
+  background: var(--qmid);
+}
+/* K-50（輪郭をボタンの内側に描き、隣の折りたたみのボタンに重ねない。色と太さは .ob-root の輪郭のまま。§2.22 の「焦点の枠の形」） */
+.ob-root .ob-qh:focus-visible {
+  outline-offset: -2px;
+}
+/* K-49（--qc の値を onMid にする。マウスのときも色を変えない。K-49 の表の 3〜9） */
+.ob-qh .nm {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--qc);
+  letter-spacing: -0.3px;
+  line-height: 1.1;
+}
+/* K-49（同） */
+.ob-qh .jp {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--qc);
+  margin-top: 2px;
+}
+.ob-qh .ct {
+  margin-left: auto;
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--qc);
+  color: #ffffff;
+  white-space: nowrap;
+}
+.ob-q.r .ob-qh .ct {
+  margin-left: 0;
+  margin-right: auto;
+}
+.ob-qh .ct b {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1;
+}
+.ob-qh .ct span {
+  font-size: 12px;
   font-weight: 700;
 }
-.character__count {
+.ob-qh .ct small {
+  font-size: 12px;
+  font-weight: 700;
+  margin-left: 6px;
+  color: var(--qmid);
+}
+.ob-fold {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--qmid);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.ob-fold i {
+  display: block;
+  font-style: normal;
+  transition: transform 0.15s;
+}
+.ob-q.fold .ob-fold i {
+  transform: rotate(-90deg);
+}
+.ob-q.fold .ob-g {
+  display: none;
+}
+.ob-g {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+/* キャラクター（§2.11） */
+.ob-c {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto 1fr;
+  column-gap: 10px;
+  align-items: start;
+  min-width: 0;
+  min-height: 132px;
+  padding: 10px 12px 10px 8px;
+  border: 1px solid #ffffff;
+  border-radius: 12px;
+  background: var(--cbg);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    box-shadow 0.15s,
+    transform 0.15s;
+}
+.ob-c:hover {
+  box-shadow: 0 8px 18px -10px #6b7785;
+  transform: translateY(-1px);
+}
+.ob-c img {
+  grid-row: 1/4;
+  width: 62px;
+  height: 112px;
+  object-fit: contain;
+  object-position: center bottom;
+}
+.ob-c .who {
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--ink);
+}
+/* K-49（参照元は var(--sub)。K-49 の表の 19〜22） */
+.ob-c .ty {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--qsub);
+  margin-top: 1px;
+}
+.ob-c .lean {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 7px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  border: 1px solid var(--lc);
+  color: var(--lc);
+  background: #ffffff;
+}
+.ob-c .lean.core {
+  background: var(--lc);
+  color: #ffffff;
+}
+.ob-c .n {
+  grid-column: 2;
+  align-self: end;
+  justify-self: end;
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  color: var(--qc);
+}
+.ob-c .n b {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.ob-c .n span {
+  font-size: 12px;
+  font-weight: 700;
+}
+.ob-c.z {
+  background: #f7f9fa;
+}
+.ob-c.z img {
+  filter: grayscale(1);
+}
+/* K-49（参照元は #7A8592。K-49 の表の 23） */
+.ob-c.z .who {
+  color: var(--mut-pale);
+}
+/* K-49（0 人の枠の短縮名は参照元の #5F6B78 のまま。#F7F9FA の上で 5.15:1） */
+.ob-c.z .ty {
+  color: var(--sub);
+}
+/* K-49（参照元は #9AA5B1。K-49 の表の 24） */
+.ob-c.z .n {
+  color: #667484;
+}
+/* 本文の幅で切り替える（§2.19。.ob-root のコンテナクエリ） */
+@container (min-width: 1000px) {
+  .ob-c {
+    min-height: 156px;
+  }
+  .ob-c img {
+    width: 80px;
+    height: 136px;
+  }
+}
+@container (max-width: 900px) {
+  .ob-sum {
+    flex-wrap: wrap;
+    gap: 12px 20px;
+  }
+  .ob-bal {
+    flex-basis: 100%;
+    order: 3;
+  }
+  .ob-leg {
+    display: grid;
+    grid-template-columns: repeat(2, auto);
+    justify-content: start;
+    column-gap: 28px;
+  }
+  .ob-q {
+    padding: 10px;
+    gap: 8px;
+  }
+  .ob-qh .nm {
+    font-size: 19px;
+  }
+  .ob-qh .ct {
+    padding: 5px 10px;
+  }
+  .ob-qh .ct b {
+    font-size: 17px;
+  }
+  .ob-qh .ct small {
+    display: none;
+  }
+  .ob-g {
+    gap: 6px;
+  }
+  .ob-c {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    min-height: 0;
+    padding: 8px;
+    justify-items: center;
+    text-align: center;
+  }
+  .ob-c img {
+    grid-row: auto;
+    width: 52px;
+    height: 88px;
+  }
+  .ob-c .who {
+    font-size: 13.5px;
+    margin-top: 4px;
+  }
+  .ob-c .ty {
+    font-size: 11px;
+  }
+  .ob-c .lean {
+    justify-self: center;
+    margin-top: 5px;
+    font-size: 10.5px;
+    padding: 2px 7px;
+  }
+  .ob-c .n {
+    grid-column: auto;
+    justify-self: center;
+    margin-top: 4px;
+  }
+  .ob-c .n b {
+    font-size: 22px;
+  }
+}
+@container (max-width: 520px) {
+  .ob-wrap {
+    grid-template-columns: 22px 1fr;
+  }
+  .ob-ax-x,
+  .ob-ax-y {
+    font-size: 11.5px;
+  }
+  .ob-c img {
+    width: 44px;
+    height: 74px;
+  }
+  .ob-qh .jp {
+    display: none;
+  }
+  .ob-qh .nm {
+    font-size: 16px;
+  }
+  .ob-c .lean {
+    white-space: normal;
+    line-height: 1.3;
+    font-size: 10px;
+    padding: 2px 6px;
+  }
+  .ob-c .who {
+    font-size: 12.5px;
+  }
+  .ob-c .ty {
+    font-size: 10px;
+    word-break: break-all;
+  }
+}
+
+/* 右側の詳細パネル（§2.12。dialog。.ob-root の外に描く） */
+.ob-panel {
+  margin: 0 0 0 auto;
+  padding: 0;
+  border: 0;
+  width: min(600px, 100vw);
+  max-width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  background: #ffffff;
+  color: #1f2933;
+  box-shadow: -16px 0 40px -12px #8c98a5;
+  font-family: Inter, "Noto Sans JP", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1;
+}
+.ob-panel::backdrop {
+  background: none;
+}
+.ob-panel * {
+  box-sizing: border-box;
+}
+.ob-panel .in {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.ob-panel .hd {
+  position: relative;
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  padding: 22px 24px 18px;
+  background: var(--qbg);
+  border-bottom: 1px solid #e3e8ee;
+}
+.ob-panel .hd img {
+  width: 84px;
+  height: 148px;
+  object-fit: contain;
+  object-position: center bottom;
+  flex: none;
+}
+.ob-panel .hd .tx {
+  min-width: 0;
+  padding-bottom: 4px;
+}
+/* 丸いラベルの地は --qc（分類の label。K-49 の表の 10〜13。参照元は主色） */
+.ob-panel .q {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 800;
+  color: #ffffff;
+  background: var(--qc);
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+.ob-panel h2 {
+  margin: 8px 0 2px;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+.ob-panel .sub {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #5f6b78;
+}
+.ob-panel .x {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid #d5dce3;
+  background: #ffffff;
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  color: #3c4753;
+  cursor: pointer;
+}
+.ob-panel .x:hover {
+  background: #f2f5f8;
+}
+.ob-panel .x:focus-visible {
+  outline: 2px solid #1f2933;
+  outline-offset: 2px;
+}
+.ob-panel .bd {
+  flex: 1;
+  overflow: auto;
+  padding: 20px 24px 32px;
+}
+/* アプリ: キャラクターのパネルの本文がはみ出して焦点を受けるとき（ClassificationPanel）、焦点の枠を本文の内側に、縁から 1px
+   あけて描く（外側ではパネルの左右・下の縁で切れ、上は帯の下に隠れる。縁に接して描くと、枠の外がパネルの左の影に接する。
+   色と太さは上の .ob-panel :focus-visible のまま。11 総論 8.5・8.3 の 19） */
+.ob-panel .bd:focus-visible {
+  outline-offset: -3px;
+}
+/* 位置の箱の印の色は style 属性の Lean.posColor（K-49 の表の 17・18） */
+.ob-panel .pos {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid #e3e8ee;
+  border-radius: 12px;
+  background: #f9fafb;
+}
+.ob-panel .mini {
+  display: grid;
+  grid-template-columns: repeat(4, 14px);
+  grid-template-rows: repeat(4, 14px);
+  gap: 2px;
+  flex: none;
+}
+.ob-panel .mini i {
+  border-radius: 3px;
+}
+.ob-panel .pos b {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+  margin-bottom: 3px;
+}
+.ob-panel .pos p {
+  margin: 0;
   font-size: 13px;
+  line-height: 1.65;
+  color: #3c4753;
+}
+.ob-panel h3 {
+  margin: 22px 0 8px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #1f2933;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.ob-panel h3 small {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #5f6b78;
+}
+.ob-panel .tx2 {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.85;
+  color: #3c4753;
+}
+.ob-panel .fit {
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--qd);
+}
+.ob-panel table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.ob-panel th {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  color: #5f6b78;
+  padding: 8px 8px;
+  border-bottom: 1px solid #e3e8ee;
+  white-space: nowrap;
+  background: #f7f9fa;
+}
+.ob-panel td {
+  padding: 9px 8px;
+  border-bottom: 1px solid #eef1f4;
+  vertical-align: top;
+}
+.ob-panel td.nm {
+  font-weight: 700;
+}
+.ob-panel td.dt,
+.ob-panel td.tl {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: #3c4753;
+}
+.ob-panel .empty {
+  margin: 0;
+  padding: 18px;
+  border: 1px dashed #cdd5dd;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #5f6b78;
+  text-align: center;
+}
+.ob-panel .types {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.ob-panel .types button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid #e3e8ee;
+  border-radius: 10px;
+  background: #ffffff;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: #1f2933;
+}
+.ob-panel .types button:hover {
+  background: #f7f9fa;
+}
+.ob-panel .types img {
+  width: 30px;
+  height: 52px;
+  object-fit: contain;
+}
+.ob-panel .types b {
+  display: block;
+  font-size: 13.5px;
+}
+.ob-panel .types span {
+  font-size: 12px;
+  color: #5f6b78;
+}
+/* K-49（参照元は var(--qd)。白とマウスのときの #F7F9FA の上で届く typeCount。マウスのときも色を変えない。K-49 の表の 14〜16） */
+.ob-panel .types em {
+  margin-left: auto;
+  font-style: normal;
+  font-weight: 800;
+  font-size: 18px;
+  color: var(--qn);
+}
+/* 画面の幅で切り替える（§2.19） */
+@media (max-width: 600px) {
+  .ob-panel .hd {
+    padding: 18px 16px 14px;
+  }
+  .ob-panel .bd {
+    padding: 16px;
+  }
+  .ob-panel .hd img {
+    width: 64px;
+    height: 112px;
+  }
+  .ob-panel .types {
+    grid-template-columns: 1fr;
+  }
+  .ob-panel th.tl,
+  .ob-panel td.tl {
+    display: none;
+  }
+}
+
+/* 組織内分類とは（§2.5。参照元は Bubble のポップアップ。枠の太さ・影・背景を押したときは推定） */
+.ob-about {
+  padding: 0;
+  border: 1px solid #d5d5d5;
+  border-radius: 10px;
+  width: 700px;
+  max-width: calc(100vw - 32px);
+  background: #ffffff;
+  color: #4c4b4b;
+  box-shadow: 15px 0 35px rgba(26, 26, 26, 0.08);
+}
+.ob-about::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+}
+.ob-about .in {
+  position: relative;
+  padding: 32px;
+}
+.ob-about .x {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #4c4b4b;
+  cursor: pointer;
+}
+.ob-about .x:hover {
+  color: rgba(76, 75, 75, 0.7);
+}
+/* アイコン（28px）をボタンの枠いっぱいに描く（行の高さで上下にずらさない） */
+.ob-about .x svg {
+  display: block;
+}
+.ob-about h2 {
+  margin: 0;
+  font-family: "Noto Sans JP", sans-serif;
+  font-size: 35px;
+  font-weight: 900;
+  line-height: 1.5;
+}
+.ob-about .tx {
+  margin: 25px 0 0;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 /* ---- アカウント（06 §3.7） */

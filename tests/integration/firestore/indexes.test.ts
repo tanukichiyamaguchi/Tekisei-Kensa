@@ -23,7 +23,6 @@ import {
   canLinkAsPrevious,
   fetchPopulation,
   listResults,
-  listResultsForClassification,
 } from "@/lib/db/repositories/results-repository";
 import { listUsageLogs } from "@/lib/db/repositories/usage-logs-repository";
 import { adminFirestore } from "@/lib/firebase/admin";
@@ -182,8 +181,7 @@ beforeAll(async () => {
     await canLinkAsPrevious({ organizationId: org.organizationId, resultId: submitted.resultId }),
   ).toBe(true);
   for (const viewer of [ownerViewer, adminViewer]) {
-    await listResults({ viewer }); // Q3 / Q4
-    await listResultsForClassification({ viewer }); // Q3 / Q4
+    await listResults({ viewer }); // Q3 / Q4（回答一覧・組織内分類。11-3 §3.1）
     await listUsageLogs({ viewer }); // Q5（改）/ Q6（改）（11-2 §3.4。M7-list-33）
   }
   await listAdminUsers(org.organizationId); // Q8
@@ -225,7 +223,8 @@ afterAll(() => {
 describe("I-50 firestore.indexes.json とクエリの照合", () => {
   it("発行した全クエリが、単一フィールドの既定インデックスか定義済みの複合インデックスで処理できる", () => {
     const relevant = captured.filter((s) => s.collection !== "probe");
-    expect(relevant.length).toBeGreaterThan(15);
+    // 捕捉できていることの確かめ。PR-7.7a で listResultsForClassification の 2 本（Q3 / Q4 と同じ形）を消して 15 本
+    expect(relevant.length).toBeGreaterThanOrEqual(15);
     const missing = relevant
       .filter(needsComposite)
       .filter((shape) => !indexFile.indexes.some((index) => indexServes(index, shape)));

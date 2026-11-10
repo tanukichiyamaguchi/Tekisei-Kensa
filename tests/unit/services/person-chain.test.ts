@@ -1,9 +1,11 @@
-// M7-list-01〜03 同じ人の受験を 1 行にまとめる buildPersonRows（11-2 §2.2・§5.1、K-31 ①）と findPersonRow
+// M7-list-01〜03 同じ人の受験を 1 行にまとめる buildPersonRows（11-2 §2.2・§5.1、K-31 ①）と findPersonRow。
+// M7-zaiseki-20 組織内分類と在籍・退職で数える人の代表 selectCountedHeads（11-3 §2.2・§5.1、K-39 Q-10・Q-24）
 import { describe, expect, it } from "vitest";
 
 import {
   buildPersonRows,
   findPersonRow,
+  selectCountedHeads,
   type PersonChainNode,
   type PersonRow,
 } from "@/lib/services/person-chain";
@@ -129,5 +131,72 @@ describe("findPersonRow", () => {
 
   it("無い resultId は null", () => {
     expect(findPersonRow(rows, "Missing")).toBeNull();
+  });
+});
+
+describe("M7-zaiseki-20 selectCountedHeads", () => {
+  const counted = (
+    resultId: string,
+    submittedAt: string,
+    options: { readonly previousResultId?: string; readonly isExcluded?: boolean } = {},
+  ) => ({
+    resultId,
+    previousResultId: options.previousResultId ?? null,
+    submittedAt: new Date(submittedAt),
+    isExcluded: options.isExcluded ?? false,
+  });
+  const heads = (nodes: Parameters<typeof selectCountedHeads>[0]) =>
+    selectCountedHeads(nodes).map((node) => node.resultId);
+
+  it("除外中の受験を先に除く（K-39 Q-24）", () => {
+    expect(
+      heads([
+        counted("R1", "2026-01-01T00:00:00Z"),
+        counted("X", "2026-02-01T00:00:00Z", { isExcluded: true }),
+      ]),
+    ).toEqual(["R1"]);
+  });
+
+  it("R2 の前回が R1 なら R2 だけ（前回は数えない。K-39 Q-10）", () => {
+    const r1 = counted("R1", "2025-01-01T00:00:00Z");
+    const r2 = counted("R2", "2026-01-01T00:00:00Z", { previousResultId: "R1" });
+    const result = selectCountedHeads([r1, r2]);
+    expect(result.map((node) => node.resultId)).toEqual(["R2"]);
+    expect(result[0]).toBe(r2);
+  });
+
+  it("R2（前回 R1）が除外中なら R1", () => {
+    expect(
+      heads([
+        counted("R1", "2025-01-01T00:00:00Z"),
+        counted("R2", "2026-01-01T00:00:00Z", { previousResultId: "R1", isExcluded: true }),
+      ]),
+    ).toEqual(["R1"]);
+  });
+
+  it("同じ前回 P を指す A・B（枝分かれ）は A と B。P は入らない", () => {
+    expect(
+      heads([
+        counted("P", "2024-01-01T00:00:00Z"),
+        counted("A", "2025-01-01T00:00:00Z", { previousResultId: "P" }),
+        counted("B", "2026-01-01T00:00:00Z", { previousResultId: "P" }),
+      ]),
+    ).toEqual(["B", "A"]);
+  });
+
+  it("戻り値は submittedAt の降順、同じ時刻は resultId の昇順（文字コードの順）", () => {
+    const at = "2026-01-01T00:00:00Z";
+    expect(
+      heads([
+        counted("Old", "2025-01-01T00:00:00Z"),
+        counted("Ra", at),
+        counted("New", "2026-06-01T00:00:00Z"),
+        counted("RB", at),
+      ]),
+    ).toEqual(["New", "RB", "Ra", "Old"]);
+  });
+
+  it("空の入力は空", () => {
+    expect(selectCountedHeads([])).toEqual([]);
   });
 });

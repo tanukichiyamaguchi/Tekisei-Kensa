@@ -1,31 +1,43 @@
 // E-17 組織内分類・アカウント、E-18 招待とパスワード設定（08 §3.4.3）。
 // E-16（チーム・除外・削除）は回答一覧の作り直しで M7-list-39・43（list-operations.spec.ts）に、E-17 の利用履歴は M7-list-44 に移した
-// （11-2 §5.5。利用履歴はヘッダーではなく回答一覧の見出しの横から開く）
+// （11-2 §5.5。利用履歴はヘッダーではなく回答一覧の見出しの横から開く）。E-17 の組織内分類は作り直した画面の部品で確かめる（11-3 §5.5）
 import { emulatorTask } from "../support/admin";
-import { E2E_ADMIN_PASSWORD, expect, loginViaUi, openDialog, test } from "../support/admin-ui";
+import {
+  E2E_ADMIN_PASSWORD,
+  expect,
+  loginViaUi,
+  obCell,
+  obHeading,
+  obPanel,
+  obTotal,
+  openDialog,
+  resultRows,
+  test,
+} from "../support/admin-ui";
 
-test("E-17 組織内分類の人数合計が一覧と一致し、分類・キャラクターのポップアップ、受検リンクのコピー、owner の招待リンク発行", async ({
+test("E-17 組織内分類の人数が一覧の除外中でない行の数と一致し、分類・キャラクターのパネル、受検リンクのコピー、owner の招待リンク発行", async ({
   page,
   context,
   adminOrg,
 }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await loginViaUi(page, adminOrg.ownerEmail);
+  // 一覧は 10 行で、除外中は 10 の 1 行。組織内分類は除外した受験を数えない（11-3 §2.2。K-39 Q-24）
+  await expect(resultRows(page)).toHaveCount(10);
+  const included = await resultRows(page).getByRole("switch", { checked: false }).count();
+  expect(included).toBe(9);
   await page.goto("/admin/classification");
-  const counts = (await page.getByTestId("style-count").allTextContents()).map((s) =>
-    Number.parseInt(s, 10),
-  );
-  expect(counts.reduce((a, b) => a + b, 0)).toBe(10);
+  await expect(obTotal(page).label).toHaveText("回答者");
+  await expect(obTotal(page).count).toHaveText(String(included));
 
-  await page
-    .getByTestId("classification-analytical")
-    .locator(".classification-card__title")
-    .click();
-  await expect(openDialog(page).locator(".dialog__title")).toHaveText("Analyticalタイプ（分析型）");
+  await obHeading(page, "analytical").click();
+  await expect(obPanel(page).getByRole("heading", { level: 2 })).toHaveText("アナリティカル");
   await page.keyboard.press("Escape");
-  await page.getByTestId("classification-driving").locator(".character").first().click();
-  await expect(openDialog(page).locator(".dialog__title")).toHaveText("えりか（レビュワータイプ）");
+  await expect(obPanel(page)).toBeHidden();
+  await obCell(page, "pioneer").click();
+  await expect(obPanel(page).getByRole("heading", { level: 2 })).toHaveText("ひなた");
   await page.keyboard.press("Escape");
+  await expect(obPanel(page)).toBeHidden();
 
   await page.goto("/admin/account");
   await page.getByRole("button", { name: "求職者用回答リンクをコピーする" }).click();
