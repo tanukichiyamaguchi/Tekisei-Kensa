@@ -22,6 +22,8 @@ export type AuditAction =
   | "result.pdf_export"
   | "respondent.update_team"
   | "respondent.update_exclusion"
+  | "result.update_employment"
+  | "result.update_staff_role"
   | "respondent.delete"
   | "usage_log.view"
   | "classification.view"

@@ -18,6 +18,7 @@ export type ApiErrorCode =
   | "RESPONDENT_NOT_FOUND"
   | "SESSION_ALREADY_SUBMITTED"
   | "ANSWERS_INCOMPLETE"
+  | "LEFT_BEFORE_HIRED"
   | "POPULATION_EMPTY"
   | "AI_ALREADY_GENERATING"
   | "AI_GENERATION_FAILED"
@@ -73,6 +74,9 @@ export const API_ERRORS = {
     ),
   emailAlreadyRegistered: () =>
     new ApiError(409, "EMAIL_ALREADY_REGISTERED", "このメールアドレスはすでに登録されています"),
+  /** PATCH /api/v1/admin/respondents/{id} の employment で、退職日が入社日より前（11-2 §3.9） */
+  leftBeforeHired: () =>
+    new ApiError(422, "LEFT_BEFORE_HIRED", "退職日が入社日より前になっています"),
   rateLimited: (retryAfterSeconds?: number) =>
     new ApiError(
       429,

@@ -1,11 +1,14 @@
-// lib/utils/admin-api.ts の adminFetch（06 §10.4）: 401 → ログイン、403（停止・未登録）→ 再読み込み、その他 → AdminApiError
-import { describe, expect, it, vi } from "vitest";
+// lib/utils/admin-api.ts の adminFetch（06 §10.4）: 401 → ログイン、403（停止・未登録）→ 再読み込み、その他 → AdminApiError。
+// 回答一覧の updatePerson・fetchUsageLogs（11-2 §3.6・§3.8・§5.5）
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   AdminApiError,
   adminFetch,
   downloadPdf,
+  fetchUsageLogs,
   filenameFromDisposition,
+  updatePerson,
 } from "@/lib/utils/admin-api";
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -148,5 +151,66 @@ describe("downloadPdf（06 §3.5.11、04 §5.10）", () => {
     expect(filenameFromDisposition('attachment; filename="a.pdf"', "b.pdf")).toBe("a.pdf");
     expect(filenameFromDisposition(null, "b.pdf")).toBe("b.pdf");
     expect(filenameFromDisposition("attachment", "b.pdf")).toBe("b.pdf");
+  });
+});
+
+describe("updatePerson・fetchUsageLogs（11-2 §3.6・§3.8）", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /** グローバルの fetch を差し替え、呼び出しを記録する */
+  function stubFetch(res: Response) {
+    const fetchMock = vi.fn<(input: string, init: RequestInit) => Promise<Response>>(
+      async () => res,
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("updatePerson は ID をエンコードした URL に、渡した patch だけを JSON で PATCH し、応答を返す", async () => {
+    const dto = {
+      respondentId: "R/1",
+      resultIds: ["Res1"],
+      teamCode: "C",
+      isExcluded: false,
+      employment: { status: "employed", hiredOn: null, leftOn: null },
+      staffRole: null,
+      isVisibleAfterUpdate: true,
+      updatedAt: "2026-11-10T00:00:00.000Z",
+    };
+    const fetchMock = stubFetch(jsonResponse(200, dto));
+    await expect(updatePerson("R/1", { teamCode: "C" })).resolves.toEqual(dto);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("/api/v1/admin/respondents/R%2F1");
+    expect(init).toMatchObject({ method: "PATCH", body: '{"teamCode":"C"}' });
+
+    const second = stubFetch(jsonResponse(200, dto));
+    const employment = { status: "left", hiredOn: "2025-04-01", leftOn: "2026-10-31" } as const;
+    await updatePerson("R1", { employment, staffRole: "leader" });
+    expect(JSON.parse(second.mock.calls[0]![1].body as string)).toEqual({
+      employment,
+      staffRole: "leader",
+    });
+  });
+
+  it("updatePerson の 404 は AdminApiError（code と message を保つ）", async () => {
+    stubFetch(jsonResponse(404, errorBody("RESPONDENT_NOT_FOUND", "受検者が見つかりません")));
+    await expect(updatePerson("R1", { isExcluded: true })).rejects.toMatchObject({
+      status: 404,
+      code: "RESPONDENT_NOT_FOUND",
+      message: "受検者が見つかりません",
+    });
+  });
+
+  it("fetchUsageLogs はクエリなしの GET で { items, total } を返す", async () => {
+    const body = { items: [], total: 0 };
+    const fetchMock = stubFetch(jsonResponse(200, body));
+    await expect(fetchUsageLogs()).resolves.toEqual(body);
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("/api/v1/admin/usage-logs");
+    expect(init).toMatchObject({ method: "GET" });
+    expect(init).not.toHaveProperty("body");
   });
 });

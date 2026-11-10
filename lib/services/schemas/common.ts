@@ -2,6 +2,7 @@
 import { z } from "zod";
 
 import {
+  calendarDateSchema,
   choiceCodeSchema,
   cpLength,
   docIdSchema,
@@ -10,7 +11,13 @@ import {
 } from "@/lib/db/schemas/values";
 import type { ComparisonScope, TeamCode } from "@/lib/scoring/types";
 
-export { choiceCodeSchema, docIdSchema, scoredQuestionNoSchema, teamCodeSchema };
+export {
+  calendarDateSchema,
+  choiceCodeSchema,
+  docIdSchema,
+  scoredQuestionNoSchema,
+  teamCodeSchema,
+};
 
 /** 前後空白を除去し、空白のみを拒否する必須文字列 */
 export const requiredText = (max: number) =>
@@ -20,6 +27,10 @@ export const requiredText = (max: number) =>
     .refine((s) => s.length > 0, { message: "必須項目です" })
     .refine((s) => cpLength(s) <= max, { message: `${max} 文字以内で入力してください` });
 
+/**
+ * PR-7.6 まで今の回答一覧の画面（旧レイアウト）の URL のクエリの解釈（listResultsQuerySchema）だけが使う。PR-7.6 で消す
+ * （04 §2.2、11-2 §4.3。回答一覧・利用履歴の API はクエリを受け取らない）
+ */
 export const pagingSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(50),

@@ -1,16 +1,24 @@
-// 結果の取得・前回の候補・母集団（02 §3.5、§8.5、11-1 §2.2.8、11-5 §3.2）
+// 結果の取得・前回の候補・回答一覧の射影・母集団（02 §3.5、§8.5、11-1 §2.2.8、11-2 §3.11、11-5 §3.2）
 import type { DocumentData, Query } from "firebase-admin/firestore";
 
 import { canViewExecutives } from "@/lib/auth/claims";
 import type { Viewer } from "@/lib/auth/claims";
 import { COLLECTIONS, db, rawCollection, resultsRef } from "@/lib/db/collections";
 import type { Result } from "@/lib/db/domain";
+import { initialEmploymentStatus } from "@/lib/db/employment-status";
 import { fromSnapshot } from "@/lib/db/mappers/documents";
 import { toPopulationSourceRow, toResult } from "@/lib/db/mappers/result";
-import { toDate } from "@/lib/db/mappers/timestamp";
+import { toDate, toNullableDate } from "@/lib/db/mappers/timestamp";
 import { selectPopulation, type PopulationRow } from "@/lib/db/population";
 import { docIdSchema } from "@/lib/db/schemas/values";
-import type { AiGenerationStatus, RespondentKind, ResultDoc, TeamCode } from "@/lib/db/types";
+import type {
+  AiGenerationStatus,
+  EmploymentStatus,
+  RespondentKind,
+  ResultDoc,
+  StaffRole,
+  TeamCode,
+} from "@/lib/db/types";
 import type { AptitudeTypeKey, ComparisonScope, SocialStyleKey } from "@/lib/scoring/types";
 import { SCORING_VERSION } from "@/lib/scoring/version";
 
@@ -99,7 +107,12 @@ function visibleResultsQuery(viewer: Viewer): Query {
   return query.where("deletedAt", "==", null).orderBy("submittedAt", "desc");
 }
 
-/** 回答一覧の 1 行（04 §5.3 の一覧・検索・並び替えに必要な列だけ。指標 map は含まない） */
+/**
+ * 回答一覧の 1 行（受験 1 件。指標 map は含まない）。回答一覧（listResultRows）・受検者の更新（updatePerson）・
+ * PR-7.6 までの今の回答一覧の画面の旧サービス（listResults）・11-7 の組み合わせの候補が使う。
+ * M7 で足した 8 項目（11-2 §3.5 の手順 1・§3.11、11-6 §3.1、11-7 §4.5 の (5)）は、M7 より前の文書に無ければ toResult と
+ * 同じ規則で補う（02 §5.5）
+ */
 export interface ResultListRow {
   readonly resultId: string;
   readonly respondentId: string;
@@ -112,9 +125,20 @@ export interface ResultListRow {
   readonly aiGenerationStatus: AiGenerationStatus;
   readonly scoringVersion: string;
   readonly submittedAt: Date;
+  readonly previousResultId: string | null; // 前回の結果（11-7 §3.1）
+  readonly employmentStatus: EmploymentStatus; // 区分・入社日・退職日・役職（11-2 §3.1）
+  readonly hiredOn: string | null;
+  readonly leftOn: string | null;
+  readonly staffRole: StaffRole | null;
+  readonly longitudinalAiStatus: AiGenerationStatus; // 経年比較の AI 解説の状態（11-6 §3.1）
+  readonly longitudinalAiStartedAt: Date | null;
+  readonly latestLongitudinalAiAnalysisId: string | null;
 }
 
-/** 回答一覧。組織の結果を全件読み、select() で上記の列に射影して submittedAt 降順で返す（D04-55） */
+/**
+ * 閲覧範囲の受験の全件（Q3 / Q4）。select() で上記の列に射影して submittedAt の降順で返す（D04-55）。
+ * 検索・絞り込み・並び替え・表示の上限は画面で行う（11-2 §3.5。PR-7.6 までの今の画面は旧サービスがメモリ上で行う）
+ */
 export async function listResults(input: {
   readonly viewer: Viewer;
 }): Promise<readonly ResultListRow[]> {
@@ -130,14 +154,23 @@ export async function listResults(input: {
       "aiGenerationStatus",
       "scoringVersion",
       "submittedAt",
+      "previousResultId",
+      "employmentStatus",
+      "hiredOn",
+      "leftOn",
+      "staffRole",
+      "longitudinalAiStatus",
+      "longitudinalAiStartedAt",
+      "latestLongitudinalAiAnalysisId",
     )
     .get();
   return snapshot.docs.map((doc) => {
     const d = doc.data() as Partial<ResultDoc>;
+    const respondentKind = d.respondentKind as RespondentKind;
     return {
       resultId: doc.id,
       respondentId: String(d.respondentId),
-      respondentKind: d.respondentKind as RespondentKind,
+      respondentKind,
       teamCode: (d.teamCode ?? null) as TeamCode | null,
       isExcluded: d.isExcluded === true,
       aptitudeType: d.aptitudeType as AptitudeTypeKey,
@@ -146,6 +179,18 @@ export async function listResults(input: {
       aiGenerationStatus: d.aiGenerationStatus as AiGenerationStatus,
       scoringVersion: String(d.scoringVersion),
       submittedAt: toDate(d.submittedAt, "submittedAt"),
+      // M7 で足した項目は、無ければ作成時の値で補い、ある値は検証しない（toResult と同じ。02 §5.5）
+      previousResultId: d.previousResultId ?? null,
+      employmentStatus: d.employmentStatus ?? initialEmploymentStatus(respondentKind),
+      hiredOn: d.hiredOn ?? null,
+      leftOn: d.leftOn ?? null,
+      staffRole: d.staffRole ?? null,
+      longitudinalAiStatus: d.longitudinalAiStatus ?? "not_generated",
+      longitudinalAiStartedAt: toNullableDate(
+        d.longitudinalAiStartedAt ?? null,
+        "longitudinalAiStartedAt",
+      ),
+      latestLongitudinalAiAnalysisId: d.latestLongitudinalAiAnalysisId ?? null,
     };
   });
 }

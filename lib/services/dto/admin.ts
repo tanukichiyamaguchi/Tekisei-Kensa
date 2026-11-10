@@ -1,6 +1,12 @@
 // 管理者 API の応答 Dto（04 §8.2）。AI 解説・結果詳細・比較は dto/result.ts
 import type { AiGenerationStatus } from "@/lib/ai/types";
-import type { AdminRole, DiagnosisExperience, RespondentKind } from "@/lib/db/types";
+import type {
+  AdminRole,
+  DiagnosisExperience,
+  EmploymentStatus,
+  RespondentKind,
+  StaffRole,
+} from "@/lib/db/types";
 import type { AptitudeTypeKey, SocialStyleKey, TeamCode } from "@/lib/scoring/types";
 
 export interface MeDto {
@@ -45,6 +51,10 @@ export interface InviteRotatedDto {
   readonly rotatedAt: string;
 }
 
+/**
+ * ページ付きの一覧。API は返さない。PR-7.6 まで今の回答一覧の画面（旧レイアウト）の Server Component が旧 listResults の
+ * 戻り値として使い、PR-7.6 で消す（11-2 §4.3）
+ */
 export interface PagedDto<T> {
   readonly items: readonly T[];
   readonly total: number;
@@ -52,7 +62,45 @@ export interface PagedDto<T> {
   readonly pageSize: number;
 }
 
-/** GET /api/v1/admin/results の 1 行（04 §5.3）。職業名は画面が lib/masters/occupations.ts で引く */
+/** GET /api/v1/admin/results（04 §5.3、11-2 §3.5）。クエリを受け取らず、閲覧範囲の全行を返す */
+export interface ResultListDto {
+  readonly generatedAt: string; // 基準時刻（ISO 8601。一覧のデータをサーバで読んだ時刻）
+  readonly rows: readonly ResultListRowDto[]; // 代表の submittedAt の降順
+}
+
+/**
+ * 回答一覧の 1 行（同じ人の受験をまとめた行。11-2 §2.2）。値は代表の受験とその受検者のもの。
+ * 個人情報は代表の受検者の氏名・電話番号だけ（前回以前の受験の氏名・電話番号は返さない）。職業名は画面が引く
+ */
+export interface ResultListRowDto {
+  readonly resultId: string; // 代表の受験
+  readonly respondentId: string; // 代表の受検者（更新・削除に使う）
+  readonly name: string;
+  readonly phoneNumber: string;
+  readonly occupationCode: number;
+  readonly teamCode: TeamCode | null;
+  readonly isExcluded: boolean;
+  readonly employmentStatus: EmploymentStatus;
+  readonly hiredOn: string | null;
+  readonly leftOn: string | null;
+  readonly staffRole: StaffRole | null;
+  readonly aptitudeType: AptitudeTypeKey;
+  readonly submittedAt: string;
+  readonly exams: readonly ResultListExamDto[]; // つながり。[0] が代表
+}
+
+/** 行のつながりの受験 1 件（11-2 §3.5）。hasLongitudinalReport は「経年比較あり」（11-2 §2.9） */
+export interface ResultListExamDto {
+  readonly resultId: string;
+  readonly respondentId: string;
+  readonly submittedAt: string;
+  readonly hasLongitudinalReport: boolean;
+}
+
+/**
+ * 受験 1 件ごとの一覧の行（受検者区分を含む）。API は返さない。PR-7.6 まで今の回答一覧の画面（旧レイアウト）の
+ * Server Component が旧 listResults の戻り値として使い、PR-7.6 で消す（11-2 §4.3）。職業名は画面が lib/masters/occupations.ts で引く
+ */
 export interface ResultListItemDto {
   readonly resultId: string;
   readonly respondentId: string;
@@ -82,11 +130,22 @@ export interface AdminUserListDto {
   readonly total: number;
 }
 
-/** PATCH /api/v1/admin/respondents/{respondentId}（04 §5.6） */
-export interface RespondentUpdatedDto {
-  readonly respondentId: string;
+/**
+ * PATCH /api/v1/admin/respondents/{respondentId}（04 §5.6、11-2 §3.6）。teamCode・isExcluded・employment・staffRole は
+ * 更新したあとの代表の受験（行の代表）の値。送信前の受検者は resultIds が空で、employment・staffRole が null
+ */
+export interface PersonUpdatedDto {
+  readonly respondentId: string; // パスの受検者
+  readonly resultIds: readonly string[]; // 書いた範囲の受験（つながりの順）
   readonly teamCode: TeamCode | null;
   readonly isExcluded: boolean;
+  readonly employment: {
+    readonly status: EmploymentStatus;
+    readonly hiredOn: string | null;
+    readonly leftOn: string | null;
+  } | null;
+  readonly staffRole: StaffRole | null;
+  readonly isVisibleAfterUpdate: boolean; // 更新後も閲覧者に見えるか（オーナー以外が責任者・幹部にしたとき false）
   readonly updatedAt: string;
 }
 
@@ -112,7 +171,16 @@ export interface ClassificationDto {
   }>;
 }
 
-/** GET /api/v1/admin/usage-logs の 1 行（04 §5.8）。respondentId の null は将来の物理削除に備えた型 */
+/** GET /api/v1/admin/usage-logs（04 §5.8、11-2 §3.8）。送信済みの全件（ページングなし）。total は items の件数 */
+export interface UsageLogListDto {
+  readonly items: readonly UsageLogItemDto[];
+  readonly total: number;
+}
+
+/**
+ * GET /api/v1/admin/usage-logs の 1 行（04 §5.8）。respondentId の null は将来の物理削除に備えた型。
+ * submittedAt は送信済みだけを返すので常に値がある（型は今のまま）
+ */
 export interface UsageLogItemDto {
   readonly usageLogId: string;
   readonly respondentId: string | null;

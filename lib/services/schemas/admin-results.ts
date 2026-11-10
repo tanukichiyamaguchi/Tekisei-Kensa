@@ -1,8 +1,12 @@
-// 回答一覧・組織内分類・利用履歴のクエリ（04 §5.3、§5.7、§5.8）
+// 回答一覧の URL のクエリと組織内分類のクエリ（04 §5.3、§5.7）。回答一覧・利用履歴の API はクエリを受け取らない（11-2 §3.5・§3.8）
 import { z } from "zod";
 
 import { pagingSchema, teamCodeSchema } from "./common";
 
+/**
+ * 今の回答一覧の画面（旧レイアウト）の URL のクエリ。PR-7.6 まで app/(admin)/admin/page.tsx が解釈に使い（不正は既定値）、
+ * PR-7.6 で消す（11-2 §4.3）。API（GET /api/v1/admin/results）は使わない
+ */
 export const listResultsQuerySchema = pagingSchema.extend({
   q: z.string().trim().max(100).optional(),
   teamCode: z.union([teamCodeSchema, z.literal("none")]).optional(),
@@ -20,8 +24,3 @@ export const classificationQuerySchema = z.object({
   includeExcluded: queryBoolean.default(true),
 });
 export type ClassificationQuery = z.infer<typeof classificationQuerySchema>;
-
-export const listUsageLogsQuerySchema = pagingSchema.extend({
-  order: z.enum(["asc", "desc"]).default("desc"),
-});
-export type ListUsageLogsQuery = z.infer<typeof listUsageLogsQuerySchema>;

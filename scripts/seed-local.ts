@@ -14,7 +14,7 @@ import { saveAnswers, submitSession } from "../lib/db/repositories/assessment-se
 import { createOrganization } from "../lib/db/repositories/organizations-repository";
 import {
   registerRespondent,
-  updateRespondentFlags,
+  updatePersonAttributes,
 } from "../lib/db/repositories/respondents-repository";
 import type { RespondentKind, TeamCode } from "../lib/db/types";
 import { adminAuth } from "../lib/firebase/admin";
@@ -162,8 +162,9 @@ export async function seedLocal(
     const registered = await registerAndSave(org.organizationId, index, r.kind, r.answers, 4);
     const { resultId } = await submitSession({ sessionId: registered.sessionId, meta });
     if (r.teamCode !== null || r.isExcluded) {
-      await updateRespondentFlags({
-        respondentId: registered.respondentId,
+      // 受検者の更新と同じ書き込み（チーム・除外と監査ログ。11-2 §3.11）。つながりは無いので、その受検者と受験の 1 組
+      await updatePersonAttributes({
+        members: [{ respondentId: registered.respondentId, resultId }],
         viewer: ownerViewer,
         patch: { teamCode: r.teamCode, isExcluded: r.isExcluded },
         meta,

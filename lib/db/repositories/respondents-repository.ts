@@ -1,19 +1,32 @@
 // 受検者（02 §3.3、§8.4）。複製フィールド（results / usageLogs）は同一バッチで更新する（I-3）
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import type { DocumentReference, DocumentSnapshot, WriteBatch } from "firebase-admin/firestore";
 
 import { addAuditLogToBatch } from "./audit-logs-repository";
 import { canViewExecutives } from "@/lib/auth/claims";
 import type { RequestMeta, Viewer } from "@/lib/auth/claims";
 import { COLLECTIONS, db, rawCollection, respondentsRef } from "@/lib/db/collections";
-import type { Respondent } from "@/lib/db/domain";
+import type { Respondent, Result } from "@/lib/db/domain";
+import { initialEmploymentStatus, respondentKindForStaffRole } from "@/lib/db/employment-status";
 import { RepositoryError } from "@/lib/db/errors";
 import { fromSnapshot, toRespondent } from "@/lib/db/mappers/documents";
+import { toResult } from "@/lib/db/mappers/result";
 import { toTimestamp } from "@/lib/db/mappers/timestamp";
 import { assessmentSessionCreateSchema } from "@/lib/db/schemas/assessment-session";
 import { respondentCreateSchema } from "@/lib/db/schemas/respondent";
+import { employmentFieldsSchema, staffRoleSchema } from "@/lib/db/schemas/result";
 import { validateForWrite } from "@/lib/db/schemas/validate";
 import { docIdSchema, teamCodeSchema } from "@/lib/db/schemas/values";
-import type { DiagnosisExperience, RespondentKind, TeamCode } from "@/lib/db/types";
+import type {
+  AuditDetails,
+  DiagnosisExperience,
+  EmploymentStatus,
+  RespondentKind,
+  ResultDoc,
+  StaffRole,
+  TeamCode,
+} from "@/lib/db/types";
+import { logger } from "@/lib/utils/logger";
 import { getOrganization } from "./organizations-repository";
 
 export interface RegisterRespondentInput {
@@ -173,69 +186,274 @@ export async function getRespondentsByIds(input: {
   return out;
 }
 
-export interface UpdateRespondentFlagsInput {
+/** 受検者の更新で書く範囲の 1 件（つながりの受験と、その受検者。11-2 §3.11）。送信前の受検者は resultId が null */
+export interface PersonMember {
   readonly respondentId: string;
+  readonly resultId: string | null;
+}
+
+/** 変える項目（11-2 §3.6 の本文。送られた項目だけを持つ） */
+export interface PersonAttributesPatch {
+  readonly teamCode?: TeamCode | null;
+  readonly isExcluded?: boolean;
+  readonly employment?: {
+    readonly status: EmploymentStatus;
+    readonly hiredOn: string | null;
+    readonly leftOn: string | null;
+  };
+  readonly staffRole?: StaffRole;
+}
+
+export interface UpdatePersonAttributesInput {
+  readonly members: readonly PersonMember[];
   readonly viewer: Viewer;
-  readonly patch: { readonly teamCode?: TeamCode | null; readonly isExcluded?: boolean };
+  readonly patch: PersonAttributesPatch;
   readonly meta: RequestMeta;
 }
-export interface UpdatedRespondentFlags {
-  readonly before: { readonly teamCode: TeamCode | null; readonly isExcluded: boolean };
-  readonly after: { readonly teamCode: TeamCode | null; readonly isExcluded: boolean };
+export interface UpdatedPersonAttributes {
+  /** 書く範囲の受験（読み取りで除かれなかったもの。値が同じで書かなかった受験も含む）。members の順（つながりの順） */
+  readonly writtenResultIds: readonly string[];
+  /** staffRole を送ったときの受検者区分（責任者・幹部 → executive、スタッフ → applicant）。送らなければ null */
+  readonly kindAfter: RespondentKind | null;
+}
+
+/** 1 回のバッチに積む文書の上限（Firestore の 1 回の上限 500 件より小さく抑える。11-2 §3.6） */
+const PERSON_BATCH_LIMIT = 450;
+
+type BatchOp = (batch: WriteBatch) => void;
+
+interface LoadedMember {
+  readonly respondent: Respondent;
+  readonly result: Result | null; // 読み取りの補いを含む（toResult）
+  readonly hasEmploymentStatus: boolean; // 生の results 文書に employmentStatus があるか（M7 より前の文書には無い）
+}
+
+/** getAll() を 100 件ずつ */
+async function getAllInChunks(refs: readonly DocumentReference[]): Promise<DocumentSnapshot[]> {
+  const out: DocumentSnapshot[] = [];
+  for (let i = 0; i < refs.length; i += GET_ALL_CHUNK) {
+    const chunk = refs.slice(i, i + GET_ALL_CHUNK);
+    if (chunk.length > 0) out.push(...(await db().getAll(...chunk)));
+  }
+  return out;
 }
 
 /**
- * チーム・除外フラグの更新。respondents（正）と results（複製）を同一バッチで更新し、変更があった項目ごとに
- * auditLogs（respondent.update_team / respondent.update_exclusion）を同じバッチに追加する。変更が無ければ何も書かない
+ * 受検者の更新（11-2 §3.11。updateRespondentFlags を置き換えた）。members（同じ人のつながりの受験と受検者。閲覧範囲の中）に、
+ * チーム・除外・区分と日付・役職のうち変わる項目だけを書く。読み取りで除いた受検者・受験は書かず（warn に resultId だけを出す）、
+ * 書く範囲が残らなければ RESPONDENT_NOT_FOUND。役職で受検者区分が変われば、正の respondents.kind と複製の
+ * results.respondentKind・usageLogs.respondentKind を同じバッチで書く（I-3、K-39 Q-02）。書く文書の updatedAt はすべて同じ
+ * Timestamp（I-36）で、監査ログは変わった項目ごとに同じバッチに積む。書く文書が 450 件を超えるときは、受験ごとの書き込みを
+ * 分けずに 450 件までのバッチに分けて順に書く。読み取りとバッチの間にトランザクションは使わない（同時の更新は後勝ち）
  */
-export async function updateRespondentFlags(
-  input: UpdateRespondentFlagsInput,
-): Promise<UpdatedRespondentFlags> {
-  if (input.patch.teamCode !== undefined && input.patch.teamCode !== null) {
-    validateForWrite(teamCodeSchema, input.patch.teamCode, "respondents.teamCode");
+export async function updatePersonAttributes(
+  input: UpdatePersonAttributesInput,
+): Promise<UpdatedPersonAttributes> {
+  const { patch, viewer } = input;
+  // 書き込み前の検証（02 §2。違反は VALIDATION_ERROR）
+  if (patch.teamCode !== undefined && patch.teamCode !== null) {
+    validateForWrite(teamCodeSchema, patch.teamCode, "respondents.teamCode");
   }
-  const r = await getRespondent({ respondentId: input.respondentId, viewer: input.viewer });
-  if (!r) throw new RepositoryError("RESPONDENT_NOT_FOUND", "受検者が見つかりません");
-  const before = { teamCode: r.teamCode, isExcluded: r.isExcluded };
-  const after = {
-    teamCode: input.patch.teamCode === undefined ? r.teamCode : input.patch.teamCode,
-    isExcluded: input.patch.isExcluded === undefined ? r.isExcluded : input.patch.isExcluded,
-  };
-  const teamChanged = before.teamCode !== after.teamCode;
-  const exclusionChanged = before.isExcluded !== after.isExcluded;
-  if (!teamChanged && !exclusionChanged) return { before, after };
+  if (patch.employment !== undefined) {
+    validateForWrite(
+      employmentFieldsSchema,
+      {
+        employmentStatus: patch.employment.status,
+        hiredOn: patch.employment.hiredOn,
+        leftOn: patch.employment.leftOn,
+      },
+      "results.employmentStatus",
+    );
+  }
+  if (patch.staffRole !== undefined) {
+    validateForWrite(staffRoleSchema, patch.staffRole, "results.staffRole");
+  }
+  const kindAfter =
+    patch.staffRole === undefined ? null : respondentKindForStaffRole(patch.staffRole);
+  const skip = (member: PersonMember) =>
+    logger.warn("person_attributes.member_skipped", { resultId: member.resultId });
 
-  const updatedAt = Timestamp.now(); // 両文書で同じ時刻にする（I-36）
-  const fields = { teamCode: after.teamCode, isExcluded: after.isExcluded, updatedAt };
-  const batch = db().batch();
-  batch.update(rawCollection(COLLECTIONS.respondents).doc(r.id), fields);
-  if (r.resultId !== null) batch.update(rawCollection(COLLECTIONS.results).doc(r.resultId), fields);
-  const common = {
-    organizationId: r.organizationId,
-    actorKind: "admin" as const,
-    actorUid: input.viewer.uid,
-    actorRole: input.viewer.role,
-    targetCollection: COLLECTIONS.respondents,
-    targetId: r.id,
-    ipAddress: input.meta.ipAddress,
-    userAgent: input.meta.userAgent,
+  // 1. 受検者
+  const respondents = await getRespondentsByIds({
+    organizationId: viewer.organizationId,
+    respondentIds: input.members.map((m) => m.respondentId),
+  });
+  const visible: Array<{ readonly member: PersonMember; readonly respondent: Respondent }> = [];
+  for (const member of input.members) {
+    const respondent = respondents.get(member.respondentId);
+    if (respondent && isVisibleTo(respondent, viewer)) visible.push({ member, respondent });
+    else skip(member);
+  }
+
+  // 2. 受験（と、役職で受検者区分が変わるときの利用履歴）
+  const resultIds = visible
+    .map((v) => v.member.resultId)
+    .filter((id): id is string => id !== null && docIdSchema.safeParse(id).success);
+  const results = new Map<string, { readonly result: Result; readonly hasStatus: boolean }>();
+  const resultSnapshots = await getAllInChunks(
+    resultIds.map((id) => rawCollection(COLLECTIONS.results).doc(id)),
+  );
+  for (const snapshot of resultSnapshots) {
+    const data = snapshot.data();
+    if (!snapshot.exists || data === undefined) continue;
+    const result = toResult(snapshot.id, data as ResultDoc);
+    if (result.organizationId !== viewer.organizationId || result.deletedAt !== null) continue;
+    results.set(result.id, { result, hasStatus: data.employmentStatus !== undefined });
+  }
+  const loaded: LoadedMember[] = [];
+  for (const { member, respondent } of visible) {
+    if (member.resultId === null) {
+      loaded.push({ respondent, result: null, hasEmploymentStatus: false });
+      continue;
+    }
+    const found = results.get(member.resultId);
+    if (!found) {
+      skip(member);
+      continue;
+    }
+    loaded.push({ respondent, result: found.result, hasEmploymentStatus: found.hasStatus });
+  }
+  if (loaded.length === 0) {
+    throw new RepositoryError("RESPONDENT_NOT_FOUND", "受検者が見つかりません");
+  }
+  const usageLogIds = new Set<string>();
+  if (kindAfter !== null) {
+    const ids = loaded
+      .filter((m) => m.result !== null && m.respondent.kind !== kindAfter)
+      .map((m) => m.respondent.usageLogId)
+      .filter((id): id is string => id !== null && docIdSchema.safeParse(id).success);
+    const usageSnapshots = await getAllInChunks(
+      ids.map((id) => rawCollection(COLLECTIONS.usageLogs).doc(id)),
+    );
+    for (const snapshot of usageSnapshots) {
+      if (snapshot.exists && snapshot.get("organizationId") === viewer.organizationId) {
+        usageLogIds.add(snapshot.id);
+      }
+    }
+  }
+
+  // 3. 受験ごとに、変わる項目だけを書く
+  const updatedAt = Timestamp.now(); // 書く文書の updatedAt をすべて同じ時刻にする（I-36）
+  const audit =
+    (action: string, targetCollection: string, targetId: string, details: AuditDetails): BatchOp =>
+    (batch) =>
+      addAuditLogToBatch(batch, {
+        organizationId: viewer.organizationId,
+        actorKind: "admin",
+        actorUid: viewer.uid,
+        actorRole: viewer.role,
+        action,
+        targetCollection,
+        targetId,
+        details,
+        ipAddress: input.meta.ipAddress,
+        userAgent: input.meta.userAgent,
+      });
+  const groups: BatchOp[][] = [];
+  for (const { respondent: r, result, hasEmploymentStatus } of loaded) {
+    const respondentFields: Record<string, unknown> = {};
+    const resultFields: Record<string, unknown> = {};
+    let usageLogKind: RespondentKind | null = null;
+    const audits: BatchOp[] = [];
+    if (patch.teamCode !== undefined && patch.teamCode !== r.teamCode) {
+      respondentFields.teamCode = patch.teamCode;
+      resultFields.teamCode = patch.teamCode;
+      audits.push(
+        audit("respondent.update_team", COLLECTIONS.respondents, r.id, {
+          before: r.teamCode,
+          after: patch.teamCode,
+        }),
+      );
+    }
+    if (patch.isExcluded !== undefined && patch.isExcluded !== r.isExcluded) {
+      respondentFields.isExcluded = patch.isExcluded;
+      resultFields.isExcluded = patch.isExcluded;
+      audits.push(
+        audit("respondent.update_exclusion", COLLECTIONS.respondents, r.id, {
+          before: r.isExcluded,
+          after: patch.isExcluded,
+        }),
+      );
+    }
+    if (result !== null && patch.staffRole !== undefined && kindAfter !== null) {
+      const roleChanged = result.staffRole !== patch.staffRole;
+      const kindChanged = r.kind !== kindAfter;
+      if (roleChanged || kindChanged) {
+        // M7 より前の受験（employmentStatus が無い）は、変える前の受検者区分から求めた区分を書く（11-2 §3.1）
+        if (!hasEmploymentStatus) resultFields.employmentStatus = initialEmploymentStatus(r.kind);
+        if (roleChanged) resultFields.staffRole = patch.staffRole;
+        if (kindChanged) {
+          respondentFields.kind = kindAfter;
+          resultFields.respondentKind = kindAfter;
+          if (r.usageLogId !== null && usageLogIds.has(r.usageLogId)) usageLogKind = kindAfter;
+        }
+        audits.push(
+          audit("result.update_staff_role", COLLECTIONS.results, result.id, {
+            before: result.staffRole,
+            after: patch.staffRole,
+            kindBefore: r.kind,
+            kindAfter,
+          }),
+        );
+      }
+    }
+    if (result !== null && patch.employment !== undefined) {
+      const next = patch.employment;
+      if (
+        next.status !== result.employmentStatus ||
+        next.hiredOn !== result.hiredOn ||
+        next.leftOn !== result.leftOn
+      ) {
+        resultFields.employmentStatus = next.status;
+        resultFields.hiredOn = next.hiredOn;
+        resultFields.leftOn = next.leftOn;
+        audits.push(
+          audit("result.update_employment", COLLECTIONS.results, result.id, {
+            before: result.employmentStatus,
+            after: next.status,
+            hiredOnBefore: result.hiredOn,
+            hiredOnAfter: next.hiredOn,
+            leftOnBefore: result.leftOn,
+            leftOnAfter: next.leftOn,
+          }),
+        );
+      }
+    }
+    const ops: BatchOp[] = [];
+    if (Object.keys(respondentFields).length > 0) {
+      const ref = rawCollection(COLLECTIONS.respondents).doc(r.id);
+      ops.push((batch) => batch.update(ref, { ...respondentFields, updatedAt }));
+    }
+    if (result !== null && Object.keys(resultFields).length > 0) {
+      const ref = rawCollection(COLLECTIONS.results).doc(result.id);
+      ops.push((batch) => batch.update(ref, { ...resultFields, updatedAt }));
+    }
+    if (usageLogKind !== null && r.usageLogId !== null) {
+      const ref = rawCollection(COLLECTIONS.usageLogs).doc(r.usageLogId);
+      const kind = usageLogKind;
+      ops.push((batch) => batch.update(ref, { respondentKind: kind, updatedAt }));
+    }
+    if (ops.length > 0) groups.push([...ops, ...audits]);
+  }
+
+  // 4〜5. 変わる項目があれば、受験ごとの書き込みを分けずに 450 件までのバッチに積んで順にコミットする
+  let batch = db().batch();
+  let count = 0;
+  for (const ops of groups) {
+    if (count > 0 && count + ops.length > PERSON_BATCH_LIMIT) {
+      await batch.commit();
+      batch = db().batch();
+      count = 0;
+    }
+    for (const op of ops) op(batch);
+    count += ops.length;
+  }
+  if (count > 0) await batch.commit();
+
+  return {
+    writtenResultIds: loaded.flatMap((m) => (m.result === null ? [] : [m.result.id])),
+    kindAfter,
   };
-  if (teamChanged) {
-    addAuditLogToBatch(batch, {
-      ...common,
-      action: "respondent.update_team",
-      details: { before: before.teamCode, after: after.teamCode },
-    });
-  }
-  if (exclusionChanged) {
-    addAuditLogToBatch(batch, {
-      ...common,
-      action: "respondent.update_exclusion",
-      details: { before: before.isExcluded, after: after.isExcluded },
-    });
-  }
-  await batch.commit();
-  return { before, after };
 }
 
 /**
