@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { Viewer } from "@/lib/auth/claims";
 import {
   softDeleteRespondent,
-  updateRespondentFlags,
+  updatePersonAttributes,
 } from "@/lib/db/repositories/respondents-repository";
 import { fetchPopulation } from "@/lib/db/repositories/results-repository";
 import { scoreAnswers } from "@/lib/scoring/score";
@@ -37,8 +37,8 @@ beforeAll(async () => {
   ids.a2 = (await submitAnswerSet(org, cyclicAnswers())).resultId;
 
   const excluded = await submitAnswerSet(org, uniformAnswers(2));
-  await updateRespondentFlags({
-    respondentId: excluded.respondentId,
+  await updatePersonAttributes({
+    members: [{ respondentId: excluded.respondentId, resultId: excluded.resultId }],
     viewer,
     patch: { isExcluded: true },
     meta,
@@ -54,8 +54,8 @@ beforeAll(async () => {
   await writeDocForTest("results", ids.d, { scoringVersion: "0.9.0" });
 
   const team = await submitAnswerSet(org, uniformAnswers(5));
-  await updateRespondentFlags({
-    respondentId: team.respondentId,
+  await updatePersonAttributes({
+    members: [{ respondentId: team.respondentId, resultId: team.resultId }],
     viewer,
     patch: { teamCode: "A" },
     meta,

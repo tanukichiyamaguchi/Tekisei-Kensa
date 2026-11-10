@@ -4,8 +4,8 @@
 // （firestore-debug.log に該当出力なし）。そのため 08 の代替手順どおり、リポジトリ関数が実際に発行したクエリの形
 // （等価条件・不等号条件・並び順）を捕捉し、firestore.indexes.json の定義と機械的に照合する。
 // Q-M7-1 はリポジトリの canLinkAsPrevious() の発行で照合する（M7-exam-34。送信のトランザクションの中の同じ形のクエリは
-// tx.get() で読み、Query.prototype.get を通らないので捕捉されない）。リポジトリの関数がまだ無い M7 のクエリ（Q5・Q6 の改め。
-// PR-7.5 が置き換える）は、Q7・Q12 と同じく直接のクエリで発行する
+// tx.get() で読み、Query.prototype.get を通らないので捕捉されない）。Q5（改）・Q6（改）は利用履歴の listUsageLogs({ viewer })
+// の発行で照合する（M7-list-33。11-2 §3.4）
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
@@ -53,12 +53,17 @@ const indexKey = (index: IndexDef) =>
   `${index.collectionGroup}(${index.fields.map((f) => `${f.fieldPath} ${f.order}`).join(", ")})`;
 
 /**
- * M7 で使わなくなり、PR-7.17 で消す定義（11-5 §3.1・§3.11: 2.5 版までの Q1・Q2。fetchPopulation() は Q1（改）で読む）。
- * 使うコードのデプロイの後に消す規則（08 §8.2 の 4）により、M7 の最後まで定義に残す
+ * M7 で使わなくなり、PR-7.17 で消す定義（firestore.indexes.json の順）。11-5 §3.1・§3.11: 2.5 版までの Q1・Q2
+ * （fetchPopulation() は Q1（改）で読む）。11-2 §3.4: registeredAt 順の Q5・Q6 の 4 本（利用履歴は Q5（改）・Q6（改）で読む）。
+ * 使うコードのデプロイの後に消す規則（08 §8.2 の 4）と、前の版に戻すときのため、M7 の最後まで定義に残す
  */
 const RETIRED_INDEXES = [
   "results(organizationId ASCENDING, isExcluded ASCENDING, scoringVersion ASCENDING, deletedAt ASCENDING)",
   "results(organizationId ASCENDING, isExcluded ASCENDING, scoringVersion ASCENDING, deletedAt ASCENDING, teamCode ASCENDING)",
+  "usageLogs(organizationId ASCENDING, registeredAt DESCENDING)",
+  "usageLogs(organizationId ASCENDING, registeredAt ASCENDING)",
+  "usageLogs(organizationId ASCENDING, respondentKind ASCENDING, registeredAt DESCENDING)",
+  "usageLogs(organizationId ASCENDING, respondentKind ASCENDING, registeredAt ASCENDING)",
 ];
 
 /** 捕捉したクエリの形 */
@@ -135,7 +140,7 @@ function indexServes(index: IndexDef, shape: QueryShape): boolean {
   if (JSON.stringify(head) !== JSON.stringify(eq)) return false;
   const rest = index.fields.slice(eq.length);
   const ordering = orderingOf(shape);
-  if (ordering.length === 0) return true; // 等価条件のみ: 先頭一致で足りる（Q13 は Q5 / Q6 と共用。02 §7.1）
+  if (ordering.length === 0) return true; // 等価条件のみ: 先頭一致で足りる
   return JSON.stringify(rest) === JSON.stringify(ordering);
 }
 
@@ -160,7 +165,8 @@ beforeAll(async () => {
     return originalAggregateGet.apply(this, args);
   });
 
-  // リポジトリの全クエリを発行する（02 §7.1 の Q1（改）・Q3〜Q14、Q-M7-1、Q-M7-2）
+  // リポジトリの全クエリを発行する（02 §7.1 の Q1（改）・Q3・Q4・Q5（改）・Q6（改）・Q7〜Q12・Q14、Q-M7-1、Q-M7-2。
+  // registeredAt 順の Q5・Q6 と Q13 は 2.7 版でやめた）
   const { org, owner } = await createOrganizationWithOwner("インデックス歯科");
   const submitted = await submitAnswerSet(org, uniformAnswers(3));
   const ownerViewer: Viewer = { uid: owner.uid, organizationId: org.organizationId, role: "owner" };
@@ -178,9 +184,7 @@ beforeAll(async () => {
   for (const viewer of [ownerViewer, adminViewer]) {
     await listResults({ viewer }); // Q3 / Q4
     await listResultsForClassification({ viewer }); // Q3 / Q4
-    for (const order of ["desc", "asc"] as const) {
-      await listUsageLogs({ viewer, order, offset: 0, limit: 10 }); // Q5 / Q6 + Q13
-    }
+    await listUsageLogs({ viewer }); // Q5（改）/ Q6（改）（11-2 §3.4。M7-list-33）
   }
   await listAdminUsers(org.organizationId); // Q8
   await listActiveOwners(org.organizationId); // Q-M7-2（11-8 §3.4）
@@ -212,18 +216,6 @@ beforeAll(async () => {
     .orderBy("createdAt", "desc")
     .limit(10)
     .get();
-  // M7 で定義し、リポジトリの関数が後で使うクエリ（Q5・Q6（改）: 利用履歴の submittedAt 順。PR-7.5 が置き換える）
-  await adminFirestore()
-    .collection("usageLogs")
-    .where("organizationId", "==", org.organizationId)
-    .orderBy("submittedAt", "desc")
-    .get(); // Q5（改。11-2 §3.4）
-  await adminFirestore()
-    .collection("usageLogs")
-    .where("organizationId", "==", org.organizationId)
-    .where("respondentKind", "==", "applicant")
-    .orderBy("submittedAt", "desc")
-    .get(); // Q6（改。11-2 §3.4）
 });
 
 afterAll(() => {
@@ -240,7 +232,7 @@ describe("I-50 firestore.indexes.json とクエリの照合", () => {
     expect(missing).toEqual([]);
   });
 
-  it("使われていない定義は、M7 で使わなくなり PR-7.17 で消す今の Q1・Q2 の 2 本だけ（ほかに使わない定義が無い）", () => {
+  it("使われていない定義は、M7 で使わなくなり PR-7.17 で消す 6 本（2.5 版までの Q1・Q2 と、registeredAt 順の Q5・Q6 の 4 本）だけ（ほかに使わない定義が無い）", () => {
     const unused = indexFile.indexes.filter(
       (index) => !captured.filter(needsComposite).some((shape) => indexServes(index, shape)),
     );

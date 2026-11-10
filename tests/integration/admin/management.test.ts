@@ -1,4 +1,4 @@
-// I-31 監査ログ、I-32 論理削除、I-36 複製フィールドの同期（04 §5.6、00 §2.2・D-34、04 §10 (7)）
+// I-31 監査ログ、I-32 論理削除、I-36 複製フィールドの同期（04 §5.6、00 §2.2・D-34、04 §10 (7)、11-2 §3.6・§3.10）
 import type { Timestamp } from "firebase-admin/firestore";
 import { describe, expect, it } from "vitest";
 
@@ -13,7 +13,7 @@ import { GET as getResultRoute } from "@/app/api/v1/admin/results/[resultId]/rou
 import { GET as listResultsRoute } from "@/app/api/v1/admin/results/route";
 import { GET as listUsageLogsRoute } from "@/app/api/v1/admin/usage-logs/route";
 import { COLLECTIONS } from "@/lib/db/collections";
-import type { PagedDto, ResultListItemDto, RespondentUpdatedDto } from "@/lib/services/dto/admin";
+import type { PersonUpdatedDto, ResultListDto } from "@/lib/services/dto/admin";
 
 import {
   createOrganizationWithOwner,
@@ -85,6 +85,12 @@ describe("I-31 管理者 API の監査ログ", () => {
     await call(patchRespondent(owner, target.respondentId, { teamCode: "C" }));
     await call(patchRespondent(owner, target.respondentId, { isExcluded: true }));
     await call(
+      patchRespondent(owner, target.respondentId, {
+        employment: { status: "employed", hiredOn: "2025-04-01", leftOn: null },
+      }),
+    );
+    await call(patchRespondent(owner, target.respondentId, { staffRole: "leader" }));
+    await call(
       callRoute(listUsageLogsRoute, {
         method: "GET",
         url: "/api/v1/admin/usage-logs",
@@ -118,6 +124,8 @@ describe("I-31 管理者 API の監査ログ", () => {
       "result.comparison",
       "respondent.update_team",
       "respondent.update_exclusion",
+      "result.update_employment",
+      "result.update_staff_role",
       "usage_log.view",
       "classification.view",
       "account.update",
@@ -146,20 +154,49 @@ describe("I-31 管理者 API の監査ログ", () => {
       before: false,
       after: true,
     });
+    expect(byAction("result.update_employment")[0]).toMatchObject({
+      targetCollection: COLLECTIONS.results,
+      targetId: target.resultId,
+      details: {
+        before: "candidate",
+        after: "employed",
+        hiredOnBefore: null,
+        hiredOnAfter: "2025-04-01",
+        leftOnBefore: null,
+        leftOnAfter: null,
+      },
+    });
+    expect(byAction("result.update_staff_role")[0]).toMatchObject({
+      targetCollection: COLLECTIONS.results,
+      targetId: target.resultId,
+      details: { before: null, after: "leader", kindBefore: "applicant", kindAfter: "executive" },
+    });
+    // 回答一覧は行と受験の数（11-2 §3.10）
+    expect(byAction("result.list")[0]!.details).toEqual({ rowCount: 2, examCount: 2 });
     expect(byAction("account.update")[0]!.details).toEqual({ fields: ["name"] });
     expect(byAction("respondent.delete")[0]!.targetId).toBe(target.respondentId);
   });
 
-  it("同じ値への PATCH は 200 で監査ログを書かない", async () => {
+  it("同じ値への PATCH は 200 で監査ログを書かない（区分と日付・役職を含む）", async () => {
     const { org, owner } = await createOrganizationWithOwner("監査ログ変更なし歯科");
     const target = await submitAnswerSet(org, uniformAnswers(2));
     const before = (await auditLogsOf(org.organizationId)).length;
     const res = await patchRespondent(owner, target.respondentId, {
       teamCode: null,
       isExcluded: false,
+      employment: { status: "candidate", hiredOn: null, leftOn: null },
     });
     expect(res.status).toBe(200);
     expect((await auditLogsOf(org.organizationId)).length).toBe(before);
+    expect((await patchRespondent(owner, target.respondentId, { staffRole: "staff" })).status).toBe(
+      200,
+    );
+    const afterRole = (await auditLogsOf(org.organizationId)).length;
+    expect(afterRole).toBe(before + 1);
+    expect((await patchRespondent(owner, target.respondentId, { staffRole: "staff" })).status).toBe(
+      200,
+    );
+    expect((await auditLogsOf(org.organizationId)).length).toBe(afterRole);
   });
 });
 
@@ -206,7 +243,7 @@ describe("I-32 DELETE /admin/respondents/{id}", () => {
       url: "/api/v1/admin/results",
       cookieHeader: owner.cookieHeader,
     });
-    expect(((await list.json()) as PagedDto<ResultListItemDto>).total).toBe(0);
+    expect(((await list.json()) as ResultListDto).rows).toEqual([]);
     const patch = await patchRespondent(owner, target.respondentId, { isExcluded: true });
     expect(patch.status).toBe(404);
   });
@@ -245,11 +282,15 @@ describe("I-36 複製フィールドの同期", () => {
     for (const step of steps) {
       const res = await patchRespondent(owner, target.respondentId, step.body);
       expect(res.status).toBe(200);
-      const dto = (await res.json()) as RespondentUpdatedDto;
+      const dto = (await res.json()) as PersonUpdatedDto;
       expect(dto).toMatchObject({
         respondentId: target.respondentId,
+        resultIds: [target.resultId],
         teamCode: step.teamCode,
         isExcluded: step.isExcluded,
+        employment: { status: "candidate", hiredOn: null, leftOn: null },
+        staffRole: null,
+        isVisibleAfterUpdate: true,
       });
 
       const respondent = await getDocForTest<Flags>(COLLECTIONS.respondents, target.respondentId);
@@ -259,6 +300,7 @@ describe("I-36 複製フィールドの同期", () => {
       expect(respondent!.isExcluded).toBe(step.isExcluded);
       expect(result!.isExcluded).toBe(step.isExcluded);
       expect(result!.updatedAt.isEqual(respondent!.updatedAt)).toBe(true);
+      // respondentKind は staffRole を送らなければ変わらない（11-2 §3.2）
       expect(respondent!.kind).toBe("applicant");
       expect(result!.respondentKind).toBe("applicant");
 
@@ -267,8 +309,51 @@ describe("I-36 複製フィールドの同期", () => {
         url: "/api/v1/admin/results",
         cookieHeader: owner.cookieHeader,
       });
-      const [item] = ((await list.json()) as PagedDto<ResultListItemDto>).items;
-      expect(item).toMatchObject({ teamCode: step.teamCode, isExcluded: step.isExcluded });
+      const [row] = ((await list.json()) as ResultListDto).rows;
+      expect(row).toMatchObject({ teamCode: step.teamCode, isExcluded: step.isExcluded });
+    }
+  });
+
+  it("つながった受験（再受験）では、受検者・受験・利用履歴の複製がつながりの全件で正の値と一致し、書いた文書の updatedAt が同じ", async () => {
+    const { org, owner } = await createOrganizationWithOwner("同期つながり歯科");
+    const first = await submitAnswerSet(org, uniformAnswers(2));
+    const retake = await submitAnswerSet(org, uniformAnswers(3), {
+      previousResultId: first.resultId,
+    });
+    type Copy = {
+      teamCode?: string | null;
+      isExcluded?: boolean;
+      kind?: string;
+      respondentKind?: string;
+      updatedAt: Timestamp;
+    };
+    const read = async (exam: typeof first) => ({
+      respondent: (await getDocForTest<Copy>(COLLECTIONS.respondents, exam.respondentId))!,
+      result: (await getDocForTest<Copy>(COLLECTIONS.results, exam.resultId))!,
+      usageLog: (await getDocForTest<Copy>(COLLECTIONS.usageLogs, exam.usageLogId))!,
+    });
+    for (const body of [{ teamCode: "E" }, { isExcluded: true }, { staffRole: "staff" }]) {
+      const res = await patchRespondent(owner, retake.respondentId, body);
+      expect(res.status, JSON.stringify(body)).toBe(200);
+      expect(((await res.json()) as PersonUpdatedDto).resultIds).toEqual([
+        retake.resultId,
+        first.resultId,
+      ]);
+      for (const exam of [first, retake]) {
+        const { respondent, result, usageLog } = await read(exam);
+        expect(result.teamCode).toBe(respondent.teamCode);
+        expect(result.isExcluded).toBe(respondent.isExcluded);
+        expect(result.respondentKind).toBe(respondent.kind);
+        expect(usageLog.respondentKind).toBe(respondent.kind);
+      }
+    }
+    const a = await read(first);
+    const b = await read(retake);
+    expect([a.respondent.teamCode, b.respondent.teamCode]).toEqual(["E", "E"]);
+    expect([a.respondent.kind, b.respondent.kind]).toEqual(["applicant", "applicant"]);
+    // 最後の役職の変更で書いたのは、区分が変わった再受験の 3 文書と、役職が変わった 1 回目の受験。updatedAt は同じ
+    for (const doc of [b.respondent, b.usageLog, a.result]) {
+      expect(doc.updatedAt.isEqual(b.result.updatedAt)).toBe(true);
     }
   });
 

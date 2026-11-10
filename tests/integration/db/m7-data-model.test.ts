@@ -33,7 +33,7 @@ import { getRespondent } from "@/lib/db/repositories/respondents-repository";
 import { getResult } from "@/lib/db/repositories/results-repository";
 import { adminAuth, adminFirestore } from "@/lib/firebase/admin";
 import { getExamStep, type ExamStepNo } from "@/lib/presentation/exam-steps";
-import type { InviteRotatedDto, RespondentUpdatedDto } from "@/lib/services/dto/admin";
+import type { InviteRotatedDto, PersonUpdatedDto } from "@/lib/services/dto/admin";
 import { loadPrintData, type PrintData } from "@/lib/services/print-data";
 
 import {
@@ -106,12 +106,19 @@ function stepBody(stepNo: ExamStepNo, choice = 3, from = 1) {
   };
 }
 
-/** 呼ぶたびに変わる値（比較の計算の時刻）を除いた応答 */
+/** 呼ぶたびに変わる値（比較の計算の時刻、回答一覧の基準時刻）を除いた応答 */
 function stableBody(name: string, body: unknown): unknown {
-  if (name !== "comparison") return body;
-  const { computedAt, ...rest } = body as Doc;
-  expect(typeof computedAt).toBe("string");
-  return rest;
+  if (name === "comparison") {
+    const { computedAt, ...rest } = body as Doc;
+    expect(typeof computedAt).toBe("string");
+    return rest;
+  }
+  if (name === "list") {
+    const { generatedAt, ...rest } = body as Doc;
+    expect(typeof generatedAt).toBe("string");
+    return rest;
+  }
+  return body;
 }
 
 const adminGet = (
@@ -426,21 +433,56 @@ describe("M7 より前の形の文書を読んでも壊れない（例外的な�
     expect(await loadPrint()).toEqual(printBefore);
   });
 
-  it("PATCH /admin/respondents/{id} も補って読み、200 で今の応答の形を返す", async () => {
-    const res = await callRoute(patchRespondentRoute, {
+  const patchLegacy = (respondentId: string, body: unknown) =>
+    callRoute(patchRespondentRoute, {
       method: "PATCH",
-      url: `/api/v1/admin/respondents/${target.respondentId}`,
-      params: { respondentId: target.respondentId },
-      body: { teamCode: "A" },
+      url: `/api/v1/admin/respondents/${respondentId}`,
+      params: { respondentId },
+      body,
       cookieHeader: legacyOwner.cookieHeader,
     });
+
+  it("PATCH /admin/respondents/{id} も補って読み、200 で応答する。チームの変更では M7 の項目を書かない", async () => {
+    const res = await patchLegacy(target.respondentId, { teamCode: "A" });
     expect(res.status).toBe(200);
-    const body = (await res.json()) as RespondentUpdatedDto;
-    expect(body).toMatchObject({ respondentId: target.respondentId, teamCode: "A" });
+    const body = (await res.json()) as PersonUpdatedDto;
+    expect(body).toMatchObject({
+      respondentId: target.respondentId,
+      resultIds: [target.resultId],
+      teamCode: "A",
+      // 区分・日付・役職は読み取りの補いの値（11-2 §3.1）
+      employment: { status: "candidate", hiredOn: null, leftOn: null },
+      staffRole: null,
+    });
     const result = (await getDocForTest<Doc>(COLLECTIONS.results, target.resultId))!;
     expect(result.teamCode).toBe("A");
     // 移行（backfill-m7）の前なので、M7 の項目は書かれないまま
     expect(result).not.toHaveProperty("employmentStatus");
+  });
+
+  it("M7-list-32（補いの分）: 役職の変更では、employmentStatus の無い受験に変える前の受検者区分から求めた区分を書く（役職で区分を動かさない。11-2 §3.1）", async () => {
+    // 既存スタッフをスタッフにする: 受検者区分は applicant になるが、区分は変える前の executive から求めた employed
+    expect((await patchLegacy(executive.respondentId, { staffRole: "staff" })).status).toBe(200);
+    const exec = (await getDocForTest<Doc>(COLLECTIONS.results, executive.resultId))!;
+    expect(exec).toMatchObject({
+      employmentStatus: "employed",
+      staffRole: "staff",
+      respondentKind: "applicant",
+    });
+    expect(exec).not.toHaveProperty("hiredOn"); // 書くのは区分だけ（ほかの項目は読み取りで補う）
+    expect(
+      (await getDocForTest<Doc>(COLLECTIONS.usageLogs, executive.usageLogId))!.respondentKind,
+    ).toBe("applicant");
+    // 求職者を幹部にする: 受検者区分は executive になるが、区分は変える前の applicant から求めた candidate
+    expect((await patchLegacy(target.respondentId, { staffRole: "leader" })).status).toBe(200);
+    expect((await getDocForTest<Doc>(COLLECTIONS.results, target.resultId))!).toMatchObject({
+      employmentStatus: "candidate",
+      staffRole: "leader",
+      respondentKind: "executive",
+    });
+    expect((await getDocForTest<Doc>(COLLECTIONS.respondents, target.respondentId))!.kind).toBe(
+      "executive",
+    );
   });
 
   it("公開の時点で受験中の人（11-1 §3.6）: M7 より前の形の受検者・セッションのまま残りをステップごとに保存して送信でき、results に M7 の項目が入る", async () => {

@@ -1,19 +1,20 @@
 "use client";
-// P-01 利用履歴（06 §3.4.7）。開くたびに GET /api/v1/admin/usage-logs（registeredAt 降順）を取得する
+// P-01 利用履歴（06 §3.4.7）。PR-7.6 で作り直すまでの形。API は送信済みの全件を回答日時の新しい順で返すので
+// （11-2 §3.8）、開くたびに GET /api/v1/admin/usage-logs で全件を 1 回受け取り、50 件ずつ画面でページを切り替える
 import { useEffect, useState } from "react";
 
 import { Dialog } from "@/components/ui/Dialog";
 import { ADMIN_TEXTS } from "@/lib/presentation/admin-texts";
 import { formatDateTime } from "@/lib/presentation/format-datetime";
 import { pageCount } from "@/lib/presentation/admin-navigation";
-import type { PagedDto, UsageLogItemDto } from "@/lib/services/dto/admin";
+import type { UsageLogListDto } from "@/lib/services/dto/admin";
 import { AdminApiError, fetchUsageLogs } from "@/lib/utils/admin-api";
 
 const PAGE_SIZE = 50;
 
 type State =
   | { readonly kind: "loading" }
-  | { readonly kind: "ready"; readonly data: PagedDto<UsageLogItemDto> }
+  | { readonly kind: "ready"; readonly data: UsageLogListDto }
   | { readonly kind: "error"; readonly message: string };
 
 export function UsageLogDialog(props: { readonly open: boolean; readonly onClose: () => void }) {
@@ -24,7 +25,7 @@ export function UsageLogDialog(props: { readonly open: boolean; readonly onClose
     if (!props.open) return;
     const controller = new AbortController();
     setState({ kind: "loading" });
-    fetchUsageLogs({ page, pageSize: PAGE_SIZE })
+    fetchUsageLogs()
       .then((data) => {
         if (!controller.signal.aborted) setState({ kind: "ready", data });
       })
@@ -36,13 +37,16 @@ export function UsageLogDialog(props: { readonly open: boolean; readonly onClose
         });
       });
     return () => controller.abort();
-  }, [props.open, page]);
+  }, [props.open]);
 
   const title =
     state.kind === "ready"
       ? `${ADMIN_TEXTS.usageLogs}（全 ${state.data.total} 件）`
       : ADMIN_TEXTS.usageLogs;
   const pages = state.kind === "ready" ? pageCount(state.data.total, PAGE_SIZE) : 1;
+  // API の並び（回答日時の新しい順）のまま、表示するページの分だけを切り出す
+  const items =
+    state.kind === "ready" ? state.data.items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : [];
 
   return (
     <Dialog
@@ -97,7 +101,7 @@ export function UsageLogDialog(props: { readonly open: boolean; readonly onClose
             </tr>
           </thead>
           <tbody>
-            {state.data.items.map((item) => (
+            {items.map((item) => (
               <tr key={item.usageLogId}>
                 <td>{item.name}</td>
                 <td className="data-table__nowrap">{item.phoneNumber}</td>

@@ -17,7 +17,7 @@ import {
   getRespondent,
   registerRespondent,
   softDeleteRespondent,
-  updateRespondentFlags,
+  updatePersonAttributes,
 } from "@/lib/db/repositories/respondents-repository";
 import { fetchPopulation, getResult, listResults } from "@/lib/db/repositories/results-repository";
 import { listUsageLogs } from "@/lib/db/repositories/usage-logs-repository";
@@ -357,9 +357,10 @@ describe("受検の登録 → 保存 → 送信（リポジトリ経路）", () 
   });
 });
 
-describe("I-36 複製フィールドの同期（updateRespondentFlags）", () => {
+describe("I-36 複製フィールドの同期（updatePersonAttributes。members はその受検者と結果の 1 組）", () => {
   it("teamCode A → B → null、isExcluded true → false で respondents と results が常に一致し updatedAt が同じ", async () => {
     const { respondentId, resultId } = await submitAnswerSet(org, uniformAnswers(4));
+    const members = [{ respondentId, resultId }];
     const steps: Array<{ teamCode?: "A" | "B" | null; isExcluded?: boolean }> = [
       { teamCode: "A" },
       { teamCode: "B" },
@@ -368,7 +369,8 @@ describe("I-36 複製フィールドの同期（updateRespondentFlags）", () =>
       { isExcluded: false },
     ];
     for (const patch of steps) {
-      await updateRespondentFlags({ respondentId, viewer, patch, meta });
+      const written = await updatePersonAttributes({ members, viewer, patch, meta });
+      expect(written).toEqual({ writtenResultIds: [resultId], kindAfter: null });
       const r = await getDocForTest("respondents", respondentId);
       const res = await getDocForTest("results", resultId);
       expect(res!.teamCode).toBe(r!.teamCode);
@@ -393,32 +395,55 @@ describe("I-36 複製フィールドの同期（updateRespondentFlags）", () =>
     ).toBe(2);
   });
 
-  it("変更が無ければ何も書かない。不正なチーム（A〜Z 以外）は VALIDATION_ERROR、他組織の受検者は RESPONDENT_NOT_FOUND", async () => {
-    const { respondentId } = await submitAnswerSet(org, uniformAnswers(4));
+  it("変更が無ければ何も書かない。不正なチーム（A〜Z 以外）・区分と日付・役職は VALIDATION_ERROR、他組織の受検者は RESPONDENT_NOT_FOUND", async () => {
+    const { respondentId, resultId } = await submitAnswerSet(org, uniformAnswers(4));
+    const members = [{ respondentId, resultId }];
     const before = await countDocs("auditLogs");
-    await updateRespondentFlags({
-      respondentId,
+    const updatedAt = (await getDocForTest("results", resultId))!.updatedAt as Timestamp;
+    await updatePersonAttributes({
+      members,
       viewer,
-      patch: { teamCode: null, isExcluded: false },
+      patch: {
+        teamCode: null,
+        isExcluded: false,
+        employment: { status: "candidate", hiredOn: null, leftOn: null },
+      },
       meta,
     });
     expect(await countDocs("auditLogs")).toBe(before);
+    expect(
+      ((await getDocForTest("results", resultId))!.updatedAt as Timestamp).isEqual(updatedAt),
+    ).toBe(true);
     await expectRepositoryError(
-      updateRespondentFlags({ respondentId, viewer, patch: { teamCode: "AA" as "A" }, meta }),
+      updatePersonAttributes({ members, viewer, patch: { teamCode: "AA" as "A" }, meta }),
       "VALIDATION_ERROR",
     );
+    // 区分が退職でない退職日・退職日 < 入社日・決まった値以外の役職（書き込みの前の検証。02 §2）
+    for (const patch of [
+      { employment: { status: "employed", hiredOn: null, leftOn: "2026-10-31" } },
+      { employment: { status: "left", hiredOn: "2026-04-01", leftOn: "2025-04-01" } },
+      { employment: { status: "left", hiredOn: null, leftOn: "2026-02-30" } },
+      { staffRole: "owner" },
+    ] as const) {
+      await expectRepositoryError(
+        updatePersonAttributes({ members, viewer, patch: patch as never, meta }),
+        "VALIDATION_ERROR",
+      );
+    }
     const other = { ...viewer, organizationId: "otherOrganization0001" };
     await expectRepositoryError(
-      updateRespondentFlags({ respondentId, viewer: other, patch: { teamCode: "A" }, meta }),
+      updatePersonAttributes({ members, viewer: other, patch: { teamCode: "A" }, meta }),
       "RESPONDENT_NOT_FOUND",
     );
   });
 
   it("admin は幹部の受検者を変更できない（存在を見せない）", async () => {
-    const { respondentId } = await submitAnswerSet(org, uniformAnswers(1), { kind: "executive" });
+    const { respondentId, resultId } = await submitAnswerSet(org, uniformAnswers(1), {
+      kind: "executive",
+    });
     await expectRepositoryError(
-      updateRespondentFlags({
-        respondentId,
+      updatePersonAttributes({
+        members: [{ respondentId, resultId }],
         viewer: { ...viewer, role: "admin" },
         patch: { teamCode: "A" },
         meta,
@@ -455,8 +480,8 @@ describe("論理削除（softDeleteRespondent）", () => {
     expect(population.some((p) => p.resultId === resultId)).toBe(false);
     // usageLogs は変更しない（利用履歴は削除後も残る。10 K-04）
     expect(await getDocForTest("usageLogs", usageLogId)).not.toBeNull();
-    const usage = await listUsageLogs({ viewer, order: "desc", offset: 0, limit: 200 });
-    expect(usage.items.some((u) => u.id === usageLogId)).toBe(true);
+    const usage = await listUsageLogs({ viewer });
+    expect(usage.some((u) => u.id === usageLogId)).toBe(true);
     expect(
       await countDocs("auditLogs", [
         ["targetId", "==", respondentId],

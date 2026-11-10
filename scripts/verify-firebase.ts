@@ -189,8 +189,9 @@ async function checkFirestore(results: CheckResult[], runId: string): Promise<vo
     });
   }
 
-  // デプロイ済みの firestore.indexes.json でリポジトリの全クエリ（02 §7.1 の Q1（改）・Q3〜Q14・Q-M7-1。Q2 は 2.6 版でやめた。
-  // Q-M7-2 はアプリが発行し始める PR で足す）が通ること（H-01 の補助）
+  // デプロイ済みの firestore.indexes.json でリポジトリの全クエリ（02 §7.1 の Q1（改）・Q3・Q4・Q5（改）・Q6（改）・Q8〜Q11・Q14・
+  // Q-M7-1。運用・テスト用の Q7・Q12 は発行しない。Q2 は 2.6 版で、Q13 と registeredAt 順の Q5・Q6 は 2.7 版でやめた。Q-M7-2 は
+  // アプリが発行し始める PR で足す）が通ること（H-01 の補助）
   const orgId = `verify${runId}`;
   const owner: Viewer = { uid: "verify", organizationId: orgId, role: "owner" };
   const admin: Viewer = { ...owner, role: "admin" };
@@ -216,22 +217,8 @@ async function checkFirestore(results: CheckResult[], runId: string): Promise<vo
     ["Q3 listResults(owner)", () => listResults({ viewer: owner })],
     ["Q4 listResults(admin)", () => listResults({ viewer: admin })],
     ["Q3 listResultsForClassification", () => listResultsForClassification({ viewer: owner })],
-    [
-      "Q5 listUsageLogs(owner, desc)",
-      () => listUsageLogs({ viewer: owner, order: "desc", offset: 0, limit: 1 }),
-    ],
-    [
-      "Q5 listUsageLogs(owner, asc)",
-      () => listUsageLogs({ viewer: owner, order: "asc", offset: 0, limit: 1 }),
-    ],
-    [
-      "Q6 listUsageLogs(admin, desc)",
-      () => listUsageLogs({ viewer: admin, order: "desc", offset: 0, limit: 1 }),
-    ],
-    [
-      "Q6 listUsageLogs(admin, asc)",
-      () => listUsageLogs({ viewer: admin, order: "asc", offset: 0, limit: 1 }),
-    ],
+    ["Q5（改） listUsageLogs(owner)", () => listUsageLogs({ viewer: owner })],
+    ["Q6（改） listUsageLogs(admin)", () => listUsageLogs({ viewer: admin })],
     ["Q8 listAdminUsers", () => listAdminUsers(orgId)],
     [
       "Q9 findOrganizationByInviteTokenHash",
@@ -272,7 +259,7 @@ async function checkFirestore(results: CheckResult[], runId: string): Promise<vo
   results.push({
     id: "3c",
     title:
-      "デプロイ済みのインデックスでリポジトリの全クエリ（Q1（改）・Q3〜Q14・Q-M7-1）が実行できる",
+      "デプロイ済みのインデックスでリポジトリの全クエリ（Q1（改）・Q3・Q4・Q5（改）・Q6（改）・Q8〜Q11・Q14・Q-M7-1）が実行できる",
     status: failed.length === 0 ? "成立" : "不成立",
     detail: failed.length === 0 ? `${queries.length} 件すべて成功` : `失敗: ${failed.join(" / ")}`,
   });

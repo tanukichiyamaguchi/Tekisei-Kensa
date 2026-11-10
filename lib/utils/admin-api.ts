@@ -1,14 +1,14 @@
 // 管理画面（ブラウザ）から API を呼ぶ口（06 §10.4）。応答型は 04 §8.2 の Dto を import type で参照する。
 // /api/v1/admin/** は adminFetch() を通し、401 はログイン画面へ、403（停止・未登録）は再読み込みで E-01 を描画させる
 import type { ComparisonScope } from "@/lib/scoring/types";
+import type { EmploymentStatus, StaffRole } from "@/lib/db/types";
 import { ADMIN_TEXTS } from "@/lib/presentation/admin-texts";
 import type {
   InviteAcceptedDto,
   InviteRotatedDto,
   MeUpdatedDto,
-  PagedDto,
-  RespondentUpdatedDto,
-  UsageLogItemDto,
+  PersonUpdatedDto,
+  UsageLogListDto,
 } from "@/lib/services/dto/admin";
 import type { AiAnalysisDto, ComparisonDto } from "@/lib/services/dto/result";
 
@@ -216,10 +216,23 @@ export async function downloadPdf(
 
 // ---- 回答一覧
 
-export function updateRespondent(
+/**
+ * PATCH /api/v1/admin/respondents/{respondentId}（04 §5.6、11-2 §3.6）。チーム・除外・区分と日付・役職を、その受験を含む行の
+ * つながった全受験に書く。本文は渡された patch だけ（送らない項目は変わらない）
+ */
+export function updatePerson(
   respondentId: string,
-  patch: { readonly teamCode?: string | null; readonly isExcluded?: boolean },
-): Promise<RespondentUpdatedDto> {
+  patch: {
+    readonly teamCode?: string | null;
+    readonly isExcluded?: boolean;
+    readonly employment?: {
+      readonly status: EmploymentStatus;
+      readonly hiredOn: string | null;
+      readonly leftOn: string | null;
+    };
+    readonly staffRole?: StaffRole;
+  },
+): Promise<PersonUpdatedDto> {
   return adminFetch(`${admin}/respondents/${encodeURIComponent(respondentId)}`, {
     method: "PATCH",
     body: patch,
@@ -233,13 +246,9 @@ export function deleteRespondent(respondentId: string): Promise<void> {
   });
 }
 
-export function fetchUsageLogs(params: {
-  readonly page: number;
-  readonly pageSize: number;
-}): Promise<PagedDto<UsageLogItemDto>> {
-  return adminFetch(`${admin}/usage-logs?page=${params.page}&pageSize=${params.pageSize}`, {
-    method: "GET",
-  });
+/** GET /api/v1/admin/usage-logs（04 §5.8、11-2 §3.8）。送信済みの全件（ページングなし。クエリは付けない） */
+export function fetchUsageLogs(): Promise<UsageLogListDto> {
+  return adminFetch(`${admin}/usage-logs`, { method: "GET" });
 }
 
 // ---- アカウント

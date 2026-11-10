@@ -1,5 +1,6 @@
 "use client";
-// M-04 の一覧テーブル（06 §3.4.2、§3.4.4、§3.4.5）。チーム・除外は即時 PATCH、失敗時は元の値に戻す
+// M-04 の一覧テーブル（06 §3.4.2、§3.4.4、§3.4.5）。チーム・除外は即時 PATCH、失敗時は元の値に戻す。
+// PATCH は受検者の更新（updatePerson。つながった全受験に書く。11-2 §3.6）
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -11,7 +12,7 @@ import { ADMIN_TEXTS, RESPONDENT_KIND_LABELS } from "@/lib/presentation/admin-te
 import { TEAM_CODES, teamLabel } from "@/lib/presentation/comparison-scope-params";
 import { formatDateTime } from "@/lib/presentation/format-datetime";
 import type { ResultListItemDto } from "@/lib/services/dto/admin";
-import { AdminApiError, deleteRespondent, updateRespondent } from "@/lib/utils/admin-api";
+import { AdminApiError, deleteRespondent, updatePerson } from "@/lib/utils/admin-api";
 
 type Row = ResultListItemDto;
 
@@ -44,11 +45,16 @@ export function ResultTable(props: {
       prev.map((r) => (r.respondentId === row.respondentId ? ({ ...r, ...patch } as Row) : r)),
     );
     try {
-      const updated = await updateRespondent(row.respondentId, patch);
+      const updated = await updatePerson(row.respondentId, patch);
+      // 応答の値はつながりの代表の受験の値（11-2 §3.6）。この画面は受験ごとの行なので、送った項目だけを入れる
       setRows((prev) =>
         prev.map((r) =>
           r.respondentId === row.respondentId
-            ? { ...r, teamCode: updated.teamCode, isExcluded: updated.isExcluded }
+            ? {
+                ...r,
+                ...(patch.teamCode === undefined ? {} : { teamCode: updated.teamCode }),
+                ...(patch.isExcluded === undefined ? {} : { isExcluded: updated.isExcluded }),
+              }
             : r,
         ),
       );

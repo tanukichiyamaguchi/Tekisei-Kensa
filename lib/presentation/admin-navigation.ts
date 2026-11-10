@@ -23,6 +23,9 @@ export function loginPath(next?: string): string {
   return next ? `/admin/login?next=${encodeURIComponent(next)}` : "/admin/login";
 }
 
+// ResultListUrlState・resultListHref・hasResultFilters・pageCount は、PR-7.6 まで今の回答一覧の画面（旧レイアウト）だけが使い
+// （pageCount は今の利用履歴のポップアップ UsageLogDialog も使う）、PR-7.6 で消す（11-2 §4.2・§4.3。safeNextPath・loginPath は残す）
+
 /** 回答一覧の URL クエリで画面が使う項目（06 §3.4.3。excluded・teamCode 以外の sort は使わない） */
 export type ResultListUrlState = Pick<
   ListResultsQuery,

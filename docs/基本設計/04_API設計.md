@@ -3,8 +3,8 @@
 | 項目 | 内容 |
 |---|---|
 | 文書名 | 適性検査システム 基本設計 04 API・サーバ処理設計 |
-| 版 | 2.4 |
-| 作成日 | 2026-09-17（1.1 版: 2026-09-19、1.2 版: 2026-09-21、2.0 版: 2026-09-21。技術構成の変更（Supabase → Firebase。10 K-06）を反映した全面改版。2.1 版: 2026-09-21。Firebase 化後の分冊間整合（02 2.1 版の関数名・型名に統一）。2.2 版: 2026-09-24。本番デプロイで判明した事項の反映。2.3 版: 2026-11-09。M7 の PR-7.3（受検者画面。11 総論 5.4、11-1 §3.4）。2.4 版: 2026-11-10。M7 の PR-7.4（再受験のつながりと母集団。11 総論 5.4、11-1 §3.4.1・§3.4.3、11-5 §2.1）。改版履歴は §12） |
+| 版 | 2.5 |
+| 作成日 | 2026-09-17（1.1 版: 2026-09-19、1.2 版: 2026-09-21、2.0 版: 2026-09-21。技術構成の変更（Supabase → Firebase。10 K-06）を反映した全面改版。2.1 版: 2026-09-21。Firebase 化後の分冊間整合（02 2.1 版の関数名・型名に統一）。2.2 版: 2026-09-24。本番デプロイで判明した事項の反映。2.3 版: 2026-11-09。M7 の PR-7.3（受検者画面。11 総論 5.4、11-1 §3.4）。2.4 版: 2026-11-10。M7 の PR-7.4（再受験のつながりと母集団。11 総論 5.4、11-1 §3.4.1・§3.4.3、11-5 §2.1）。2.5 版: 2026-11-10。M7 の PR-7.5（回答一覧の API。11 総論 5.4、11-2 §3.5〜§3.11）。改版履歴は §12） |
 | 対象 | 実装者（Route Handler、`lib/services/`、`lib/auth/`、`lib/db/` の実装担当）、05〜08 分冊の設計者 |
 
 ## 0. 本書の位置づけ
@@ -161,35 +161,18 @@ sequenceDiagram
 | 応答の Content-Type | `application/json; charset=utf-8`。PDF のみ `application/pdf` |
 | 日時 | ISO 8601、UTC、`Z` 付き（例: `2026-09-17T01:23:45.678Z`）。Firestore の `Timestamp` ↔ `Date` ↔ ISO 文字列の変換は `lib/db/mappers/`（02）と Dto の組み立てで行い、service の中では `Date` で扱う |
 | 数値 | JSON の number。採点値は丸めない（03 §9）。Firestore の number をそのまま返す（1.x 版の `numeric` 文字列変換は不要） |
-| 一覧応答 | `{ "items": [...], "total": n }` に加え、ページングを使う API は `page`、`pageSize` を含める（§2.2） |
+| 一覧応答 | `{ "items": [...], "total": n }`（利用履歴・管理者一覧）。回答一覧は `{ "generatedAt", "rows": [...] }`（§5.3）。2.5 版から、一覧 API はページングせず全件を返す（§2.2） |
 | 応答ヘッダー | `X-Request-Id`（サーバが採番した UUID。リクエスト ID は文書 ID ではないため UUID のまま）。`Cache-Control: no-store`（個人情報を含むため全 API で固定） |
 | リクエスト ID | `X-Request-Id` ヘッダーをクライアントが送ってきても使わず、サーバで採番する（ログの偽装防止） |
 | 文字数 | 文字数の上限はコードポイント単位（`Array.from(s).length`）で数える。02 の検証スキーマと同じ規則にする |
 
 ### 2.2 ページング・並び替え
 
-一覧 API（回答一覧、利用履歴）に共通です。
+2.5 版（M7 の PR-7.5。11-2 §3.5・§3.8）から、一覧 API（回答一覧、利用履歴）はクエリを受け取らず（付いていても無視する）、閲覧範囲の全件を返します。検索・絞り込み・並び替え・表示の上限（回答一覧は 100 行ずつの「さらに表示」）は画面で行います（11-2 §2.7・§2.8。参照元どおり）。2.4 版までの `page`・`pageSize`・`sort`・`order` と、応答の `page`・`pageSize` はやめました。
 
-| パラメータ | 型 | 既定値 | 制約 |
-|---|---|---|---|
-| `page` | integer | 1 | 1 以上 |
-| `pageSize` | integer | 50 | 1〜200 |
-| `sort` | string | API ごとに定義 | 許可された項目名のみ |
-| `order` | `asc` / `desc` | API ごとに定義 | |
-
-応答:
-
-```json
-{
-  "items": [],
-  "total": 123,
-  "page": 1,
-  "pageSize": 50
-}
-```
-
-- 設計判断 D04-04: 既存の回答一覧は全件表示と推定されますが（要件定義書 §6.2 A-02 にページングの記載なし。未確認）、1 組織あたり数百件規模（00 D-30 の推定）でも 1 リクエストで返せるよう `pageSize` の上限を 200 とし、06 分冊は初期表示で `pageSize=200` を使ってよいこととします。
-- Firestore には SQL の `OFFSET` に相当する `offset()` がありますが、読み飛ばした文書も読み取りとして数えられます（実装時確認）。回答一覧はコレクションをまたぐ突き合わせと氏名の部分一致が必要なため、サーバのメモリ上でページングします（§5.3 D04-55）。利用履歴は `offset()` + `limit()` と `count()` 集計で行います（§5.8）。いずれも 1 組織あたり数百件規模を前提にした判断で、件数の上限の目安は §5.3 に記します。
+- `pagingSchema`（§2.3）は、PR-7.6 まで今の回答一覧の画面（旧レイアウト。06 §3.4）の URL のクエリの解釈（`listResultsQuerySchema`。§5.3 の最後の注記）だけが使い、PR-7.6 で消します（11-2 §4.3）。
+- 設計判断 D04-04（2.5 版で改めた）: 一覧 API はページングせず全件を返します。1 組織あたり数百件規模（00 D-30 の推定）では、応答は数百 KB 以内に収まります（件数の上限の目安は §5.3 D04-55）。2.4 版までは `pageSize` の上限 200 のページングでした。
+- Firestore の `offset()` は読み飛ばした文書も読み取りとして数えられます（実装時確認）。2.5 版から、利用履歴も `offset()` と `count()` 集計（02 Q13）を使わず、全件を読みます（§5.8）。
 
 ### 2.3 入力検証（zod）
 
@@ -221,6 +204,10 @@ export const choiceCodeSchema = z.union([z.literal(1), z.literal(2), z.literal(3
 
 export const scoredQuestionNoSchema = z.number().int().min(1).max(144);
 
+/** 暦日 YYYY-MM-DD（1900-01-01〜2100-12-31 の実在する日）。02 §5 の lib/db/schemas/values.ts から再 export する（2.5 版。11-2 §3.1） */
+export { calendarDateSchema } from "@/lib/db/schemas/values";
+
+/** PR-7.6 まで今の回答一覧の画面（旧レイアウト）の URL のクエリの解釈だけが使う（§2.2） */
 export const pagingSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(50),
@@ -281,7 +268,7 @@ export type ApiErrorCode =
   | "UNAUTHENTICATED" | "ID_TOKEN_INVALID" | "RESPONDENT_TOKEN_INVALID" | "RESPONDENT_TOKEN_EXPIRED"
   | "FORBIDDEN" | "ADMIN_SUSPENDED" | "ADMIN_NOT_REGISTERED" | "ROLE_REQUIRED"
   | "NOT_FOUND" | "ORGANIZATION_NOT_FOUND" | "SESSION_NOT_FOUND" | "RESULT_NOT_FOUND" | "RESPONDENT_NOT_FOUND"
-  | "SESSION_ALREADY_SUBMITTED" | "ANSWERS_INCOMPLETE" | "POPULATION_EMPTY"
+  | "SESSION_ALREADY_SUBMITTED" | "ANSWERS_INCOMPLETE" | "LEFT_BEFORE_HIRED" | "POPULATION_EMPTY"
   | "AI_ALREADY_GENERATING" | "AI_GENERATION_FAILED" | "AI_DAILY_LIMIT_EXCEEDED"
   | "PDF_GENERATION_FAILED" | "INVITE_TOKEN_INVALID" | "EMAIL_ALREADY_REGISTERED" | "CURRENT_PASSWORD_MISMATCH"
   | "RATE_LIMITED" | "SERVICE_UNAVAILABLE" | "INTERNAL_ERROR";
@@ -319,6 +306,7 @@ export class ApiError extends Error {
 | 404 | `RESPONDENT_NOT_FOUND` | 受検者が見つかりません | 管理者 API（同上） |
 | 409 | `SESSION_ALREADY_SUBMITTED` | この受検はすでに送信済みです | 回答保存・送信・開始 |
 | 422 | `ANSWERS_INCOMPLETE` | 未回答の設問があります | 送信（`details.missing` に設問番号の配列） |
+| 422 | `LEFT_BEFORE_HIRED` | 退職日が入社日より前になっています | `PATCH /api/v1/admin/respondents/{id}` の `employment`（退職日 < 入社日。§5.6、11-2 §3.9。2.5 版。画面は先に同じ判定をして通知を出すので、通常はこのエラーにならない） |
 | 409 | `POPULATION_EMPTY` | 比較対象となる受検者がいません | 比較計算（母集団 0 件。03 D3-08） |
 | 409 | `AI_ALREADY_GENERATING` | AI 解説を生成中です。しばらくしてから再度お試しください | AI 生成 |
 | 502 | `AI_GENERATION_FAILED` | AI 解説の生成に失敗しました。再度お試しください | AI 生成（provider エラー・JSON 検証失敗・タイムアウト） |
@@ -556,7 +544,7 @@ export type AuditAction =
   | "respondent.register" | "session.start" | "session.submit"
   | "admin.signup" | "admin.login" | "admin.claims_mismatch"
   | "result.list" | "result.view" | "result.comparison" | "result.ai_generate" | "result.pdf_export"
-  | "respondent.update_team" | "respondent.update_exclusion" | "respondent.delete"
+  | "respondent.update_team" | "respondent.update_exclusion" | "result.update_employment" | "result.update_staff_role" | "respondent.delete"
   | "usage_log.view" | "classification.view" | "account.update" | "organization.rotate_invite_token"
   // 以下はリポジトリ・スクリプト（02 §9.6、§9.9）が書く。service からは呼ばないが、AuditAction の全集合は 02 §11 の表と一致させる
   | "organization.create" | "admin.create" | "admin.role_change" | "admin.suspend" | "admin.unsuspend" | "admin.delete";
@@ -584,12 +572,12 @@ export type { AuditWriter } from "@/lib/db/repositories/audit-logs-repository"; 
 export function enqueueAuditLog(writer: AuditWriter, entry: AuditEntry): void;
 ```
 
-- `lib/services/audit.ts` の `AuditEntry`（`request: RequestMeta` を持つ）は、02 §8.6 の `AuditEntry`（`ipAddress` / `userAgent` を平坦に持ち、`action` は `string`）へ `writeAuditLog` / `enqueueAuditLog` が変換します。登録・開始・送信・チーム／除外・削除・再発行・AI 保存／失敗の監査ログは 02 のリポジトリ関数が `meta: RequestMeta` を受け取って同一バッチ／トランザクションに書くため、service は `request` を渡すだけです（02 §8.1）。service が自分で書くのは閲覧系（`writeAuditLog`）と `admin.login`・`account.update`・`admin.claims_mismatch` です。
+- `lib/services/audit.ts` の `AuditEntry`（`request: RequestMeta` を持つ）は、02 §8.6 の `AuditEntry`（`ipAddress` / `userAgent` を平坦に持ち、`action` は `string`）へ `writeAuditLog` / `enqueueAuditLog` が変換します。登録・開始・送信・チーム／除外・区分と日付・役職・削除・再発行・AI 保存／失敗の監査ログは 02 のリポジトリ関数が `meta: RequestMeta` を受け取って同一バッチ／トランザクションに書くため、service は `request` を渡すだけです（02 §8.1）。service が自分で書くのは閲覧系（`writeAuditLog`）と `admin.login`・`account.update`・`admin.claims_mismatch` です。
 
 | 規則 | 内容 |
 |---|---|
 | 書き込み経路 | すべて Admin SDK（`lib/db/repositories/audit-logs-repository.ts` の `appendAuditLog` / `addAuditLogToBatch`。02 §8.6）。1.x 版の「利用者セッションのクライアントで `actor_id = auth.uid()` を強制」は無くなったため、`actorUid` は service が `AdminContext.uid` / `RespondentSessionContext.respondentId` から必ず設定する（リクエストから受け取らない） |
-| タイミング | 更新系（登録・開始・送信・チーム・除外・削除・再発行・アカウント変更・AI 生成の完了／失敗）は本処理と **同じバッチ／トランザクション** に積み、成功時だけ残る。閲覧系（`result.list`、`result.view`、`result.comparison`、`result.pdf_export`、`usage_log.view`、`classification.view`）はデータ取得の成功後に単独で追記する。失敗した操作は記録しない（失敗はアプリログ。01） |
+| タイミング | 更新系（登録・開始・送信・チーム・除外・区分と日付・役職・削除・再発行・アカウント変更・AI 生成の完了／失敗）は本処理と **同じバッチ／トランザクション** に積み、成功時だけ残る。閲覧系（`result.list`、`result.view`、`result.comparison`、`result.pdf_export`、`usage_log.view`、`classification.view`）はデータ取得の成功後に単独で追記する。失敗した操作は記録しない（失敗はアプリログ。01） |
 | 失敗時 | 閲覧系の追記が失敗しても本処理の応答は変えない（設計判断 D04-11: 閲覧をログ障害で止めない。ただし `logger.warn` で `requestId` とともに記録し、監視対象にする）。更新系は同一バッチのため、監査ログだけが失敗することはない |
 | `details` | 個人情報を入れない。値は `{ before, after }` のようにフィールドの値だけ。配列は `account.update` の `fields`（例 `{ "fields": ["name"] }`）のように文字列の配列に限る（`AuditDetails` 型）。Firestore には map として保存する |
 | `admin.signup` | 招待受理 `POST /auth/invite`（§6.3）が呼ぶ 02 の `createAdminAccount()`（`actorKind: "admin"`）が、`adminUsers` 文書の作成に続けて書く（`actorUid` = `createUser` が返した `uid`。設計判断 D04-36 改。同一バッチではないが各手順は冪等で、途中失敗は D02-40 の再要求で補完される）。`login-events`（§5.1）では書かない |
@@ -752,13 +740,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ resu
 | POST | `/api/v1/admin/me/login-events` | ログイン成功の記録（`admin.login`）。追加 | admin 以上 | §5.1 |
 | POST | `/api/v1/admin/organization/invite-token` | 管理者追加用リンクの再発行。追加（平文のトークンはこの応答でだけ返す） | owner／super_admin | §5.2 |
 | GET | `/api/v1/admin/admin-users` | 同一組織の管理者一覧（アカウント画面 M-07。06 D06-20 の依頼）。追加（2.0 版で変更: `email` を含める） | owner／super_admin | §5.11 |
-| GET | `/api/v1/admin/results` | 回答一覧（検索・並び替え・チーム・除外の絞り込み） | admin 以上（幹部は owner のみ） | §5.3 |
+| GET | `/api/v1/admin/results` | 回答一覧の全行（同じ人の受験を 1 行にまとめ、つながりを返す。検索・絞り込み・並び替えは画面。2.5 版） | admin 以上（幹部は owner のみ） | §5.3 |
 | GET | `/api/v1/admin/results/{resultId}` | 結果詳細（全指標・受検者情報・AI 解説の状態と本文） | 同上 | §5.4 |
 | GET | `/api/v1/admin/results/{resultId}/comparison` | 比較計算（都度計算、非永続化） | 同上 | §5.5 |
-| PATCH | `/api/v1/admin/respondents/{respondentId}` | チーム・除外フラグの更新 | 同上 | §5.6 |
+| PATCH | `/api/v1/admin/respondents/{respondentId}` | チーム・除外・区分・入社日・退職日・役職の更新（つながった全受験に 1 回のバッチで書く。役職で受検者区分も変わる。2.5 版） | 同上 | §5.6 |
 | DELETE | `/api/v1/admin/respondents/{respondentId}` | 削除（論理削除） | 同上 | §5.6 |
 | GET | `/api/v1/admin/classification` | 組織内分類（分類 × タイプの人数と該当者） | 同上 | §5.7 |
-| GET | `/api/v1/admin/usage-logs` | 利用履歴 | 同上 | §5.8 |
+| GET | `/api/v1/admin/usage-logs` | 利用履歴（送信済みの全件。2.5 版） | 同上 | §5.8 |
 | POST | `/api/v1/admin/results/{resultId}/ai-analysis` | AI 解説の生成（生成済みなら保存済みを返す） | 同上 | §5.9 |
 | GET | `/api/v1/admin/results/{resultId}/ai-analysis` | AI 解説の取得（状態のポーリングにも使う） | 同上 | §5.9 |
 | GET | `/api/v1/admin/results/{resultId}/pdf` | PDF 出力（`mode=full` / `restricted`） | 同上 | §5.10 |
@@ -1397,90 +1385,67 @@ export type UpdateMeInput = z.infer<typeof updateMeInputSchema>;
 
 ### 5.3 回答一覧 `GET /api/v1/admin/results`
 
-要件定義書 §6.2 A-02（列、回答日時降順）、A-03（チーム）、A-04（除外）、A-13（幹部はオーナーのみ）に対応します。
+要件定義書 §6.2 A-02（列、回答日時降順）、A-03（チーム）、A-04（除外）、A-13（幹部はオーナーのみ）に対応します。2.5 版（M7 の PR-7.5）で 11-2 §3.5 の形に改めました（同じ人の受験を 1 行にまとめ、閲覧範囲の全行を返す）。詳細は 11-2 §3.5 が正で、本書は要約です。
 
 | 項目 | 内容 |
 |---|---|
-| 認可 | admin 以上。幹部（`executive`）は owner／super_admin にのみ返す（`admin` のときはクエリに `respondentKind == "applicant"` を付ける。00 §5） |
-| 処理 | `results` を組織条件でクエリし、`respondents` を `getAll()` でまとめて取得してサーバで突き合わせる（00 §2.2、D-02。Firestore は結合ができない）。絞り込み・並び替え・ページングはサーバのメモリ上で行う（下記、D04-55） |
-| 監査ログ | `result.list`（`details: { "count": 件数, "page": n }`） |
+| 認可 | admin 以上。既存スタッフ（幹部。`executive`）の受験は owner／super_admin にのみ返す（`admin` のときはクエリに `respondentKind == "applicant"` を付ける。00 §5、10 K-29） |
+| クエリ | なし（2.4 版までの `q`・`teamCode`・`excluded`・`kind`・`sort`・`order`・`page`・`pageSize` はやめた。付いていても無視する）。検索・絞り込み・並び替え・表示の上限は画面で行う（11-2 §2.7・§2.8） |
+| 処理 | `listResultRows(ctx)`（`lib/services/result-list.ts`。下の手順） |
+| 監査ログ | `result.list`（`details: { "rowCount": 行数, "examCount": 受験の件数 }`。11-2 §3.10） |
 
-クエリパラメータ:
+処理手順（`listResultRows`）:
 
-| 名前 | 型 | 既定値 | 内容 |
-|---|---|---|---|
-| `q` | string（100 文字以内） | なし | 氏名の部分一致（大文字小文字を区別しない `includes`。Firestore には部分一致検索が無いため、サーバのメモリ上で判定する）。電話番号の部分一致も同時に行う（正規化後の値に対して。設計判断 D04-26） |
-| `teamCode` | `A`〜`Z` または `none` | なし | チームで絞り込み。`none` は未設定（`null`）のみ |
-| `excluded` | `all` / `only` / `none` | `all` | 除外フラグの表示切替。`all` = 全件、`only` = 除外のみ、`none` = 除外を含めない |
-| `kind` | `applicant` / `executive` | なし | 区分で絞り込み（owner が幹部だけを見るため。admin が `executive` を指定した場合は結果 0 件） |
-| `sort` | `submittedAt` / `name` / `teamCode` / `occupationCode` | `submittedAt` | 並び替え列 |
-| `order` | `asc` / `desc` | `desc`（`sort=submittedAt` のとき）、`asc`（それ以外） | |
-| `page`、`pageSize` | §2.2 | 1、50 | |
+1. `listResults({ viewer })`（`results-repository.ts`。02 §8.5）で閲覧範囲の `results` を **全件** 読む（02 Q3 / Q4: `organizationId == ctx.organizationId`、`deletedAt == null`、`admin` なら `respondentKind == "applicant"`、`submittedAt` 降順）。`select()` の射影は、2.4 版までの 10 項目（`respondentId`、`respondentKind`、`teamCode`、`isExcluded`、`aptitudeType`、`socialStyle`、`reliability`、`aiGenerationStatus`、`scoringVersion`、`submittedAt`）に、前回の結果 `previousResultId`（11-7）、区分・入社日・退職日・役職（`employmentStatus`・`hiredOn`・`leftOn`・`staffRole`。11-2 §3.1）、経年比較の状態（`longitudinalAiStatus`・`longitudinalAiStartedAt`・`latestLongitudinalAiAnalysisId`。11-6 §3.1）の 8 項目を足した（2.5 版）。M7 より前の文書に無い項目は読み取りで補う（02 §5.5）。
+2. `buildPersonRows()`（`lib/services/person-chain.ts`。11-2 §2.2）で同じ人の受験を 1 行にまとめる。前回の結果でつながった受験を [代表, 前回, 前々回, …] の 1 行にし、行は代表の `submittedAt` の降順（同じなら `resultId` の昇順）。閲覧範囲の受験だけでまとめるので、`admin` には既存スタッフの受験でつながりが切れる。論理削除した受験も入らないので、前回が削除されるとつながりが切れる（10 K-39 Q-35）。
+3. 代表の受験の受検者だけを `getRespondentsByIds({ organizationId, respondentIds })`（`respondents-repository.ts`。02 §8.4。`getAll()` を 100 件ずつ）で読む。受検者が無い・組織が違う・論理削除済みの行は除き、`logger.warn("result_list.respondent_missing", { requestId, resultId })` を出す（整合性の異常。氏名は出さない）。
+4. 受験ごとに「経年比較あり」（`hasLongitudinalReport`）を決める: `longitudinalAiStatus == "completed"` で、`previousResultId` が手順 1 の受験の中にあるとき真（11-2 §2.9。前回が閲覧範囲に無い・論理削除済みなら偽。10 K-39 Q-35・K-29）。経年比較の生成（11-6）が入るまでは常に偽。
+5. 監査ログ `result.list` を書き（失敗しても応答は変えない。D04-11）、応答する。`generatedAt` はサーバが一覧のデータを読んだ時刻（画面の「受験から1年以上」「今月」の判定の基準時刻。11-2 §0.4）。
 
-zod スキーマ:
-
-```ts
-// lib/services/schemas/admin-results.ts
-import { z } from "zod";
-import { pagingSchema, teamCodeSchema } from "./common";
-
-export const listResultsQuerySchema = pagingSchema.extend({
-  q: z.string().trim().max(100).optional(),
-  teamCode: z.union([teamCodeSchema, z.literal("none")]).optional(),
-  excluded: z.enum(["all", "only", "none"]).default("all"),
-  kind: z.enum(["applicant", "executive"]).optional(),
-  sort: z.enum(["submittedAt", "name", "teamCode", "occupationCode"]).default("submittedAt"),
-  order: z.enum(["asc", "desc"]).optional(),
-});
-export type ListResultsQuery = z.infer<typeof listResultsQuerySchema>;
-```
-
-レスポンス（200）:
+レスポンス（200。`ResultListDto`。§8.2。値は見本）:
 
 ```json
 {
-  "items": [
+  "generatedAt": "2026-11-05T03:00:00.000Z",
+  "rows": [
     {
-      "resultId": "Res4Lm6Np8Qr1St3Uv5W",
-      "respondentId": "Rsp2Xy4Za6Bc8De1Fg3H",
-      "name": "山田 太郎",
-      "phoneNumber": "090-1234-5678",
-      "occupationCode": 2,
-      "kind": "applicant",
+      "resultId": "ResExampleHead000002",
+      "respondentId": "RspExampleHead000002",
+      "name": "見本 花子",
+      "phoneNumber": "00000000000",
+      "occupationCode": 1,
       "teamCode": "A",
       "isExcluded": false,
-      "submittedAt": "2026-09-17T01:40:12.345Z",
-      "aptitudeType": "attendant",
-      "socialStyle": "expressive",
-      "aiGenerationStatus": "not_generated"
+      "employmentStatus": "employed",
+      "hiredOn": "2025-04-01",
+      "leftOn": null,
+      "staffRole": "leader",
+      "aptitudeType": "conductor",
+      "submittedAt": "2026-09-07T00:05:00.000Z",
+      "exams": [
+        { "resultId": "ResExampleHead000002", "respondentId": "RspExampleHead000002", "submittedAt": "2026-09-07T00:05:00.000Z", "hasLongitudinalReport": true },
+        { "resultId": "ResExamplePrev000001", "respondentId": "RspExamplePrev000001", "submittedAt": "2025-09-01T01:00:00.000Z", "hasLongitudinalReport": false }
+      ]
     }
-  ],
-  "total": 73,
-  "page": 1,
-  "pageSize": 50
+  ]
 }
 ```
 
-- 職業名（例: `アイリスト`）は返しません。06 分冊が `lib/masters/occupations.ts` で引きます（00 §1.10、10 K-19）。K-19 より前に受検した旧データの職業コード 9 は「その他」と表示します（保存済み文書の検証 `storedOccupationCodeSchema`。PR #13・#14）。
-- `aptitudeType` / `socialStyle` / `aiGenerationStatus` は一覧の要件（A-02）には無い項目ですが、組織内分類やアイコン表示に使えるよう含めます（設計判断 D04-27。`results` 文書にあるフィールドのみで追加の読み取りが無い）。
-- `sort=name` は `respondents.name` を `Intl.Collator("ja")` で比べた順（コードポイント順に近く、日本語の読み順にはならない。仮置き）。
-
-処理手順（`lib/services/result-list.ts`）:
-
-1. `listResults({ viewer })`（`results-repository.ts`。02 §8.5）で組織の `results` を **全件** 取得する（`ResultListRow[]`。02 Q3 / Q4: `organizationId == ctx.organizationId`、`deletedAt == null`、`admin` なら `respondentKind == "applicant"`、`submittedAt` 降順。`select()` で一覧に必要な列（`respondentId`、`respondentKind`、`teamCode`、`isExcluded`、`aptitudeType`、`socialStyle`、`reliability`、`aiGenerationStatus`、`scoringVersion`、`submittedAt`）に射影済み）。`kind`・`teamCode`・`excluded` の絞り込みは **メモリ上** で行う（`kind` 指定時は `respondentKind == kind`（`admin` が `executive` を指定した場合は結果 0 件）、`teamCode` は `none` なら `null`、`excluded=only` は `isExcluded == true`、`excluded=none` は `isExcluded == false`）。Firestore 側の複合インデックスは Q3 / Q4 の 2 本だけで足りる（絞り込みの組み合わせごとのインデックスは不要。D04-55）。
-2. 手順 1 の絞り込み後（`q` があれば全件、無ければ表示ページ分に限ってもよい）の `respondentId` を集め、`getRespondentsByIds({ organizationId, respondentIds })`（`respondents-repository.ts`。02 §8.4。内部で `getAll()` を 100 件ずつに分けて呼ぶ。実装時確認: `getAll()` の 1 回あたりの上限）で `respondents` を取得する（戻り値は `respondentId` をキーにした `ReadonlyMap`）。`respondents` 側の `deletedAt != null` や `organizationId` 不一致（整合性の異常）は一覧から除き、`logger.warn` を出す。
-3. `q` があれば、`respondents.name` と `phoneNumber` のどちらかに `q`（前後空白除去、`toLocaleLowerCase`）が含まれる行に絞る。
-4. `sort` / `order` に従ってメモリ上で並び替える（`submittedAt` は手順 1 の順を維持。`name` / `teamCode` / `occupationCode` は `respondents` の値で並び替え、同値は `submittedAt` 降順）。
-5. `total` = 絞り込み後の件数。`page` / `pageSize` で切り出す。
-6. 監査ログ `result.list`。
-
-- 設計判断 D04-55（2.0 版。02 D02-44 で採用）: 一覧はメモリ上で絞り込み・並び替え・ページングします。理由: (1) Firestore は `results` と `respondents` を結合できず、氏名・電話番号による絞り込みと並び替えは `respondents` 側の値を必要とする、(2) 部分一致検索が無い、(3) 1 組織あたりの結果は数百件規模（00 D-30 の推定）で、全件でも読み取りは数百回・応答は数百 KB 以内に収まる。目安として 1 組織の `results` が **5,000 件** を超える見込みになった時点で、`respondents` の検索用フィールド（氏名の正規化文字列など）を `results` に複製して Firestore 側でクエリする方式か、外部の全文検索への移行を検討します（08 の性能テスト PF-xx で 1,000 件規模の応答時間を測る。§10）。
+- 行の値は、チーム・除外・区分・入社日・退職日・役職・タイプ・受験日時が代表の受験、氏名・電話番号・職業コードが代表の受検者のもの。`exams` はつながり（[0] が代表）。
+- 個人情報は代表の受検者の氏名・電話番号だけを返します。前回以前の受験は `resultId`・`respondentId`・`submittedAt`・`hasLongitudinalReport` だけで、氏名・電話番号を返しません。
+- 受検者区分（`kind`）は返しません（既存スタッフの受験も同じ表に混ぜ、区分列・既存スタッフのラベルを出さない。11-2 §2.8・§2.25）。職業名は返さず、画面が `lib/masters/occupations.ts` で引きます（00 §1.10、10 K-19。K-19 より前の旧データの職業コード 9 は「その他」）。
+- 設計判断 D04-27（2.5 版で改めた）: 2.4 版まで返していた `socialStyle`・`aiGenerationStatus`（と `kind`）は返しません（新しい一覧で使わない。タイプの点の色は `aptitudeType` からマスタで決める。11-2 §2.8）。
+- 設計判断 D04-26（2.5 版で改めた）: 氏名・電話番号の検索（正規化と部分一致）は画面で行います（11-2 §2.7）。
+- 設計判断 D04-55（2.0 版。2.5 版で改めた）: 一覧は閲覧範囲の `results` を全件読んで行にまとめ、全行を返します。絞り込み・並び替え・表示の上限は画面で行います。理由: (1) Firestore は `results` と `respondents` を結合できない、(2) 部分一致検索が無い、(3) 同じ人のまとめ方はつながりの全体を見て決まる、(4) 1 組織あたりの結果は数百件規模（00 D-30 の推定）で、全件でも読み取りは数百回、応答は 1 行あたり数百バイトで数百 KB 以内。目安として 1 組織の `results` が **5,000 件** を超える見込みになった時点で、方式を見直します（`respondents` の検索用フィールドを `results` に複製して Firestore 側でクエリする方式など）。1,000 件の一覧と更新の時間は 08 の PF-08 で測ります（§10）。
+- PR-7.6 まで（今の回答一覧の画面。旧レイアウト。06 §3.4）: 今の画面の Server Component（`app/(admin)/admin/page.tsx`）は、この API を呼ばず、`lib/services/result-list.ts` の旧 `listResults(ctx, query)` を直接呼びます。受験ごとの行（`PagedDto<ResultListItemDto>`。`kind` を含む）を返し、URL のクエリ（`q`・`kind`・`teamCode`・`sort`・`order`・`page`・`pageSize`）を `listResultsQuerySchema` で解釈して（不正は既定値）、絞り込み・並び替え・ページングをサーバのメモリ上で行います（2.4 版までのこの節の処理。監査ログ `result.list` の `details` も 2.4 版までの `{ count, page }`）。新しい `ResultListDto` は人ごとの行で受検者区分が無く、今の画面の区分列（オーナー）・区分の絞り込み・受験ごとの行を作れないためです。PR-7.6 で画面を `listResultRows` に替え、旧 `listResults`・`listResultsQuerySchema`・`ResultListItemDto`・`PagedDto` を消します（11-2 §4.3）。
 
 エラー:
 
 | HTTP | code | 条件 |
 |---:|---|---|
-| 422 | `VALIDATION_ERROR` | `q` が 100 文字超、`teamCode` / `excluded` / `kind` / `sort` / `order` / `page` / `pageSize` が許可値以外 |
+| 401 | `UNAUTHENTICATED` | セッション Cookie なし（`requireAdmin` 共通。§5.1） |
+| 403 | `ADMIN_NOT_REGISTERED` / `ADMIN_SUSPENDED` | `requireAdmin` 共通（§5.1） |
+| 503 | `SERVICE_UNAVAILABLE` | Firestore の一時的な失敗（§2.4） |
 
 ### 5.4 結果詳細 `GET /api/v1/admin/results/{resultId}`
 
@@ -1652,69 +1617,95 @@ export async function getComparison(ctx: AdminContext, input: { readonly resultI
 
 ### 5.6 受検者の更新・削除 `PATCH/DELETE /api/v1/admin/respondents/{respondentId}`
 
-要件定義書 §6.2 A-03（チーム）、A-04（除外）、A-05（削除）に対応します。
+要件定義書 §6.2 A-03（チーム）、A-04（除外）、A-05（削除）に対応します。2.5 版で、区分・入社日・退職日・役職の更新（11-2 §2.13〜§2.15）を足しました。
 
 #### `PATCH /api/v1/admin/respondents/{respondentId}`
 
+2.5 版（M7 の PR-7.5）で 11-2 §3.6 の形に改めました（チーム・除外に区分・入社日・退職日・役職を足し、つながった全受験に 1 回のバッチで書く）。詳細は 11-2 §3.6 が正で、本書は要約です。
+
 | 項目 | 内容 |
 |---|---|
-| 認可 | admin 以上（見える文書のみ。`assertVisibleToAdmin`） |
-| リクエスト | `teamCode`（`A`〜`Z` または `null` = 未設定）、`isExcluded`（boolean）のいずれか 1 つ以上 |
-| 処理 | `updateRespondentFlags({ respondentId, viewer: ctx, patch, meta: ctx.request })`（02 §8.4）: `respondents` を読み → 可視性の判定 → `respondents` と `results`（`resultId` があれば）の `teamCode` / `isExcluded` を **同一バッチで更新**（00 D-34 の複製フィールドの同期）→ 変更があった項目ごとに `auditLogs` を同じバッチに積む。戻り値は `{ before, after }` |
-| 監査ログ | `respondent.update_team`（`details: { before, after }`）、`respondent.update_exclusion`（同） |
+| 認可 | admin 以上。パスの受検者が閲覧範囲になければ 404 `RESPONDENT_NOT_FOUND`（他組織・削除済み・`admin` に対する既存スタッフ） |
+| リクエスト | 次の 1 つ以上: `teamCode`（`A`〜`Z` または `null` = 未設定。10 K-32 ⑦）、`isExcluded`（boolean）、`employment`（区分 `status`・入社日 `hiredOn`・退職日 `leftOn` の 3 つ組）、`staffRole`（`manager`・`leader`・`staff`） |
+| 書く範囲 | パスの受検者の受験を含む行（11-2 §2.2。閲覧範囲の中）のつながり全件。受験の無い受検者（送信前）は、その受検者だけ（`teamCode`・`isExcluded` だけを受け付ける） |
+| 処理 | `updatePerson(ctx, respondentId, input)`（`lib/services/respondent-management.ts`。下の手順） |
+| 監査ログ | 変わった項目ごとに 1 件: `respondent.update_team`・`respondent.update_exclusion`（受検者ごと。`details: { before, after }`）、`result.update_employment`（受験ごと。`details: { before, after, hiredOnBefore, hiredOnAfter, leftOnBefore, leftOnAfter }`）、`result.update_staff_role`（受験ごと。`details: { before, after, kindBefore, kindAfter }`）。11-2 §3.10 |
 
-リクエスト:
-
-```json
-{ "teamCode": "B", "isExcluded": true }
-```
+リクエストの例: `{ "teamCode": null }`、`{ "isExcluded": true }`、`{ "employment": { "status": "left", "hiredOn": "2025-04-01", "leftOn": "2026-10-31" } }`、`{ "staffRole": "manager" }`。
 
 zod スキーマ:
 
 ```ts
-// lib/services/schemas/admin-respondents.ts
+// lib/services/schemas/admin-respondents.ts（2.5 版。updateRespondentInputSchema を置き換えた）
 import { z } from "zod";
-import { teamCodeSchema } from "./common";
+import { calendarDateSchema, teamCodeSchema } from "./common";
+import { EMPLOYMENT_STATUSES, STAFF_ROLES } from "@/lib/db/types";
 
-export const updateRespondentInputSchema = z
+export const employmentInputSchema = z
+  .object({
+    status: z.enum(EMPLOYMENT_STATUSES),
+    hiredOn: calendarDateSchema.nullable(),
+    leftOn: calendarDateSchema.nullable(),
+  })
+  .refine((v) => v.leftOn === null || v.status === "left", {
+    message: "退職日は区分が退職のときだけ入れられます",
+    path: ["leftOn"],
+  });
+export const updatePersonInputSchema = z
   .object({
     teamCode: teamCodeSchema.nullable().optional(),
     isExcluded: z.boolean().optional(),
+    employment: employmentInputSchema.optional(),
+    staffRole: z.enum(STAFF_ROLES).optional(),
   })
-  .refine((v) => v.teamCode !== undefined || v.isExcluded !== undefined, { message: "変更する項目がありません" });
-export type UpdateRespondentInput = z.infer<typeof updateRespondentInputSchema>;
+  .refine(
+    (v) => v.teamCode !== undefined || v.isExcluded !== undefined || v.employment !== undefined || v.staffRole !== undefined,
+    { message: "変更する項目がありません" },
+  );
+export type UpdatePersonInput = z.infer<typeof updatePersonInputSchema>;
 ```
 
-レスポンス（200）:
+レスポンス（200。`PersonUpdatedDto`。§8.2。値は見本）:
 
 ```json
 {
-  "respondentId": "Rsp2Xy4Za6Bc8De1Fg3H",
-  "teamCode": "B",
-  "isExcluded": true,
-  "updatedAt": "2026-09-17T02:15:00.000Z"
+  "respondentId": "RspExampleHead000002",
+  "resultIds": ["ResExampleHead000002", "ResExamplePrev000001"],
+  "teamCode": "A",
+  "isExcluded": false,
+  "employment": { "status": "employed", "hiredOn": "2025-04-01", "leftOn": null },
+  "staffRole": "leader",
+  "isVisibleAfterUpdate": true,
+  "updatedAt": "2026-11-10T02:15:00.000Z"
 }
 ```
 
-処理手順（`lib/services/respondent-management.ts` の `updateRespondent`）:
+処理手順（`lib/services/respondent-management.ts` の `updatePerson`）:
 
-1. `updateRespondentFlags({ respondentId, viewer: ctx, patch, meta: ctx.request })`（02 §8.4）を呼ぶ。リポジトリは `respondents/{respondentId}` を `get` し、無い・`organizationId` 不一致・`deletedAt != null`・`kind == "executive"` かつ `canViewExecutives(role) == false` なら `RepositoryError("RESPONDENT_NOT_FOUND")` → service が 404 `RESPONDENT_NOT_FOUND` に変換（他組織・削除済み・`admin` に対する幹部を含む。08 I-21 の期待どおり）。
-2. リポジトリが入力と現在値を比べ、変更のあるフィールドだけを `respondents` に `update`（`teamCode`、`isExcluded`、`updatedAt`）。`resultId != null` なら `results/{resultId}` にも同じフィールドを `update`（複製の同期。00 D-34）。読み取り結果に依存しない書き込みのためバッチ（`WriteBatch`）で行う（02 §8.1。同じ受検者への同時更新は後勝ちになるが、値は管理者が画面で選んだ最終状態であり実害はない）。
-3. 変更があった項目ごとに `auditLogs` を同じバッチに `create`（`details: { before, after }`）。
-4. コミット後、`after` の値と `updatedAt`（service が採った現在時刻）を返す。変更が無ければ何も書かず `before == after` を返す。
+1. Route Handler が本文を `updatePersonInputSchema` で検証する（422 `VALIDATION_ERROR`）。`respondentId` が文書 ID の形でなければ 404 `NOT_FOUND`（本文の検証が先で、両方が不正なら 422。2.4 版までと同じ順）。`employment` の `hiredOn` と `leftOn` が両方あり `leftOn` < `hiredOn` なら 422 `LEFT_BEFORE_HIRED`。
+2. `getRespondent({ respondentId, viewer: ctx })`（02 §8.4）で可視性を確かめる（見えなければ 404 `RESPONDENT_NOT_FOUND`）。
+3. 受検者の `resultId` が `null`（送信前）なら、本文に `employment` か `staffRole` があれば 404 `RESULT_NOT_FOUND`。無ければ書く範囲はその受検者だけ。
+4. 送信済みなら、`listResults({ viewer })`（§5.3 の手順 1 と同じ）→ `buildPersonRows()` → `findPersonRow(rows, resultId)` の行のつながり（受験 ID と受検者 ID の組）を書く範囲にする。見つからなければ 404 `RESULT_NOT_FOUND`。
+5. `updatePersonAttributes({ members, viewer: ctx, patch, meta: ctx.request })`（02 §8.4）で書く。受検者と受験を `getAll()` で読み（無い・組織が違う・論理削除済み・閲覧範囲の外は除く）、変わる項目だけを書く。チーム・除外は `respondents`（正）と `results`（複製）、区分と日付は `results` の 3 項目、役職は `results.staffRole`。役職で受検者区分（責任者・幹部 → `executive`、スタッフ → `applicant`。10 K-39 Q-02）が変われば、`respondents.kind`・`results.respondentKind`・`usageLogs.respondentKind` を同じバッチで書く（00 D-34、02 §10 の I-3）。区分（求職者・在籍・退職）は役職で変えない（10 K-28）。書く文書の `updatedAt` はすべて同じ `Timestamp`。監査ログは同じバッチに積む。
+6. 応答する。`teamCode`・`isExcluded`・`employment`・`staffRole` は更新したあとの代表の受験の値（送った項目は送った値、ほかは今の値）。`resultIds` は書いた範囲の受験（つながりの順。値が同じで書かなかった受験も含む）。送信前の受検者は `resultIds` が空で、`employment`・`staffRole` が `null`。`isVisibleAfterUpdate` は、オーナー以外が責任者・幹部にして閲覧範囲から外れたときだけ `false`。`updatedAt` は service が採った現在時刻。
 
 エラー:
 
 | HTTP | code | 条件 |
 |---:|---|---|
 | 404 | `NOT_FOUND` | `respondentId` が文書 ID の形式でない |
-| 404 | `RESPONDENT_NOT_FOUND` | 見えない文書（他組織・削除済み・`admin` に対する幹部） |
-| 422 | `VALIDATION_ERROR` | 項目なし、`teamCode` が `A`〜`Z`／`null` 以外、`isExcluded` が boolean 以外 |
+| 404 | `RESPONDENT_NOT_FOUND` | パスの受検者が閲覧範囲にない（他組織・削除済み・`admin` に対する既存スタッフ） |
+| 404 | `RESULT_NOT_FOUND` | 受験の無い受検者に `employment`・`staffRole` を送った、つながりが見つからない |
+| 422 | `VALIDATION_ERROR` | 項目なし、`teamCode` が `A`〜`Z`・`null` 以外、`isExcluded` が boolean 以外、日付の形が違う・実在しない日、区分が退職でないのに退職日がある、`staffRole`・`status` が決まった値以外 |
+| 422 | `LEFT_BEFORE_HIRED` | 退職日が入社日より前（§2.4） |
 | 503 | `SERVICE_UNAVAILABLE` | Firestore の一時的な失敗（§2.4） |
 
-- 変更が無い（同じ値）場合も 200 を返し、監査ログは書きません（読み取りだけで終わる）。
+- 変更が無い（同じ値）場合も 200 を返し、書き込みと監査ログはありません（読み取りだけで終わる）。
+- 同時に 2 人が同じ行を変えたときは後勝ちです（読み取りとバッチの間にトランザクションを使わない。値は管理者が画面で選んだ最終状態で、実害はない。D04-59）。
+- 1 回のバッチの書き込みは、Firestore の上限（500 件）より小さく抑えます。書く文書（受検者・受験・利用履歴・監査ログ）が 450 件を超えるときは、受験ごとの書き込み（その受検者・受験・利用履歴と監査ログ）を分けずに、450 件までのバッチに分けて順に書きます。途中のバッチの失敗は `translateFirebaseError`（§2.4）で変換し（一時的な失敗は 503）、画面は読み直して実際の値を出します（11-2 §2.23）。画面は 1 回に 1 項目だけを送るので受験 1 件あたり最大 4 件で、1 人の受験が 100 件を超えることは実運用では無い想定です。
 - 除外・チームの変更は次回の比較計算（§5.5）から反映されます。比較値を保存していないため再計算処理は不要です（要件定義書 §11 の 6 番）。`results` の複製フィールドを同一バッチで更新するため、母集団（`results` の `isExcluded` / `teamCode` を 02 の `selectPopulation()` が見る。2.4 版からクエリの条件ではない。§5.5）と一覧の表示が食い違う時間は生じません。
-- 送信前（結果が無い受検者）は回答一覧に出ないため、この API の対象になりません（一覧は `results` 基点。§5.3）。ただし `respondentId` を直接指定すれば更新できます（`resultId == null` なので `respondents` だけ更新される）。害はないため制限しません。
+- 送信前（結果が無い受検者）は回答一覧に出ないため、画面からはこの API の対象になりません。`respondentId` を直接指定すれば、`teamCode`・`isExcluded` だけをその受検者に書けます（害はないため制限しない）。
+- PR-7.6 まで（今の回答一覧の画面。06 §3.4.4）: 今の画面のチーム・除外の操作は、この API を `updatePerson()`（`lib/utils/admin-api.ts`。06 §10.4）で呼びます（本文は `{ teamCode }` か `{ isExcluded }` で 2.4 版までと同じ）。つながった受験があると、チーム・除外はその全受験に書かれます（今の画面は受験ごとの行なので、操作した行は送った項目だけを応答の値で更新し（応答の値はつながりの代表の受験の値のため）、同じ人のほかの行は再読み込みまで前の値を出す。再受験リンクの発行は PR-7.11a）。区分・入社日・退職日・役職を変える画面は PR-7.6 まで無く、API だけです。
 
 #### `DELETE /api/v1/admin/respondents/{respondentId}`
 
@@ -1728,6 +1719,7 @@ export type UpdateRespondentInput = z.infer<typeof updateRespondentInputSchema>;
 
 - 論理削除後は一覧・詳細・組織内分類・母集団（`results.deletedAt == null` 条件）から消え、利用履歴は残ります（00 §2.2）。物理削除は行いません（10 K-04。00 D-11）。1.x 版の物理削除の SQL 関数は 2.0 版で廃止され、将来必要になった場合は `scripts/` に Admin SDK のスクリプトとして改めて設計します（10 §2）。
 - 冪等性: 既に削除済みの文書に対する DELETE は 404 です（設計判断 D04-30: 可視性の判定で `deletedAt != null` は「見えない」扱いになるため。06 分冊は一覧を再取得して整合させる）。
+- 2.5 版: 削除は変えません（11-2 §3.7）。削除した受験を前回とする受験の `previousResultId` は書き換えません。削除した受験は閲覧範囲に入らないので、つながりは自然に切れ、前回が行の代表になります（11-7 §2.2.3、10 K-39 Q-35）。画面は行の代表の受検者 ID を送ります（11-2 §2.16）。
 
 ### 5.7 組織内分類 `GET /api/v1/admin/classification`
 
@@ -1737,7 +1729,7 @@ export type UpdateRespondentInput = z.infer<typeof updateRespondentInputSchema>;
 |---|---|
 | 認可 | admin 以上（幹部は owner のみ集計に含まれる。§11 D04-31） |
 | クエリ | `includeExcluded`: boolean（既定 `true`。設計判断 D04-32: 既存の集計条件は未確認。組織内分類は「組織にどんな人がいるか」を見る画面のため除外者も数える。06 で切替 UI を置くかは任意） |
-| 処理 | `listResultsForClassification({ viewer: ctx })`（02 §8.5）で `results` を全件取得（02 Q3 / Q4: `organizationId`、`deletedAt == null`、`admin` なら `respondentKind == "applicant"`。`select()` で `respondentId`、`respondentKind`、`isExcluded`、`aptitudeType`、`socialStyle`、`submittedAt` に射影した `ClassificationMember[]`）。`includeExcluded=false` のときは `isExcluded == false` の行にメモリ上で絞る。`respondents` を `getRespondentsByIds({ organizationId, respondentIds })` でまとめて取得して氏名を付ける（§5.3 手順 2 と同じ）。サーバ側で `aptitudeType` ごとにグループ化し、`lib/masters/` の `AptitudeTypeDefinition.socialStyle` で分類に束ねる |
+| 処理 | `listResultsForClassification({ viewer: ctx })`（02 §8.5）で `results` を全件取得（02 Q3 / Q4: `organizationId`、`deletedAt == null`、`admin` なら `respondentKind == "applicant"`。`select()` で `respondentId`、`respondentKind`、`isExcluded`、`aptitudeType`、`socialStyle`、`submittedAt` に射影した `ClassificationMember[]`）。`includeExcluded=false` のときは `isExcluded == false` の行にメモリ上で絞る。`respondents` を `getRespondentsByIds({ organizationId, respondentIds })` でまとめて取得して氏名を付ける（§5.3 の手順 3 と同じ読み方）。サーバ側で `aptitudeType` ごとにグループ化し、`lib/masters/` の `AptitudeTypeDefinition.socialStyle` で分類に束ねる |
 | 監査ログ | `classification.view`（`details: { "count": 件数 }`） |
 
 レスポンス（200）:
@@ -1786,42 +1778,42 @@ export type UpdateRespondentInput = z.infer<typeof updateRespondentInputSchema>;
 
 ### 5.8 利用履歴 `GET /api/v1/admin/usage-logs`
 
-要件定義書 §6.2 A-06、§8.7 に対応します。
+要件定義書 §6.2 A-06、§8.7 に対応します。2.5 版（M7 の PR-7.5）で 11-2 §3.8 の形に改めました（送信済みの全件を回答日時の新しい順に返す）。詳細は 11-2 §3.3・§3.8 が正で、本書は要約です。
 
 | 項目 | 内容 |
 |---|---|
-| 認可 | admin 以上（幹部の履歴は owner のみ。`admin` のときはクエリ条件 `respondentKind == "applicant"` を付ける。`usageLogs.respondentKind` は 02 §3.7 で確定済み。§4.2.2、D04-62） |
-| クエリ | `page`、`pageSize`（§2.2）。`sort` は `registeredAt` 固定、`order` 既定 `desc` |
-| 処理 | `listUsageLogs({ viewer: ctx, order, offset: (page − 1) × pageSize, limit: pageSize })`（`usage-logs-repository.ts`。02 §8.6）: `usageLogs` を `organizationId`（+ `admin` なら `respondentKind == "applicant"`）の等価条件と `orderBy("registeredAt", order)` で取得し、`offset` + `limit` でページを切り出す。`total` は同じ条件の `count()` 集計クエリ（02 Q13）。戻り値は `{ items, total }`。複合インデックスは 02 Q5 / Q6 で定義済み |
+| 認可 | admin 以上。既存スタッフ（幹部）の履歴は owner／super_admin にのみ返す（`admin` のときはクエリ条件 `respondentKind == "applicant"` を付ける。10 K-29。`usageLogs.respondentKind` は 02 §3.7。D04-62） |
+| クエリ | なし（2.4 版までの `page`・`pageSize`・`order` はやめた。付いていても無視する） |
+| 処理 | `listUsageLogs(ctx)`（`lib/services/usage-log-list.ts`）→ `listUsageLogs({ viewer })`（`usage-logs-repository.ts`。02 §8.6）: `usageLogs` を `organizationId`（`admin` なら + `respondentKind == "applicant"`）の等価条件と `orderBy("submittedAt", "desc")` で全件読み（02 Q5（改）・Q6（改））、`submittedAt` が `null` の文書（M7 より前の登録で作られた、送信されていない履歴）を読んだあとに除く（Firestore の並びでは `null` が最後に来る。`!= null` の条件は付けず、インデックスの形を変えない） |
 | 監査ログ | `usage_log.view`（`details: { "count": 件数 }`） |
 
-レスポンス（200）:
+レスポンス（200。`UsageLogListDto`。§8.2。値は見本）:
 
 ```json
 {
   "items": [
     {
-      "usageLogId": "Usg6Tu8Vw1Xy3Za5Bc7D",
-      "respondentId": "Rsp2Xy4Za6Bc8De1Fg3H",
-      "resultId": "Res4Lm6Np8Qr1St3Uv5W",
-      "name": "山田 太郎",
-      "phoneNumber": "090-1234-5678",
+      "usageLogId": "UsgExample0000000001",
+      "respondentId": "RspExampleHead000002",
+      "resultId": "ResExampleHead000002",
+      "name": "見本 花子",
+      "phoneNumber": "00000000000",
       "kind": "applicant",
       "diagnosisExperience": "first_time",
-      "registeredAt": "2026-09-17T01:23:45.678Z",
-      "submittedAt": "2026-09-17T01:40:12.345Z"
+      "registeredAt": "2026-09-07T00:00:00.000Z",
+      "submittedAt": "2026-09-07T00:05:00.000Z"
     }
   ],
-  "total": 80,
-  "page": 1,
-  "pageSize": 50
+  "total": 1
 }
 ```
 
-- `submittedAt` が `null` の行は登録したが送信していない受検者です（利用回数管理は登録時に作られる。要件定義書 §8.7）。既存の利用履歴ポップアップ（S-09）の「回答日時」に何を表示していたかは未確認のため、06 分冊は `submittedAt`、無ければ `registeredAt` を表示する仮置きとします。
+- 応答は `{ items, total }`（`total` = `items` の件数。ページングなし）。`UsageLogItemDto` は 2.4 版のままです（`submittedAt` は送信済みだけを返すので常に値がある）。
+- 利用履歴は送信のときに作ります（11-1 §2.7.4、10 K-39 Q-18）。登録しただけで送信していない人は載りません。M7 より前の登録で作られた、送信されていない履歴は文書を残したまま返しません（2.4 版までの「未回答」の行は出なくなった）。
 - 論理削除された受検者の履歴も返ります（00 §2.2「利用履歴は残る」）。物理削除は行わないため（10 K-04）、`respondentId` が `null` になることは本フェーズでは無く、Dto の `respondentId: string | null` は将来の物理削除に備えた型です。
+- 役職の変更（§5.6）で受検者区分が変わると、`usageLogs.respondentKind` も同じバッチで変わり、`admin` に返す範囲もそれに従います（11-2 §3.2）。
 - 06 §8.2 が依頼した項目名 `respondentName` は、本書では `name`（回答一覧 §5.3・組織内分類 §5.7 と同じ項目名）で確定します。06 の読み替えは §10 に列挙します。
-- `offset()` は読み飛ばした文書も読み取りとして課金されます（実装時確認）。利用履歴は 1 組織あたり数百件規模で、`pageSize=200` なら 2〜3 ページに収まるため許容します。
+- PR-7.6 まで（今の利用履歴の画面 P-01。06 §3.4.7）: 今の画面は開くたびに全件を 1 回受け取り（`fetchUsageLogs()`。06 §10.4）、50 件ずつ画面でページを切り替えます。見出し「利用履歴（全 {total} 件）」と 5 列は 2.4 版までと同じで、並びは回答日時の新しい順です（PR-7.6 で 11-2 §2.18 の形に作り直す）。
 
 エラー:
 
@@ -1829,7 +1821,7 @@ export type UpdateRespondentInput = z.infer<typeof updateRespondentInputSchema>;
 |---:|---|---|
 | 401 | `UNAUTHENTICATED` | セッション Cookie なし（`requireAdmin` 共通。§5.1） |
 | 403 | `ADMIN_NOT_REGISTERED` / `ADMIN_SUSPENDED` | `requireAdmin` 共通（§5.1） |
-| 422 | `VALIDATION_ERROR` | `page` / `pageSize` / `order` が許可値以外（§2.2） |
+| 503 | `SERVICE_UNAVAILABLE` | Firestore の一時的な失敗（§2.4） |
 
 ### 5.9 AI 解説 `POST/GET /api/v1/admin/results/{resultId}/ai-analysis`
 
@@ -2209,12 +2201,13 @@ lib/services/
 ├── submission.ts                # submitSession（§4.5）
 ├── admin-session.ts             # createAdminSession / destroyAdminSession（§6.1、§6.2。2.0 版で追加）
 ├── admin-account.ts             # getMe / updateMe / recordLoginEvent / rotateInviteToken / listAdminUsers（§5.1、§5.2、§5.11）
-├── result-list.ts               # listResults（§5.3）
+├── person-chain.ts              # buildPersonRows / findPersonRow（同じ人の受験を 1 行にまとめる純関数。11-2 §2.2。2.5 版）
+├── result-list.ts               # listResultRows（§5.3）。PR-7.6 まで今の画面の旧 listResults(ctx, query) も
 ├── result-detail.ts             # getResultDetail（§5.4）
 ├── comparison.ts                # getComparison（§5.5）
-├── respondent-management.ts     # updateRespondent / deleteRespondent（§5.6）
+├── respondent-management.ts     # updatePerson / deleteRespondent（§5.6。2.5 版で updateRespondent を置き換えた）
 ├── classification.ts            # getClassification（§5.7）
-├── usage-log-list.ts            # listUsageLogs（§5.8）
+├── usage-log-list.ts            # listUsageLogs(ctx)（§5.8。2.5 版でクエリをやめた）
 ├── ai-analysis.ts               # generateAiAnalysis / getAiAnalysis（§5.9、07 と共同）
 ├── pdf-export.ts                # exportPdf（§5.10、07 と共同）
 ├── invite-acceptance.ts         # validateInviteToken / acceptInvite（§6.3。06 M-02 の事前検証も含む）
@@ -2295,7 +2288,7 @@ export interface SessionSubmittedDto {
 
 ```ts
 // lib/services/dto/admin.ts
-import type { AdminRole, RespondentKind } from "@/lib/db/types";
+import type { AdminRole, EmploymentStatus, RespondentKind, StaffRole } from "@/lib/db/types";
 import type { AptitudeTypeKey, SocialStyleKey, TeamCode } from "@/lib/scoring/types";
 import type { AiGenerationStatus } from "@/lib/ai/types";
 
@@ -2320,6 +2313,35 @@ export interface MeUpdatedDto extends MeDto {
   readonly reloginRequired: boolean;
 }
 
+/** GET /api/v1/admin/results（§5.3。2.5 版。11-2 §3.5） */
+export interface ResultListDto {
+  readonly generatedAt: string;                 // 基準時刻（ISO 8601）
+  readonly rows: readonly ResultListRowDto[];   // 代表の submittedAt の降順
+}
+export interface ResultListRowDto {
+  readonly resultId: string;          // 代表の受験
+  readonly respondentId: string;      // 代表の受検者（更新・削除に使う）
+  readonly name: string;
+  readonly phoneNumber: string;
+  readonly occupationCode: number;
+  readonly teamCode: TeamCode | null;
+  readonly isExcluded: boolean;
+  readonly employmentStatus: EmploymentStatus;
+  readonly hiredOn: string | null;
+  readonly leftOn: string | null;
+  readonly staffRole: StaffRole | null;
+  readonly aptitudeType: AptitudeTypeKey;
+  readonly submittedAt: string;
+  readonly exams: readonly ResultListExamDto[];   // つながり。[0] が代表
+}
+export interface ResultListExamDto {
+  readonly resultId: string;
+  readonly respondentId: string;
+  readonly submittedAt: string;
+  readonly hasLongitudinalReport: boolean;      // 経年比較あり（11-2 §2.9）
+}
+
+/** API は返さない。PR-7.6 まで今の回答一覧の画面（旧レイアウト）の Server Component が旧 listResults の戻り値として使う（§5.3。PR-7.6 で消す。11-2 §4.3） */
 export interface ResultListItemDto {
   readonly resultId: string;
   readonly respondentId: string;
@@ -2335,6 +2357,7 @@ export interface ResultListItemDto {
   readonly aiGenerationStatus: AiGenerationStatus;
 }
 
+/** API は返さない（2.5 版から一覧 API はページングしない。§2.2）。PR-7.6 まで旧 listResults の戻り値として使い、PR-7.6 で消す */
 export interface PagedDto<T> {
   readonly items: readonly T[];
   readonly total: number;
@@ -2356,10 +2379,15 @@ export interface AdminUserListDto {
   readonly total: number;
 }
 
-export interface RespondentUpdatedDto {
-  readonly respondentId: string;
+/** PATCH /api/v1/admin/respondents/{respondentId}（§5.6。2.5 版で RespondentUpdatedDto を置き換えた。11-2 §3.6） */
+export interface PersonUpdatedDto {
+  readonly respondentId: string;                 // パスの受検者
+  readonly resultIds: readonly string[];          // 書いた範囲の受験（つながりの順。送信前の受検者は空）
   readonly teamCode: TeamCode | null;
   readonly isExcluded: boolean;
+  readonly employment: { readonly status: EmploymentStatus; readonly hiredOn: string | null; readonly leftOn: string | null } | null;
+  readonly staffRole: StaffRole | null;
+  readonly isVisibleAfterUpdate: boolean;         // 更新後も閲覧者に見えるか（オーナー以外が責任者・幹部にしたとき false）
   readonly updatedAt: string;
 }
 
@@ -2384,6 +2412,11 @@ export interface ClassificationDto {
   }>;
 }
 
+/** GET /api/v1/admin/usage-logs（§5.8。2.5 版で PagedDto<UsageLogItemDto> を置き換えた。total = items の件数） */
+export interface UsageLogListDto {
+  readonly items: readonly UsageLogItemDto[];
+  readonly total: number;
+}
 export interface UsageLogItemDto {
   readonly usageLogId: string;
   readonly respondentId: string | null;
@@ -2393,7 +2426,7 @@ export interface UsageLogItemDto {
   readonly kind: RespondentKind;
   readonly diagnosisExperience: "first_time" | "experienced";
   readonly registeredAt: string;
-  readonly submittedAt: string | null;
+  readonly submittedAt: string | null;   // 2.5 版から送信済みだけを返すので、常に値がある（型は今のまま）
 }
 ```
 
@@ -2461,13 +2494,14 @@ export interface ComparisonDto extends ComparisonResult {
 | `recordLoginEvent(ctx)` | — | void | `appendAuditLog` | `admin.login` のみ（`admin.signup` は書かない。D04-36 改） |
 | `rotateInviteToken(ctx)` | — | `{ adminInvite, rotatedAt }` | `rotateInviteToken`（バッチ） | `organization.rotate_invite_token`（同バッチ） |
 | `listAdminUsers(ctx)` | `AdminContext`（`requireOwner` 済み） | `AdminUserListDto` | `listAdminUsers`、Admin SDK `getUsers` | なし |
-| `listResults(ctx, query)` | `ListResultsQuery` | `PagedDto<ResultListItemDto>` | `listResults`（全件）、`getRespondentsByIds` | `result.list` |
+| `listResultRows(ctx)` | — | `ResultListDto`（2.5 版。§5.3） | `listResults`（Q3 / Q4 の全件。射影に 8 項目を足した）、`buildPersonRows`、`getRespondentsByIds`（代表の受検者） | `result.list`（`{ rowCount, examCount }`） |
+| `listResults(ctx, query)`（PR-7.6 まで今の画面の Server Component だけが使う。PR-7.6 で消す） | `ListResultsQuery` | `PagedDto<ResultListItemDto>` | `listResults`（全件）、`getRespondentsByIds` | `result.list`（`{ count, page }`） |
 | `getResultDetail(ctx, resultId)` | 文書 ID | `ResultDetailDto` | `getResult`、`getRespondent`、`getAiAnalysis` | `result.view` |
 | `getComparison(ctx, { resultId, scope })` | | `ComparisonDto` | `getResult`、`fetchPopulation`（Q1（改）+ `selectPopulation`。2.4 版） | `result.comparison` |
-| `updateRespondent(ctx, respondentId, input)` | `UpdateRespondentInput` | `RespondentUpdatedDto` | `updateRespondentFlags`（バッチ。`respondents` + `results`） | `respondent.update_team` / `respondent.update_exclusion`（同バッチ） |
+| `updatePerson(ctx, respondentId, input)`（2.5 版。`updateRespondent` を置き換えた） | `UpdatePersonInput` | `PersonUpdatedDto` | `getRespondent`、`listResults`（Q3 / Q4）、`buildPersonRows`・`findPersonRow`、`updatePersonAttributes`（バッチ。つながりの `respondents` + `results`、役職のときは `usageLogs` も） | `respondent.update_team` / `respondent.update_exclusion` / `result.update_employment` / `result.update_staff_role`（同バッチ） |
 | `deleteRespondent(ctx, respondentId)` | | void | `softDeleteRespondent`（バッチ。3 文書） | `respondent.delete`（同バッチ） |
 | `getClassification(ctx, { includeExcluded })` | | `ClassificationDto` | `listResultsForClassification`、`getRespondentsByIds` | `classification.view` |
-| `listUsageLogs(ctx, paging)` | | `PagedDto<UsageLogItemDto>` | `listUsageLogs`（`{ items, total }`） | `usage_log.view` |
+| `listUsageLogs(ctx)`（2.5 版でクエリをやめた） | — | `UsageLogListDto` | `listUsageLogs({ viewer })`（Q5（改）/ Q6（改）の全件。送信済みだけ） | `usage_log.view` |
 | `generateAiAnalysis(ctx, resultId)` | | `AiAnalysisDto` | `getResult`、`getRespondent`、`countAiAnalysesSince`、`markAiGenerationStarted`（トランザクション）、07 の provider、`saveAiAnalysis` / `markAiGenerationFailed`（バッチ） | `result.ai_generate`（同バッチ） |
 | `getAiAnalysis(ctx, resultId)` | | `AiAnalysisDto` | `getResult`、`getAiAnalysis`、滞留時 `markAiGenerationFailed` | 滞留時のみ `result.ai_generate`（failed） |
 | `exportPdf(ctx, { resultId, mode, scope })` | | `{ bytes: Uint8Array; filename: string }` | `getResult`（可視性確認）、`fetchPopulation`（`scope` 指定時の 0 件判定）+ 07 の `lib/pdf` | `result.pdf_export` |
@@ -2509,7 +2543,7 @@ registerRespondent(input: RegisterRespondentInput): Promise<RegisteredRespondent
 getRespondent({ respondentId, viewer }): Promise<Respondent | null>                                     // 幹部の可視性を判定
 getRespondentById({ respondentId, organizationId }): Promise<Respondent | null>                         // 受検者 API 用（可視性判定なし）
 getRespondentsByIds({ organizationId, respondentIds }): Promise<ReadonlyMap<string, Respondent>>        // getAll() 100 件ずつ
-updateRespondentFlags({ respondentId, viewer, patch, meta }): Promise<{ before, after }>                 // バッチ respondents + results + auditLogs
+updatePersonAttributes({ members, viewer, patch, meta }): Promise<{ writtenResultIds, kindAfter }>      // 2.5 版。つながりの respondents + results（役職では usageLogs も）+ auditLogs を 450 件までのバッチで
 softDeleteRespondent({ respondentId, viewer, meta }): Promise<{ deletedAt }>                             // バッチ 3 文書 + respondent.delete
 getSession(sessionId): Promise<AssessmentSession | null>
 getSessionByTokenHash({ organizationId, sessionTokenHash, now }): Promise<AssessmentSession | null>     // Q10
@@ -2519,7 +2553,7 @@ submitSession({ sessionId, meta }, deps: { scoreAnswers, assertAnswerMap }): Pro
 
 // 02 §8.5 results-repository.ts
 getResult({ resultId, viewer }): Promise<Result | null>
-listResults({ viewer }): Promise<readonly ResultListRow[]>                                              // Q3 / Q4 全件。select() 射影
+listResults({ viewer }): Promise<readonly ResultListRow[]>                                              // Q3 / Q4 全件。select() 射影（2.5 版で前回・区分と日付・役職・経年比較の状態の 8 項目を足した）
 listResultsForClassification({ viewer }): Promise<readonly ClassificationMember[]>                      // Q3 / Q4 全件
 canLinkAsPrevious({ organizationId, resultId }): Promise<boolean>                                     // 前回の候補の判定（results 1（organizationId・deletedAt だけ）+ Q-M7-1（文書名だけ）。2.4 版）
 fetchPopulation({ organizationId, scope }): Promise<readonly PopulationRow[]>                           // Q1（改）+ selectPopulation()（2.4 版）。PopulationRow = PopulationMember + resultId
@@ -2530,7 +2564,7 @@ saveAiAnalysis({ resultId, viewer, generated, reliability, meta }): Promise<{ ai
 markAiGenerationFailed({ resultId, viewer, reason, meta }): Promise<void>                               // 更新 + result.ai_generate
 getAiAnalysis({ aiAnalysisId, resultId, organizationId }): Promise<AiAnalysis | null>
 countAiAnalysesSince({ organizationId, since }): Promise<number>                                        // Q14 count()
-listUsageLogs({ viewer, order, offset, limit }): Promise<{ items, total }>                              // Q5 / Q6 + Q13 count()
+listUsageLogs({ viewer }): Promise<readonly UsageLog[]>                                                 // Q5（改）/ Q6（改）全件。送信済みだけ（2.5 版。Q13 count() はやめた）
 appendAuditLog(entry: AuditEntry): Promise<{ auditLogId }>
 addAuditLogToBatch(batch: AuditWriter, entry: AuditEntry): string
 countRecentAuditLogs({ organizationId, action, ipAddress, since }): Promise<number>                    // Q11 count()
@@ -2692,12 +2726,12 @@ sequenceDiagram
 |---|---|
 | 00（共通定義） | 2.0 版で確定した契約のうち 00 §4.2 に反映を依頼したもの（**2.1 版: 00 2.1 版に反映済み**）: (1) `GET /api/v1/admin/me` の「3 種のリンクを含む」は「受検リンク 2 種。管理者追加用リンクの平文は再発行の応答でだけ返す」（D04-56）。(2) `PATCH /api/v1/admin/me` の「氏名・メールアドレス・パスワードの変更」に「メール・パスワード変更は再認証 ID トークン必須、変更後は失効して再ログイン」（D04-47 改、D04-57）。(3) `POST /auth/invite` の本文は `{ inviteToken, name, email }`（パスワードなし。D04-58）。(4) §4.2 の認証処理表「パスワード再設定: 方式は 02・04 が確定」→「ブラウザの `sendPasswordResetEmail`。サーバ API なし」（D04-58）。(5) §3.3 `lib/auth/` に `admin-context.ts`・`respondent-session.ts` を追記（§8.1）。(6) セッション Cookie の有効期間は 7 日・延長なし（D04-53）。(7) `auditLogs` に `actorKind` と `details` を持つ（D04-61）。(8) エラーコード `ID_TOKEN_INVALID`・`SERVICE_UNAVAILABLE` の追加（§2.4）。それ以外の API パスは 00 §4.2 の一覧と一致している（本書 §3 が正） |
 | 01（構成） | **2.1 版: 01 2.1 版に反映済み**。環境変数の追加依頼はない（`SESSION_COOKIE_NAME`・`PDF_TOKEN_SECRET` は 00 §3.2 に掲載済み）。`middleware.ts` は Edge ランタイムで `firebase-admin` を import せず、`SESSION_COOKIE_NAME` を `process.env` から直接読む（§8.5。01 の起動時検証の対象から外す）。Vercel Firewall のルールに `POST /auth/session`（IP あたり 1 分 10 件）と `POST /auth/invite`（IP あたり 1 分 5 件）を追加（§2.8、§6）。Firebase コンソールの設定で本書が前提にするもの: メール＋パスワードのみ有効、自己登録の無効化、パスワードポリシー（8 文字以上・英字と数字。§5.1）、パスワード再設定メールのテンプレートとアクション URL（`/admin/password-reset`。§6.4）、Web API キーの HTTP リファラー制限（サーバからは Auth の REST API を呼ばない前提。D04-47 改）。Preview 環境ではアクション URL を固定できない点の扱い（06 §3.3 の実装時確認と共通） |
-| 02（データモデル） | **2.1 版: すべて 02 2.1 版に反映済み**（本書側は関数名・型名を 02 に統一）。2.0 版で依頼した内容の反映先: (1) リポジトリ関数 → 02 §8.2〜§8.6（`registerRespondent`、`markSessionStarted`、`saveAnswers`、`submitSession`、`updateRespondentFlags`、`softDeleteRespondent`、`rotateInviteToken`、`createAdminUser`、`saveAiAnalysis`、`markAiGenerationFailed`、`markAiGenerationStarted`、`fetchPopulation`、`listResults`、`getRespondentsByIds`、`getRespondentById`、`countRecentAuditLogs`、`countAiAnalysesSince`、`listUsageLogs`）。(2) `auditLogs.actorKind`・`details` → 02 §3.8。(3) `usageLogs.respondentKind` → 02 §3.7。(4) `results.aiGenerationStartedAt`・`aiGenerationError` → 02 §3.5、`aiAnalyses.generatedBy` → 02 §3.6（本書の `generatedByUid` を取り下げ）。(5) 複合インデックス → 02 §7 Q1〜Q14。(6) 招待トークンの形式 → base64url 43 文字（02 §9.7。本書の 16 進 64 文字を取り下げ）。(7) `lib/auth/session-cookie.ts`・`claims.ts` の関数名 → 02 §9.2・§9.11（`createAdminSessionCookie`、`verifyAdminSessionCookie`、`revokeAdminSessions`、`parseAdminClaims`。本書の仮置き名を取り下げ）。(8) 1.x 版の RPC と `rpc-errors.ts` の廃止 → 02 §14。(9) 実装時確認 → 02 §15.2 D02-38・D02-41・D02-42、09 §6.4。02 からの読み替えで本書が改めたもの: `POST /auth/invite` の途中失敗は `deleteUser` ではなく再要求で回復（D02-40。§6.3）、`emailVerified: true`（D04-37 改）、チーム・除外・削除はバッチ（02 §8.1）、AI 滞留時の `failed` 化でも監査ログが残る（§5.9） |
+| 02（データモデル） | **2.5 版（M7 の PR-7.5）: 02 2.7 版に反映済み**: `updatePersonAttributes`（`updateRespondentFlags` を置き換えた。02 §8.4）、`listResults` の射影の 8 項目と補い（02 §8.5）、`listUsageLogs({ viewer })`（Q5（改）・Q6（改）の全件。02 §8.6）、監査ログ `result.update_employment`・`result.update_staff_role` と `result.list` の `details`（02 §11）、Q5・Q6（registeredAt 順）と Q13 を使わなくなったこと（02 §7.1。インデックスの削除は PR-7.17）。**2.1 版: すべて 02 2.1 版に反映済み**（本書側は関数名・型名を 02 に統一）。2.0 版で依頼した内容の反映先: (1) リポジトリ関数 → 02 §8.2〜§8.6（`registerRespondent`、`markSessionStarted`、`saveAnswers`、`submitSession`、`updateRespondentFlags`、`softDeleteRespondent`、`rotateInviteToken`、`createAdminUser`、`saveAiAnalysis`、`markAiGenerationFailed`、`markAiGenerationStarted`、`fetchPopulation`、`listResults`、`getRespondentsByIds`、`getRespondentById`、`countRecentAuditLogs`、`countAiAnalysesSince`、`listUsageLogs`）。(2) `auditLogs.actorKind`・`details` → 02 §3.8。(3) `usageLogs.respondentKind` → 02 §3.7。(4) `results.aiGenerationStartedAt`・`aiGenerationError` → 02 §3.5、`aiAnalyses.generatedBy` → 02 §3.6（本書の `generatedByUid` を取り下げ）。(5) 複合インデックス → 02 §7 Q1〜Q14。(6) 招待トークンの形式 → base64url 43 文字（02 §9.7。本書の 16 進 64 文字を取り下げ）。(7) `lib/auth/session-cookie.ts`・`claims.ts` の関数名 → 02 §9.2・§9.11（`createAdminSessionCookie`、`verifyAdminSessionCookie`、`revokeAdminSessions`、`parseAdminClaims`。本書の仮置き名を取り下げ）。(8) 1.x 版の RPC と `rpc-errors.ts` の廃止 → 02 §14。(9) 実装時確認 → 02 §15.2 D02-38・D02-41・D02-42、09 §6.4。02 からの読み替えで本書が改めたもの: `POST /auth/invite` の途中失敗は `deleteUser` ではなく再要求で回復（D02-40。§6.3）、`emailVerified: true`（D04-37 改）、チーム・除外・削除はバッチ（02 §8.1）、AI 滞留時の `failed` 化でも監査ログが残る（§5.9） |
 | 03（採点） | **2.1 版: 03 1.4 版で確認済み**。`InvalidAnswerMapError` → 422 `ANSWERS_INCOMPLETE`、`EmptyPopulationError` → 409 `POPULATION_EMPTY` に変換（§4.5、§5.5）。`ComparisonResult` は丸めずに `ComparisonDto` に載せる。`assessmentSessions.answers` の map（文字列キー）は 02 の `submitSession()` が `toAnswerMap()` で数値キーに変換してから `assertAnswerMap` に渡す（03 §2.1 の「そのまま渡してよい」は文字列キーでも動く前提だが、本書は数値キーに揃える）。`lib/masters/exam-pages.ts`（§4.4 D04-46）は 03 の `QUESTION_PAGE_LAYOUT` と `ACTIVE_QUESTIONS` を import する純関数で、03 の `lib/masters/` に置く（05 の `lib/presentation/exam-pages.ts` は再エクスポート）。**2.3 版: 03 1.5 版に合わせ、`lib/masters/exam-steps.ts`（`QUESTION_STEP_SIZES` と `ACTIVE_QUESTIONS` から `EXAM_STEP_COUNT`・`questionNosOfStep`）に置き換えた** |
 | 05（受検者画面） | **2.3 版: 05 2.0 版（11-1）に合わせた**: (a) `PUT …/answers` は `{ stepNo, answers }`（1〜41 問。D04-18・D04-19 改）、(b) `SessionProgressDto.lastSavedStepNo`・`AnswersSavedDto.stepNo`、(c) 受験者登録の画面は `GET organizations/{id}` と `resumable` を使わない（D04-43 改）、(d) 送信のあとの 2 秒の待ちは画面（§4.5）、(e) `ANSWERS_INCOMPLETE` は `missing[0]` のステップへ（§4.5）、(f) 電話番号は必須と 30 文字の上限だけ（D04-06 改）。以下は 2.2 版までの記録。**2.1 版: 05 1.4 版で `lastSavedPageNo` を反映済み**。2.0 版で **受検者 API の契約は変更なし**（パス・入出力・エラーコード）。05 1.3 版（D05-38）の読み替え（文書 ID の形式、`sessionTokenHash`、`answers` map の部分更新、`SESSION_NOT_FOUND` の条件）は本書 §2.1・§2.5.2・§4.4・§4.5 と一致していることを確認した。追加: 503 `SERVICE_UNAVAILABLE`（§2.4）は E-03（保存失敗の再試行）と同じ扱いでよい。画面遷移と API の対応、05 §7.1・§9・D05-26 の読み替え（1.1〜1.2 版で確定済み）は変更なし: (1) 401 `RESPONDENT_TOKEN_INVALID` / `RESPONDENT_TOKEN_EXPIRED`（D04-42）、`details.missing`。(2) 404 `SESSION_NOT_FOUND` は送信トランザクション内でのみ。(3) `answers` は昇順配列（D04-44）、`resumePageNo` は含めない。(4) `POST …/start` の応答は `SessionStartedDto`（D04-45）。(5) `PUT …/answers` の `pageNo` とページ所属の検証（D04-18 改）。(6) `SessionCreatedDto`。(7) `SessionSubmittedDto` の `nextUrl`。(8) Server Component は `requireRespondentSessionFromCookies(sessionId)` を呼ぶ |
-| 06（管理者画面） | **2.1 版: 06 1.4 版に反映済み**。06 1.3 版 §8.2 の依頼への回答: (1) `POST /auth/invite` の本文は `{ inviteToken, name, email }` で確定。パスワード再設定メールは **画面（クライアント SDK `sendPasswordResetEmail`）が送る**（06 §3.2 の (1) はそのまま。D04-58）。(2) `POST /auth/session` は有効な ID トークンに対して常に Cookie を発行し、停止中・未所属の判定は `requireAdmin()` に委ねる（D04-54。06 §3.1 の前提どおり。応答は `{ expiresAt }`）。(3) `DELETE /auth/session` は 204。他端末のセッションも失効する（§6.2）。(4) `PATCH /api/v1/admin/me` は **即時反映・`pendingEmail` なし**（D04-57）。現在のパスワードの検証は画面側の再認証（`signInWithEmailAndPassword` → `getIdToken` → `signOut`）で得た `reauthIdToken` を本文に入れる方式（D04-47 改。`currentPassword` は API に送らない）。メール・パスワード変更後は応答の `reloginRequired: true` とともに Cookie が削除されるので、T-36 相当の案内でログイン画面へ遷移する。T-32（確認メール）は不要。(5) `admin.login` は `login-events` のまま（D04-24 改）。**2.0 版の Dto の変更**: `MeDto.links.adminInvite` は常に `null`、`adminInviteIssuedAt` を追加（D04-56。招待リンクは owner が「再発行」した応答の `adminInvite` をその場で表示・コピーさせる。`admin` には表示できない。1.x 版 D04-22 の取り下げ）。`AdminUserItemDto` に `email` を追加（§5.11。管理者一覧に表示してよい）。`MeDto.email` は `string | null`。`PATCH /me` の応答型は `MeUpdatedDto`。§2.4 に 401 `ID_TOKEN_INVALID`（`POST /auth/session` の失敗。T-24 でよい）と 503 `SERVICE_UNAVAILABLE`（`Toast` で再試行を促す）を追加。**1.x 版から継続の読み替え（変更なし）**: 結果詳細 `aiAnalysis.status` / `error` / `latest`、`availableTeamCodes` 不採用（D04-48）、組織内分類 `socialStyle` / `aptitudeType` / `members`、利用履歴 `name`、管理者一覧 `adminUserId`、回答一覧の `aptitudeType` / `socialStyle` / `aiGenerationStatus`（D04-27）、比較の `populationSize` / `includesSubject`（D04-29）、象限は所属分類（D04-33）、削除の 404 時は一覧再取得（D04-30） |
+| 06（管理者画面） | **2.5 版（M7 の PR-7.5）**: 回答一覧 `ResultListDto`（§5.3）・受検者の更新 `PersonUpdatedDto`（§5.6）・利用履歴 `UsageLogListDto`（§5.8）は、PR-7.6 の新しい回答一覧の画面（11-2 §2）が使う。PR-7.6 までの今の画面は、一覧を旧 `listResults(ctx, query)`（Server Component）、チーム・除外を `updatePerson()`、利用履歴を全件の `fetchUsageLogs()` で使う（06 §10.4 を 06 1.7 版で改め、§3.4.7・§8.1・§8.2 に API の形が変わったことを注記した。06 §3.4 の画面の節の改版は PR-7.6）。**2.1 版: 06 1.4 版に反映済み**。06 1.3 版 §8.2 の依頼への回答: (1) `POST /auth/invite` の本文は `{ inviteToken, name, email }` で確定。パスワード再設定メールは **画面（クライアント SDK `sendPasswordResetEmail`）が送る**（06 §3.2 の (1) はそのまま。D04-58）。(2) `POST /auth/session` は有効な ID トークンに対して常に Cookie を発行し、停止中・未所属の判定は `requireAdmin()` に委ねる（D04-54。06 §3.1 の前提どおり。応答は `{ expiresAt }`）。(3) `DELETE /auth/session` は 204。他端末のセッションも失効する（§6.2）。(4) `PATCH /api/v1/admin/me` は **即時反映・`pendingEmail` なし**（D04-57）。現在のパスワードの検証は画面側の再認証（`signInWithEmailAndPassword` → `getIdToken` → `signOut`）で得た `reauthIdToken` を本文に入れる方式（D04-47 改。`currentPassword` は API に送らない）。メール・パスワード変更後は応答の `reloginRequired: true` とともに Cookie が削除されるので、T-36 相当の案内でログイン画面へ遷移する。T-32（確認メール）は不要。(5) `admin.login` は `login-events` のまま（D04-24 改）。**2.0 版の Dto の変更**: `MeDto.links.adminInvite` は常に `null`、`adminInviteIssuedAt` を追加（D04-56。招待リンクは owner が「再発行」した応答の `adminInvite` をその場で表示・コピーさせる。`admin` には表示できない。1.x 版 D04-22 の取り下げ）。`AdminUserItemDto` に `email` を追加（§5.11。管理者一覧に表示してよい）。`MeDto.email` は `string | null`。`PATCH /me` の応答型は `MeUpdatedDto`。§2.4 に 401 `ID_TOKEN_INVALID`（`POST /auth/session` の失敗。T-24 でよい）と 503 `SERVICE_UNAVAILABLE`（`Toast` で再試行を促す）を追加。**1.x 版から継続の読み替え（変更なし）**: 結果詳細 `aiAnalysis.status` / `error` / `latest`、`availableTeamCodes` 不採用（D04-48）、組織内分類 `socialStyle` / `aptitudeType` / `members`、利用履歴 `name`、管理者一覧 `adminUserId`、回答一覧の `aptitudeType` / `socialStyle` / `aiGenerationStatus`（D04-27）、比較の `populationSize` / `includesSubject`（D04-29）、象限は所属分類（D04-33）、削除の 404 時は一覧再取得（D04-30） |
 | 07（AI・PDF） | **2.1 版: 07 1.4 版に反映済み**。`AiProvider.generate()` は `signal`（240 秒）を受け取る（D04-38）。生成の状態遷移・滞留判定は §5.9 のとおり service が担い、provider は生成のみ。`aiGenerationError` は 07 §4.6 の `AiFailureReason` + service 側の `internal_error`（§5.9 手順 7）。`aiAnalyses` の作成と `results` の更新と監査ログは 1 バッチ（07 §7.1 と一致）。`generatedBy` は 07 の名前のまま `aiAnalyses.generatedBy` に保存（02 §3.6。本書の `generatedByUid` は取り下げ）。PDF は `issuePdfToken` / `verifyPdfToken`（§7.2。ペイロードの `adminUserId` → `adminUid`、`role` を追加）を使い、印刷用ページ（`lib/services/print-data.ts`）は Admin SDK でデータ取得し、`assertVisibleToAdmin` と同じ判定関数でトークンの `organizationId`・`role` に対する可視性を再検証する（07 §9.4 と一致）。`middleware.ts` からの `/admin/results/[resultId]/print` の除外は §8.5 で維持（D04-41）。非同期化する場合は POST を 202 に変える（§7.1）。日次上限は `aiAnalyses` の `count()` 集計（成功件数。07 §6.4 の「失敗は上限を消費しない」と一致） |
-| 08（テスト） | **2.1 版: 08 2.1 版に反映済み**（観点 (1)〜(15) は 08 §5・§8 の I-xx / PF-xx に対応）。結合テスト（Firebase Emulator Suite。00 D-33）の観点: (1) `admin` で幹部の結果が一覧・詳細・分類・履歴・比較対象の詳細のいずれでも 404／非表示になり、母集団には含まれる（`fetchPopulation`）。(2) 二重送信で片方が 409（トランザクションの競合）。(3) 比較 API を 2 回呼んでも Firestore に比較値のフィールド・文書が増えない。(4) `POPULATION_EMPTY`。(5) 期限切れ Cookie で 401 `RESPONDENT_TOKEN_EXPIRED`、Cookie なしで 401 `RESPONDENT_TOKEN_INVALID`。(6) `AI_ALREADY_GENERATING` の同時実行。(7) 監査ログの action ごとの記録有無（§2.6 の表。`admin.signup` は `POST /auth/invite` 直後に 1 件、`login-events` を複数回呼んでも増えない、`session.submit` / `respondent.delete` / `organization.rotate_invite_token` が本処理と同じバッチで残る）。(8) `PUT …/answers` でページに属さない設問番号が 422、`answers` map がページ外のキーを保持したまま部分更新される。(9) `GET /api/v1/admin/admin-users` が `admin` で 403 `ROLE_REQUIRED`、owner で削除済みを除く全員を `email` 付きで返す。(10) `PATCH /api/v1/admin/me` のパスワード変更後に旧 Cookie が 401 になり（`revokeRefreshTokens`）、`reauthIdToken` の `uid` 不一致・`auth_time` 超過で 422。(11) 印刷用ページが管理者 Cookie なし + 有効トークンで 200、トークンなしで 404、他組織の `resultId` を含むトークンで 404。(12) `POST /auth/session` が `auth_time` の古い ID トークンを 401 にし、発行された Cookie で `requireAdmin` が通る。`DELETE /auth/session` 後に同じ Cookie が 401。(13) `PATCH /respondents/{id}` 後に `respondents` と `results` の `teamCode` / `isExcluded` が一致（00 D-34）。(14) `admin` の一覧・分類・履歴で `respondentKind == "applicant"` 条件が効く（`usageLogs.respondentKind`）。(15) 未定義の複合インデックスが Emulator の警告で検出されない（§8.4 の一覧）。性能: 1 組織 1,000 件の `results` で一覧・比較・分類の応答時間を測る（D04-55 の目安の検証）。**08 §2.4 PR-3.1・§2.5 PR-4.1 の service ファイル名は本書 §8.1 に合わせて改版済み**（`answers.ts` → `answer-saving.ts`、`results.ts` → `result-list.ts` + `result-detail.ts`、`respondents.ts` → `respondent-management.ts`、`usage-logs.ts` → `usage-log-list.ts`。`organization-lookup.ts`、`session-progress.ts`、`invite-acceptance.ts`、`admin-session.ts`、`visibility.ts`、`firebase-errors.ts` を追加。D04-52）。08 PR-2.2 の `lib/db/{server-client,service-client,browser-client}.ts` は 00 §3.3 の `lib/firebase/{admin,client}.ts` + `lib/db/{collections,repositories,mappers}` に読み替える |
+| 08（テスト） | **2.5 版（M7 の PR-7.5）: 08 2.7 版に反映済み**: 結合テスト M7-list-21〜30・32・33（11-2 §5.2）と I-20〜I-22・I-31・I-32・I-36・I-50 の改め、PF-08（1,000 件の一覧と更新の時間。D04-55 の目安の検証）。**2.1 版: 08 2.1 版に反映済み**（観点 (1)〜(15) は 08 §5・§8 の I-xx / PF-xx に対応）。結合テスト（Firebase Emulator Suite。00 D-33）の観点: (1) `admin` で幹部の結果が一覧・詳細・分類・履歴・比較対象の詳細のいずれでも 404／非表示になり、母集団には含まれる（`fetchPopulation`）。(2) 二重送信で片方が 409（トランザクションの競合）。(3) 比較 API を 2 回呼んでも Firestore に比較値のフィールド・文書が増えない。(4) `POPULATION_EMPTY`。(5) 期限切れ Cookie で 401 `RESPONDENT_TOKEN_EXPIRED`、Cookie なしで 401 `RESPONDENT_TOKEN_INVALID`。(6) `AI_ALREADY_GENERATING` の同時実行。(7) 監査ログの action ごとの記録有無（§2.6 の表。`admin.signup` は `POST /auth/invite` 直後に 1 件、`login-events` を複数回呼んでも増えない、`session.submit` / `respondent.delete` / `organization.rotate_invite_token` が本処理と同じバッチで残る）。(8) `PUT …/answers` でページに属さない設問番号が 422、`answers` map がページ外のキーを保持したまま部分更新される。(9) `GET /api/v1/admin/admin-users` が `admin` で 403 `ROLE_REQUIRED`、owner で削除済みを除く全員を `email` 付きで返す。(10) `PATCH /api/v1/admin/me` のパスワード変更後に旧 Cookie が 401 になり（`revokeRefreshTokens`）、`reauthIdToken` の `uid` 不一致・`auth_time` 超過で 422。(11) 印刷用ページが管理者 Cookie なし + 有効トークンで 200、トークンなしで 404、他組織の `resultId` を含むトークンで 404。(12) `POST /auth/session` が `auth_time` の古い ID トークンを 401 にし、発行された Cookie で `requireAdmin` が通る。`DELETE /auth/session` 後に同じ Cookie が 401。(13) `PATCH /respondents/{id}` 後に `respondents` と `results` の `teamCode` / `isExcluded` が一致（00 D-34）。(14) `admin` の一覧・分類・履歴で `respondentKind == "applicant"` 条件が効く（`usageLogs.respondentKind`）。(15) 未定義の複合インデックスが Emulator の警告で検出されない（§8.4 の一覧）。性能: 1 組織 1,000 件の `results` で一覧・比較・分類の応答時間を測る（D04-55 の目安の検証）。**08 §2.4 PR-3.1・§2.5 PR-4.1 の service ファイル名は本書 §8.1 に合わせて改版済み**（`answers.ts` → `answer-saving.ts`、`results.ts` → `result-list.ts` + `result-detail.ts`、`respondents.ts` → `respondent-management.ts`、`usage-logs.ts` → `usage-log-list.ts`。`organization-lookup.ts`、`session-progress.ts`、`invite-acceptance.ts`、`admin-session.ts`、`visibility.ts`、`firebase-errors.ts` を追加。D04-52）。08 PR-2.2 の `lib/db/{server-client,service-client,browser-client}.ts` は 00 §3.3 の `lib/firebase/{admin,client}.ts` + `lib/db/{collections,repositories,mappers}` に読み替える |
 
 ## 11. 未確認事項・設計判断一覧
 
@@ -2712,7 +2746,7 @@ sequenceDiagram
 | D04-01 | 設計判断 | Server Component から service を直接呼ぶ場合も閲覧系の監査ログを service 内で書く | API 経由と同じ記録が残る | 06 |
 | D04-02 | 設計判断（2.0 版で補足） | 全 Route Handler を Node.js ランタイムに固定 | `export const runtime = "nodejs"`。Admin SDK は Edge で動かないため `middleware.ts` では使わない | — |
 | D04-03 | 設計判断（2.0 版で改） | 文書 ID の形式（`^[A-Za-z0-9]{1,128}$`）でないパスパラメータは 404 | 400 にしない。1.x 版の UUID から変更（00 §4.1） | 05、06 |
-| D04-04 | 未確認（要件定義書 §6.2 A-02 にページングの記載なし） | 一覧のページング | `pageSize` 既定 50、上限 200。初期表示は 200 でよい | 06 |
+| D04-04 | 未確認（要件定義書 §6.2 A-02 にページングの記載なし）。2.5 版で改めた | 一覧のページング | 2.5 版から、回答一覧・利用履歴の API はページングせず全件を返す（表示の上限は画面。11-2 §2.8・§3.5・§3.8）。2.4 版までは `pageSize` 既定 50、上限 200 | 06、11-2 |
 | D04-05 | 設計判断 | zod スキーマの置き場所 | `lib/services/schemas/` に集約。02 の文書スキーマと値の制約を共有する | 02、08 |
 | D04-06 | 決定済み（10 K-39 Q-17・K-42。2.3 版で改めた） | 電話番号の形式 | 必須と、前後の空白を除いて 30 文字の上限だけ。書式・桁数を検査せず、正規化しない（11-1 §2.2.5）。2.2 版までは全角→半角正規化のうえ `^[0-9+()\-]{8,20}$` | 05 |
 | D04-07 | 設計判断（2.0 版で補足） | 他組織・削除済み・admin に対する幹部データは 404 | 403 と区別しない。判定は `assertVisibleToAdmin`（service のコード。RLS の代替） | 06、08 |
@@ -2734,8 +2768,8 @@ sequenceDiagram
 | D04-23 | 未確認（要件定義書 §6.2 A-12。2.0 版で拡大） | パスワード変更時の現在のパスワード入力 | パスワードとメールアドレスの変更時に、現在のパスワードによる再認証を必須にする。依頼主確認事項 | 06 |
 | D04-24 | 設計判断（2.0 版で改） | `admin.login` の記録方法 | ログイン成功直後にブラウザが `POST /api/v1/admin/me/login-events` を呼ぶ方式を維持。`POST /auth/session` ではクレームと `adminUsers` を検証しない（D04-54）ため `organizationId` を確定できない | 06 |
 | D04-25 | 設計判断（2.0 版で補足） | 招待トークン再発行 API を追加 | `POST /api/v1/admin/organization/invite-token`（owner のみ）。2.0 版では平文を得る唯一の手段 | 06 |
-| D04-26 | 設計判断 | 一覧の `q` は氏名と電話番号の部分一致 | 正規化後の電話番号に対して。メモリ上で判定（D04-55） | 06 |
-| D04-27 | 設計判断 | 一覧に `aptitudeType` / `socialStyle` / `aiGenerationStatus` を含める | `results` 文書にあり追加の読み取りが無い | 06 |
+| D04-26 | 設計判断（2.5 版で改めた） | 一覧の検索は氏名と電話番号の部分一致 | 2.5 版から画面で正規化して判定する（11-2 §2.7）。API はクエリを受け取らない。2.4 版までは API の `q` でメモリ上で判定（PR-7.6 まで今の画面の旧 `listResults` が同じ判定を使う） | 06、11-2 |
+| D04-27 | 設計判断（2.5 版で改めた） | 一覧の行の項目 | 2.5 版から `aptitudeType` を返し、`socialStyle`・`aiGenerationStatus`・`kind` は返さない（新しい一覧で使わない。11-2 §3.5）。2.4 版までは `results` 文書にあり追加の読み取りが無いため 3 つを含めていた | 06、11-2 |
 | D04-28 | 設計判断（00 §3.1 の例外） | `scores` と比較応答の指標キーは `TraitKey` 等の snake_case 識別子をそのまま使う | `results` 文書の map のキー・マスタ・画面で同じ文字列（00 §2.1） | 06、07、08 |
 | D04-29 | 設計判断 | 比較応答に `includesSubject` を含める | D-05（K-01 で決定）を画面で説明可能にする | 06 |
 | D04-30 | 設計判断 | 削除済みへの DELETE は 404 | 冪等な 204 にしない | 06 |
@@ -2763,14 +2797,14 @@ sequenceDiagram
 | D04-52 | 設計判断（2.0 版で補足） | `lib/services/` のファイル名は本書 §8.1 が正 | 08 PR-3.1・PR-4.1 の読み替え（§10）。2.0 版で `admin-session.ts`、`visibility.ts`、`firebase-errors.ts` を追加 | 08 |
 | D04-53 | 設計判断（2.0 版）・未確認（要件定義書 §12: ログイン保持期間） | 管理者セッション Cookie の有効期間 | 7 日・延長なし（Firebase のセッション Cookie はサーバ側で更新できない。`expiresIn` の上限 14 日は実装時確認）。`middleware.ts` は Cookie の更新を行わない。ログアウト・パスワード変更の失効は利用者単位（他端末も失効）。依頼主確認事項 | 01、02、06 |
 | D04-54 | 設計判断（2.0 版。06 §8.2 の依頼 (2) への回答） | `POST /auth/session` はクレーム・`adminUsers` を検証せず、有効な ID トークン（`auth_time` 5 分以内）に対して常に Cookie を発行する | 停止中・未所属の判定は `requireAdmin` に集約し、E-01 の表示を Server Component の 1 箇所にする。Cookie を持つだけでは何も読めない | 06 |
-| D04-55 | 設計判断（2.0 版） | 回答一覧・組織内分類は組織内の `results` を全件読み、`respondents` を `getAll()` で突き合わせてメモリ上で絞り込み・並び替え・ページングする | Firestore に結合・部分一致が無い。数百件規模（00 D-30）では許容。1 組織 5,000 件を目安に検索用フィールドの複製などを検討。08 で 1,000 件の性能を測る | 02、06、08 |
+| D04-55 | 設計判断（2.0 版。2.5 版で改めた） | 回答一覧・組織内分類は組織内の `results` を全件読み、`respondents` を `getAll()` で突き合わせる。2.5 版から回答一覧は同じ人の受験を行にまとめて全行を返し、絞り込み・並び替え・表示の上限は画面で行う（11-2 §3.5） | Firestore に結合・部分一致が無い。同じ人のまとめ方はつながりの全体で決まる。数百件規模（00 D-30）では許容。1 組織 5,000 件を目安に検索用フィールドの複製などを検討。08 の PF-08 で 1,000 件の一覧と更新の時間を測る | 02、06、08、11-2 |
 | D04-56 | 設計判断（2.0 版）・依頼主確認事項 | 管理者追加用リンクの平文は再発行の応答でだけ返し、`GET /me` の `links.adminInvite` は `null` | `organizations.inviteTokenHash` しか保存しないため（00 §2.2）。要件定義書 §6.2 A-12「アカウント画面に管理者追加用リンク」との差異: owner が再発行したときにだけ表示され、`admin` には表示されない。平文を保存する案（ハッシュ化をやめる）は Firestore 漏えい時に管理者を追加できるため採らない | 00、06 |
 | D04-57 | 設計判断（2.0 版。06 §8.2 の依頼 (4) への回答） | メールアドレスの変更は Admin SDK `updateUser({ email })` で即時反映し、確認メール・`pendingEmail` は設けない。メール・パスワード変更後は `revokeRefreshTokens` で全セッションを失効させ、`reloginRequired: true` を返して再ログインさせる | 確認メール方式は Firebase の `verifyBeforeUpdateEmail`（クライアント SDK）を要し、ログイン状態をブラウザに残さない方針（00 D-31）と合わない。失効はセッション Cookie の `email` クレームを最新にし、他端末の古いセッションを無効化するため | 06、08 |
 | D04-58 | 設計判断（2.0 版） | パスワード再設定メールはブラウザの Firebase Auth クライアント SDK（`sendPasswordResetEmail`）で送り、サーバ API は設けない（招待受理後の初期設定と「パスワードを忘れた方」の両方） | サーバ送信（`generatePasswordResetLink` + 自前送信）はメール配信サービスの追加を要し、決定事項 1 の構成に無い。実装時確認: Admin SDK で作成した直後のユーザーへの送信、アクション URL の設定。`createUser` にはランダムパスワードを与える（パスワード無しで作成したユーザーに再設定メールが使えるなら不要） | 01、06 |
-| D04-59 | 設計判断（2.0 版。2.1 版で 02 §8.1 に合わせて範囲を限定） | 状態を条件にする更新（保存・開始・送信の `draft` 検査、AI 生成開始の `not_generated` / `failed` 検査）は Firestore のトランザクション（`runTransaction`）で「読み取り → 判定 → 書き込み」を行う。チーム・除外・削除は可視性を `get` で確認したうえでバッチ（02 §8.4） | Firestore にフィールド値を条件にする更新が無く、楽観ロックが同時リクエストの片方だけを成功させる唯一の手段。チーム・除外・削除は同時更新が後勝ちでも実害が無いため 02 の規約どおりバッチにする | 02、08 |
+| D04-59 | 設計判断（2.0 版。2.1 版で 02 §8.1 に合わせて範囲を限定） | 状態を条件にする更新（保存・開始・送信の `draft` 検査、AI 生成開始の `not_generated` / `failed` 検査）は Firestore のトランザクション（`runTransaction`）で「読み取り → 判定 → 書き込み」を行う。チーム・除外・削除は可視性を `get` で確認したうえでバッチ（02 §8.4）。2.5 版から受検者の更新（チーム・除外・区分と日付・役職）は、つながった全件を `getAll()` で読んだうえで 1 回のバッチ（450 件を超えるときは分けて順に。11-2 §3.6） | Firestore にフィールド値を条件にする更新が無く、楽観ロックが同時リクエストの片方だけを成功させる唯一の手段。チーム・除外・区分と日付・役職・削除は同時更新が後勝ちでも実害が無いため 02 の規約どおりバッチにする | 02、08 |
 | D04-60 | 設計判断（2.0 版） | Firebase 由来の例外は `translateFirebaseError`（§2.4 の対応表）で §2.4 のコードに変換し、元のコードは応答に含めない | `ID_TOKEN_INVALID`（401）と `SERVICE_UNAVAILABLE`（503）を追加。1.x 版の `translateRpcError` を置き換え。コード名は実装時確認 | 05、06、08 |
 | D04-61 | 設計判断（2.0 版。02 §3.8 に反映済み） | `auditLogs` に `actorKind`（`admin` / `respondent` / `system`）と `details`（map）を持つ | 00 §2.2 の `actorUid`・`actorRole` だけでは受検者とシステムの操作を区別できない。`details` は 1.x 版から継続（07 のトークン数など） | 02 |
-| D04-62 | 設計判断（2.0 版。02 §3.7 に反映済み） | `usageLogs.respondentKind` を持つ | `admin` の利用履歴から幹部を除くクエリ条件に使う（結合ができないため `respondents.kind` を参照できない）。登録時に 02 の `registerRespondent()` が書く。M7 では利用履歴を作る送信のときに `respondents.kind` を写す（11-1 §2.7.4。2.3 版） | 02、06 |
+| D04-62 | 設計判断（2.0 版。02 §3.7 に反映済み） | `usageLogs.respondentKind` を持つ | `admin` の利用履歴から幹部を除くクエリ条件に使う（結合ができないため `respondents.kind` を参照できない）。登録時に 02 の `registerRespondent()` が書く。M7 では利用履歴を作る送信のときに `respondents.kind` を写す（11-1 §2.7.4。2.3 版）。役職の変更で受検者区分が変わると、`updatePersonAttributes()` が同じバッチで書き換える（11-2 §3.2。2.5 版） | 02、06 |
 
 ## 12. 改版履歴
 
@@ -2784,5 +2818,6 @@ sequenceDiagram
 | 2.2 | 2026-09-24 | 本番デプロイで判明した事項の反映（職業コードを 1〜8 に。旧コード 9 は保存済み文書の検証だけが読む。§4.2 の `occupationCode`、§5.3・§7.1 の職業名の例。10 K-19、PR #13・#14） |
 | 2.3 | 2026-11-09 | M7 の PR-7.3（受検者画面。11 総論 5.4・6.1、11-1 §3.4・§4.1。冒頭の版の欄を 2.3 にそろえた。2.2 版の改版の記録は冒頭の版の欄に入っていなかった）。§0.2 の決定事項 6 と §3.1 の回答保存の用途をステップ単位（選んだ時点）に改めた。§2.3 の電話番号を必須と 30 文字の上限だけに（書式・正規化をやめた。D04-06）、氏名を前後の空白を除いて 1〜100 文字に。§4 の冒頭に受検者 API が書く文書（登録は 3 文書、送信で利用履歴を作るか M7 より前の文書を更新）を足した。§4.1 を受験者登録の画面から使わないことに（D04-43）。§4.2 の処理を 3 文書のバッチに、監査ログの `details` に `previousCandidate` を足し、リクエストの例を見本の値に、`lib/utils/phone-number.ts` のコードを消して `name`・`phoneNumber` を `requiredText(NAME_MAX_LENGTH)`・`requiredText(PHONE_MAX_LENGTH)` に、`occupationCodeSchema` のコメントを 1〜8・10 に、§4.2.1・§4.2.2 から `usageLogId` と利用履歴の文書を外した（前回の候補は PR-7.4）。§4.3 の応答を `lastSavedStepNo` に。§4.4 を 1 ステップ分の保存（`{ stepNo, answers }`、1〜41 問、`questionNosOfStep`、`lib/masters/exam-steps.ts`。`pageNo` の古い形は 422）に改めた。§4.5 に利用履歴の作成か更新、`linkedPrevious`、区分の作成時の値、2 秒の待ちは画面で行うことを足した（つながりは PR-7.4）。§4.6 のシーケンス、§8.2 の Dto（`SessionProgressDto.lastSavedStepNo`、`AnswersSavedDto.stepNo`・`lastSavedStepNo`）、§8.3・§8.4 の表、§10 の 03・05 宛て、§11 の D04-06・D04-18・D04-19・D04-43・D04-46（入力の上限の定数の例外を含む）・D04-62 を改めた |
 | 2.4 | 2026-11-10 | M7 の PR-7.4（再受験のつながりと母集団。11 総論 5.4・6.1、11-1 §3.4.1・§3.4.3・§4.1、11-5 §2.1.2・§2.1.5・§4.1）。§4 の冒頭に、登録のとき同じ組織の `results` を前回の候補の判定のためだけに読むことと、送信で前回の結果の `updatedAt` を書くことを足した。§4.2 の処理・監査ログ（`kind` は保存した受検者区分）・リクエストの例と zod（`previousResultId: z.string().max(200).optional()`）・応答の `kind`（保存した値。候補の有無を受験者に知らせない）・422 の条件を改め、「PR-7.4 が足します」の注記を消した。§4.2.1 に手順 3（前回の候補の判定。`canLinkAsPrevious`）を足して番号を送り、§4.2.2 の入力と `respondents.previousResultId`・監査ログの `details` を確定の形にした。§4.5 の処理・監査ログ（`linkedPrevious`）と手順（前回の結果と Q-M7-1 の読み取り、`previousResultId`、つなぐときの前回の `updatedAt`。書き込みは 5〜6 件）、§4.6 のシーケンス。§5.5 の処理（`fetchPopulation` は組織の論理削除されていない全件を射影して読み、`selectPopulation` で置き換わった結果・除外・旧版・チーム外を除く）、`includesSubject`（置き換わった結果なら `false`）、処理手順 2、母集団の条件の置き場所、読み取りの性能（チームを選んでも組織の全件。11-5 §2.1.5）。応答の形・エラーは変えない。§8.3 の `registerRespondent`・`getComparison`、§8.4 の `canLinkAsPrevious`・`fetchPopulation`・`registerRespondent`・`submitSession`・`toPopulationSourceRow`、§9.1 のシーケンス。§4.2 のリクエストとレスポンスの例を再受験リンクの形（`kind: "executive"`。11-1 §3.4.1 の例と同じ）にし、読み取りの注記を「形の違う値は `results` を読まない、ほかの組織の結果・存在しない ID・論理削除済みは読み取り 1 回で止まる」に分けた。§4 の冒頭と §4.5 の手順 2 に、前回の結果は判定に使う `organizationId`・`deletedAt` だけを射影して読む（指標・氏名は読まない）ことと、文書 ID の形でない候補は送信で読まずにつながないことを足した。§5.6 の母集団の条件（`isExcluded`・`teamCode` は `selectPopulation()` が見る）と §5.10 の `count()` の注記（置き換わった結果の判定に全件が要るので数えられない）を改めた。§4 の冒頭・§4.5 の手順 2・§8.4 に、Q-M7-1 は有無だけを見るので登録と送信のどちらでも文書名だけを読む（`select()`。次の受験の指標・氏名を読まない）ことを足した |
+| 2.5 | 2026-11-10 | M7 の PR-7.5（回答一覧の API。11 総論 5.4・6.1、11-2 §3.5〜§3.11・§4.1）。§2.1 の一覧応答と §2.2 を、一覧 API がクエリを受け取らず全件を返す形に改め（D04-04）、`pagingSchema` は PR-7.6 まで今の画面の URL の解釈だけが使うと書いた。§2.3 に `calendarDateSchema` の再 export、§2.4 に 422 `LEFT_BEFORE_HIRED`、§2.6 に `result.update_employment`・`result.update_staff_role` と更新系のタイミングの区分と日付・役職を足した。§3.2 の 3 行の用途。§5.3 を 11-2 §3.5 の要約（クエリなし、`listResultRows` の手順 1〜5、`ResultListDto` と見本の値、監査 `{ rowCount, examCount }`、個人情報は代表の受検者だけ）にし、D04-26・D04-27・D04-55 を改め、PR-7.6 まで今の画面は Server Component から旧 `listResults(ctx, query)` を呼ぶ注記を足した。§5.6 の PATCH を 11-2 §3.6 の要約（4 項目、`updatePersonInputSchema`、`updatePerson` の手順 1〜6、`PersonUpdatedDto`、エラー表、変わらない値は書かない、後勝ち、450 件までのバッチ、送信前の受検者は `teamCode`・`isExcluded` だけ）にし、PR-7.6 までの今の画面の扱い（つながった全受験に書き、操作した行は送った項目だけを応答の値で更新する）の注記と、DELETE に削除した受験を前回とする受験の `previousResultId` を書き換えないことを足した。§5.8 を 11-2 §3.8 の要約（クエリなし、`listUsageLogs({ viewer })` で送信済みの全件を `submittedAt` の降順、`UsageLogListDto`、「未回答」と `offset()` の段落を消した）にし、PR-7.6 までの今の利用履歴の画面は全件を受け取り 50 件ずつ画面でページを切り替える注記を足した。§8.1 のファイル（`person-chain.ts`）、§8.2 の Dto（`ResultListDto`・`ResultListRowDto`・`ResultListExamDto`・`PersonUpdatedDto`・`UsageLogListDto` を足し、`RespondentUpdatedDto` を消し、`ResultListItemDto`・`PagedDto` に PR-7.6 まで今の画面が使う注記）、§8.3・§8.4 の関数（`listResultRows`・`updatePerson`・`listUsageLogs(ctx)`・`updatePersonAttributes`・`listResults` の射影・`listUsageLogs({ viewer })`）、§10 の 02・06・08 宛て、§11 の D04-59・D04-62 を改めた |
 
 以上。
