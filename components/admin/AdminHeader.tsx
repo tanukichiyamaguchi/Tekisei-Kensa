@@ -1,27 +1,19 @@
 "use client";
-// ヘッダー（06 §2.3）: 組織名、利用履歴ボタン（P-01）、管理者名、ログアウト
-import { useState } from "react";
-
+// ヘッダー（06 §2.3）: 組織名、管理者名、ログアウト。利用履歴は回答一覧の見出しの横から開く（11-2 §2.4。ヘッダーの「利用履歴」
+// ボタンは外した）。ヘッダー自体の廃止は 11-8 の PR-7.13a
 import { LogoutButton } from "./LogoutButton";
-import { UsageLogDialog } from "./UsageLogDialog";
-import { ADMIN_TEXTS } from "@/lib/presentation/admin-texts";
 
 export function AdminHeader(props: {
   readonly organizationName: string;
   readonly adminName: string;
 }) {
-  const [usageOpen, setUsageOpen] = useState(false);
   return (
     <header className="admin-header">
       <div className="admin-header__org">{props.organizationName}</div>
       <div className="admin-header__actions">
-        <button type="button" className="btn" onClick={() => setUsageOpen(true)}>
-          {ADMIN_TEXTS.usageLogs}
-        </button>
         <span className="admin-header__user">{props.adminName}</span>
         <LogoutButton />
       </div>
-      <UsageLogDialog open={usageOpen} onClose={() => setUsageOpen(false)} />
     </header>
   );
 }

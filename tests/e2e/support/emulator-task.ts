@@ -27,6 +27,28 @@ async function submitAnswers(
   return { resultId, respondentId: registered.respondentId };
 }
 
+/** オーナー（と指定があれば管理者 admin）のアカウントを作り、ログイン用のパスワードを設定する（ローカル専用。02 §13.2） */
+async function createLoginAccounts(
+  organizationId: string,
+  password: string,
+  roles: ReadonlyArray<"owner" | "admin">,
+): Promise<Record<"owner" | "admin", string>> {
+  const emails: Record<"owner" | "admin", string> = { owner: "", admin: "" };
+  for (const role of roles) {
+    const email = uniqueEmail(`e2e-${role}`);
+    const { uid } = await createAdminAccount({
+      email,
+      displayName: role === "owner" ? "テストテスト 院長" : "テストテスト 管理者",
+      organizationId,
+      role,
+      actorKind: "system",
+    });
+    await adminAuth().updateUser(uid, { password });
+    emails[role] = email;
+  }
+  return emails;
+}
+
 async function run(task: string | undefined, args: string[]): Promise<unknown> {
   const db = adminFirestore();
   switch (task) {
@@ -130,6 +152,69 @@ async function run(task: string | undefined, args: string[]): Promise<unknown> {
         .doc(subject.resultId)
         .update({ reliability: 90, "risks.misconduct": 90 });
       return { ownerEmail, resultId: subject.resultId };
+    }
+    case "add-reexam": {
+      // 再受験（11-2 §5 の前置き: つながりは再受験リンクの prev で登録して作る）。前回の候補を付けて登録し、送信のときに前回と
+      // つながる（11-7 §3.4）。再受験は既存スタッフ扱い（Q-33）。番号を前回と同じにすると氏名・電話番号も同じになる。直接は書かない
+      const [organizationId = "", previousResultId = "", index = "1"] = args;
+      const n = Number(index);
+      const registered = await registerAndSave(
+        organizationId,
+        n,
+        "executive",
+        randomAnswers(700 + n),
+        4,
+        previousResultId,
+      );
+      const { resultId } = await submitSession({ sessionId: registered.sessionId, meta });
+      return { resultId, respondentId: registered.respondentId };
+    }
+    case "backdate-result": {
+      // 受験日を過去にする（M7-list-37 の「受験から1年以上」。API では受験日を変えられない）。E2E に限った直接書き込み
+      const [resultId = "", days = "400"] = args;
+      await db
+        .collection(COLLECTIONS.results)
+        .doc(resultId)
+        .update({ submittedAt: Timestamp.fromMillis(Date.now() - Number(days) * 86_400_000) });
+      return { ok: true };
+    }
+    case "seed-many-rows": {
+      // 101 行以上の組織（M7-list-38・46・50）。オーナーと求職者 count 人（テストテスト 101〜）を、seed:local と同じリポジトリの
+      // 関数で登録・保存・送信する（直接は書かない。受検者登録のレート制限は service にあり、リポジトリには無い）
+      const [password = "", count = "105"] = args;
+      const org = await createOrganization({
+        name: "E2E 多人数サロン",
+        code: null,
+        customerNumber: null,
+      });
+      const { owner } = await createLoginAccounts(org.organizationId, password, ["owner"]);
+      const resultIds: string[] = [];
+      for (let i = 0; i < Number(count); i += 1) {
+        const { resultId } = await submitAnswers(
+          org.organizationId,
+          101 + i,
+          randomAnswers(1000 + i),
+        );
+        resultIds.push(resultId);
+      }
+      return { organizationId: org.organizationId, ownerEmail: owner, resultIds };
+    }
+    case "seed-empty-org": {
+      // 受験が 0 件の組織（M7-list-47）。組織・オーナー・管理者（admin）だけ
+      const org = await createOrganization({
+        name: "E2E 受験なしサロン",
+        code: null,
+        customerNumber: null,
+      });
+      const emails = await createLoginAccounts(org.organizationId, args[0] ?? "", [
+        "owner",
+        "admin",
+      ]);
+      return {
+        organizationId: org.organizationId,
+        ownerEmail: emails.owner,
+        adminEmail: emails.admin,
+      };
     }
     case "submit-type": {
       // 指定の適性タイプになる回答を固定シードの乱数回答から探して送信する（E-12 のコンダクタータイプ例）

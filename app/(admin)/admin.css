@@ -82,6 +82,14 @@ body {
   color: var(--admin-primary);
 }
 
+/* 管理画面に共通の焦点の枠（11-8 §2.2.6・別表A の 1、11 総論 8.3 の 19）。焦点の見た目を定めていない操作の部品に、
+   キーボードの操作で焦点が当たったとき出す。:where() で詳細度を下げ、部品が自分の焦点の見た目を定めているときはその指定を優先する。
+   色は変数でなく値で書く（.admin-root の外に描く部品は adm-focus-scope を付けて同じ枠を効かせる） */
+:where(.admin-root, .adm-focus-scope) :focus-visible {
+  outline: 2px solid #3f8da5;
+  outline-offset: 2px;
+}
+
 /* ---- 共通レイアウト（06 §2.3） */
 .admin-shell {
   display: grid;
@@ -233,11 +241,6 @@ body {
   background: var(--admin-primary);
   color: #ffffff;
 }
-.btn--danger {
-  border-color: var(--admin-danger);
-  background: var(--admin-danger);
-  color: #ffffff;
-}
 .btn--link {
   border: none;
   background: none;
@@ -266,9 +269,6 @@ body {
   color: var(--admin-text);
   text-decoration: none;
 }
-.icon-btn--danger {
-  color: var(--admin-danger);
-}
 
 /* ---- 通知 */
 .notice {
@@ -281,26 +281,30 @@ body {
   background: var(--admin-danger-soft);
   color: var(--admin-danger);
 }
+/* 通知（11-2 §2.20・§3.12）。1 件ずつ、画面の下の中央。モーダルの dialog が開いている間はその中に描く（Toast.tsx） */
 .toast-region {
   position: fixed;
-  right: 24px;
-  bottom: 24px;
-  z-index: 100;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  left: 50%;
+  bottom: 28px;
+  z-index: 10000;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  transform: translateX(-50%);
 }
 .toast {
-  min-width: 280px;
-  max-width: 480px;
-  padding: 12px 16px;
-  border-radius: var(--admin-radius);
-  background: var(--admin-text);
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: #1f2933;
   color: #ffffff;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  font-size: 13px;
+  font-weight: 600;
 }
 .toast--error {
-  background: var(--admin-danger);
+  background: #c62828;
+}
+/* 見出し（削除の「完了」）は本文と同じ大きさで、本文の前の行 */
+.toast__title {
+  display: block;
 }
 
 /* ---- ダイアログ（dialog 要素。06 §2.4） */
@@ -371,49 +375,8 @@ body {
   font-weight: 700;
   white-space: nowrap;
 }
-.data-table td select {
-  min-height: 32px;
-  padding: 4px 6px;
-  border: 1px solid #6b7785;
-  border-radius: 6px;
-  font: inherit;
-}
 .data-table__nowrap {
   white-space: nowrap;
-}
-.result-filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 12px 16px;
-  margin-bottom: 16px;
-}
-.result-filters .field {
-  margin-bottom: 0;
-}
-.result-filters__search {
-  width: 280px;
-}
-.result-filters__total {
-  margin-left: auto;
-  color: var(--admin-text-muted);
-}
-.pager {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 16px;
-}
-.pager a[aria-current="page"] {
-  font-weight: 700;
-  text-decoration: none;
-  color: var(--admin-text);
-}
-.empty-state {
-  padding: 32px;
-  text-align: center;
-  color: var(--admin-text-muted);
 }
 .badge {
   display: inline-block;
@@ -895,4 +858,1147 @@ body {
 }
 .invite-block > .btn {
   margin-bottom: 12px;
+}
+
+/* ---- 回答一覧（M-04。11-2 §2）。クラス名の接頭辞は rl-。色は一覧の根 .rl-root と、document.body の直下に描くメニュー .rl-menu の
+   変数（§2.26）。K-49・K-50 で変えた 21 個は §2.26 の 2 つの表（値の後ろに参照元の色）。比は総論 8.3 の配色の取り決めで計算した */
+.rl-root,
+.rl-menu {
+  /* 参照元の ad-app の色（§2.26） */
+  --rl-primary: #3f8da5; /* 検索欄の焦点の枠・閉じるアイコンのマウス・利用履歴の「閉じる」の枠 */
+  --rl-primary-dark: #2e6f84;
+  --rl-primary-soft: #e8f3f6;
+  --rl-primary-soft-2: #d3e8ee;
+  --rl-text: #1f2933;
+  --rl-text-2: #3c4753;
+  --rl-muted: #5f6b78;
+  --rl-mark: #7a8592; /* 選択欄とチームの選択の下向きの山、検索欄の虫めがねだけ */
+  --rl-line: #e3e8ee; /* カード・表・メニュー・文字のボタンの枠 */
+  --rl-line-soft: #eef2f6;
+  --rl-hover-bg: #f7f9fc; /* マウスを載せたときの地・利用履歴の見出しの行 */
+  --rl-warn: #b45309;
+  --rl-warn-soft: #fff4e5;
+  --rl-warn-line: #f3d9b1;
+  --rl-warn-card-bg: #fffbf5;
+  --rl-green-soft: #e7f5ef;
+  --rl-danger: #b42318;
+  --rl-danger-soft: #fdecec;
+  --rl-head-bg: #fafbfd; /* 表の見出しのセル */
+  --rl-row-hover: #fbfcfe;
+  --rl-tab-bg: #ebeff4;
+  --rl-tab-shadow: #cfd7e0;
+  --rl-menu-shadow: #c9d2db;
+  --rl-dates-cancel-text: #3a4651; /* 「やめる」の文字 */
+  --rl-dates-save-bg: #2f7c96; /* 「保存する」の地 */
+  /* K-49 で変えた色（§2.26 の K-49 の表） */
+  --rl-primary-strong: #397f94; /* 1・14 白い文字の地と「閉じる」の文字。参照元 #3F8DA5 */
+  --rl-tab-count: #636d79; /* 2 選んでいないタブの数。参照元 #7A8592 */
+  --rl-placeholder: #767676; /* 3 検索欄のプレースホルダー。参照元（推定）#A9A9A9 */
+  --rl-muted-cell: #6b7682; /* 4 「—」・時刻・「前回」。参照元 #7A8592 */
+  --rl-open-text: #2d6d82; /* 5 「結果を見る」の文字（ふだんもマウスも）。参照元 #2E6F84 */
+  --rl-chip-candidate: #2c748c; /* 6 区分チップ「求職者」。参照元 #2F7C96 */
+  --rl-chip-employed: #2a7b58; /* 7 区分チップ「在籍」。参照元 #2F8A63 */
+  --rl-green: #147c5b; /* 8 「経年比較あり」。参照元 #15805E */
+  --rl-muted-text: #6c7784; /* 9 チーム未設定の文字・メニューの見出し。参照元 #7A8592 */
+  --rl-menu-note: #697380; /* 10 メニューの右端の小さい文字。参照元 #7A8592 */
+  --rl-menu-note-danger: #646e7a; /* 11 「この受験を削除」の右端の小さい文字。参照元 #7A8592 */
+  --rl-danger-hover: #8c1b13; /* 12 「削除する」のマウス・押下の地（不透明度 70%）。参照元 #B42318 */
+  --rl-cancel-hover-text: #333d47; /* 13 「キャンセル」のマウス・押下の文字（不透明度 70%）。参照元 #3C4753 */
+  --rl-close-hover-text: #1d414c; /* 15 「閉じる」のマウス・押下の文字（不透明度 70%）。参照元 #3F8DA5 */
+  /* K-50 で変えた色（§2.26 の K-50 の表） */
+  --rl-field-line: #7a92ae; /* 1 検索欄・選択欄の枠。参照元 #E3E8EE */
+  --rl-team-line: #7d95b0; /* 2 チームの選択の枠。参照元 #E3E8EE */
+  --rl-team-line-hover: #8095aa; /* 3 チームの選択のマウスの枠。参照元 #C9D2DB */
+  --rl-switch-off: #7e94ac; /* 4 スイッチのオフの溝。参照元 #CFD7E0 */
+  --rl-date-line: #8297ac; /* 5 日付の入力欄の枠。参照元 #D5DCE3 */
+  --rl-tab-on-line: #627b98; /* 6 選択中のタブの枠（参照元に無い） */
+  --rl-knob-shadow: #8996a4; /* 7 スイッチのつまみの影。参照元 #9AA5B1 */
+  font-family:
+    Inter, "Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", system-ui,
+    sans-serif;
+  color: var(--rl-text);
+  font-size: 14px;
+  line-height: 1.6;
+}
+/* 一覧の根（§2.1）。一覧の幅で狭い・中くらいを切り替えるコンテナ（§2.22）。祖先に overflow を付けない（見出しの行を上に残す。§2.8） */
+.rl-root {
+  container-type: inline-size;
+  width: 100%;
+  padding: 4px 0 40px;
+  text-align: left;
+}
+/* 見出しの行が上に残るので、Shift+Tab で上へ戻った部品の焦点がその下に隠れないようにする（11 総論 8.5） */
+html:has(.rl-root) {
+  scroll-padding-top: 48px;
+}
+
+/* 見出し行（§2.4） */
+.rl-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.rl-root .rl-title {
+  margin: 0;
+  color: var(--rl-text);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+.rl-desc {
+  margin: 4px 0 0;
+  color: var(--rl-muted);
+  font-size: 13px;
+}
+.rl-head__actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+/* 白地のボタン（「利用履歴」「さらに表示」）と「回答リンクをコピー」 */
+.rl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 1px solid;
+  border-radius: 9px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.rl-btn--plain {
+  border-color: var(--rl-line);
+  background: #ffffff;
+  color: var(--rl-text-2);
+}
+.rl-btn--plain:hover {
+  background: var(--rl-hover-bg);
+}
+.rl-btn--primary {
+  border-color: var(--rl-primary-strong);
+  background: var(--rl-primary-strong);
+  color: #ffffff;
+}
+.rl-btn--primary:hover {
+  border-color: var(--rl-primary-dark);
+  background: var(--rl-primary-dark);
+}
+
+/* 集計カード（§2.5） */
+.rl-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.rl-card {
+  display: block;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--rl-line);
+  border-radius: 12px;
+  background: #ffffff;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.rl-card__label {
+  display: block;
+  color: var(--rl-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.rl-card__value {
+  display: block;
+  margin-top: 2px;
+  color: var(--rl-text);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+.rl-card__unit {
+  margin-left: 3px;
+  color: var(--rl-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.rl-card__sub {
+  display: block;
+  margin-top: 3px;
+  color: var(--rl-muted);
+  font-size: 11.5px;
+}
+.rl-card--alert {
+  border-color: var(--rl-warn-line);
+  background: var(--rl-warn-card-bg);
+  cursor: pointer;
+}
+.rl-card--alert .rl-card__value {
+  color: var(--rl-warn);
+}
+.rl-card--alert:hover {
+  border-color: var(--rl-warn);
+}
+
+/* 道具の行（§2.6・§2.7） */
+.rl-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.rl-tabs {
+  display: flex;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--rl-tab-bg);
+}
+.rl-tab {
+  min-height: 34px;
+  padding: 7px 14px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--rl-muted);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: inherit;
+  cursor: pointer;
+}
+/* 選択中は白地と影に、外側の 1px の枠 #627B98 を足す（K-50 の表の 6。タブの大きさと位置は変えない） */
+.rl-tab[aria-selected="true"] {
+  background: #ffffff;
+  color: var(--rl-text);
+  box-shadow:
+    0 0 0 1px var(--rl-tab-on-line),
+    0 1px 2px var(--rl-tab-shadow);
+}
+.rl-tab__count {
+  margin-left: 5px;
+  color: var(--rl-tab-count);
+  font-size: 12px;
+  font-weight: 600;
+}
+.rl-tab[aria-selected="true"] .rl-tab__count {
+  color: var(--rl-primary-dark);
+}
+/* 検索欄（§2.7）。焦点は入力欄に輪郭を出さず、欄の枠を #3F8DA5 にして示す（§2.4。輪郭は欄の枠に重なるため） */
+.rl-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 260px;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--rl-field-line);
+  border-radius: 9px;
+  background: #ffffff;
+  color: var(--rl-mark);
+}
+.rl-search:focus-within {
+  border-color: var(--rl-primary);
+}
+.rl-search .rl-search__input,
+.rl-search .rl-search__input:focus,
+.rl-search .rl-search__input:focus-visible {
+  outline: none;
+}
+.rl-search__input {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--rl-text);
+  font-family: inherit;
+  font-size: 13px;
+}
+.rl-search__input::placeholder {
+  color: var(--rl-placeholder);
+  opacity: 1;
+}
+/* チームで絞り込む・並び順（§2.7）。右端の下向きの山は 5px の三角 2 つ */
+.rl-select {
+  height: 40px;
+  padding: 0 30px 0 10px;
+  border: 1px solid var(--rl-field-line);
+  border-radius: 9px;
+  background-color: #ffffff;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--rl-mark) 50%),
+    linear-gradient(135deg, var(--rl-mark) 50%, transparent 50%);
+  background-position:
+    calc(100% - 15px) 17px,
+    calc(100% - 10px) 17px;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  color: var(--rl-text-2);
+  font-family: inherit;
+  font-size: 13px;
+  appearance: none;
+  cursor: pointer;
+}
+.rl-count {
+  margin-left: auto;
+  color: var(--rl-muted);
+  font-size: 12px;
+}
+/* 「絞り込みを解除」の焦点は管理画面に共通の焦点の枠（一覧の輪郭を当てない。§2.4） */
+.rl-clear {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--rl-primary-dark);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* 表（§2.8）。角丸を出すため、セルの線は border-spacing 0 で重ねる（セルの線は下だけ） */
+.rl-table {
+  width: 100%;
+  border: 1px solid var(--rl-line);
+  border-radius: 14px;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: #ffffff;
+}
+.rl-th {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--rl-line);
+  background: var(--rl-head-bg);
+  color: var(--rl-muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+.rl-th:first-child {
+  border-top-left-radius: 14px;
+}
+.rl-th:last-child {
+  border-top-right-radius: 14px;
+}
+.rl-th--person {
+  width: 32%;
+}
+.rl-th--help {
+  cursor: help;
+}
+.rl-th--actions {
+  text-align: right;
+}
+.rl-row {
+  cursor: pointer;
+}
+.rl-td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--rl-line-soft);
+  vertical-align: middle;
+}
+.rl-row:last-child .rl-td {
+  border-bottom: none;
+}
+.rl-row:hover .rl-td {
+  background: var(--rl-row-hover);
+}
+/* 氏名のリンク（§2.8）。inline のまま描く（輪郭がチップの並びに重ならない。11 総論 8.5）。
+   4 つの状態の色を .admin-root a より強い指定で書き、押している間の指定は置かない（ふだんとマウスの指定がそのまま当たる） */
+.rl-name {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.rl-name:link,
+.rl-name:visited {
+  color: var(--rl-text);
+  text-decoration: none;
+}
+.rl-name:link:hover,
+.rl-name:visited:hover {
+  color: var(--rl-primary-dark);
+  text-decoration: underline;
+}
+.rl-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  color: var(--rl-muted);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+/* チップ（§2.9） */
+.rl-chip {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.rl-chip--manager {
+  background: #1f3a5f;
+  color: #ffffff;
+}
+.rl-chip--leader {
+  background: #efe6f7;
+  color: #6b4a8a;
+}
+/* 区分チップ（ボタン）。焦点は管理画面に共通の焦点の枠（一覧の輪郭を当てない。§2.4） */
+.rl-chip--status {
+  margin: 0;
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+}
+.rl-chip--candidate {
+  background: #e2f0f6;
+  color: var(--rl-chip-candidate);
+}
+.rl-chip--employed {
+  background: #e3f4ea;
+  color: var(--rl-chip-employed);
+}
+.rl-chip--left {
+  background: #edf0f3;
+  color: #5a6672;
+}
+.rl-chip--date {
+  background: #f1f4f7;
+  color: #5a6672;
+}
+.rl-chip--nth {
+  background: var(--rl-primary-soft);
+  color: var(--rl-primary-dark);
+}
+.rl-chip--longitudinal {
+  background: var(--rl-green-soft);
+  color: var(--rl-green);
+}
+.rl-chip--one-year {
+  background: var(--rl-warn-soft);
+  color: var(--rl-warn);
+}
+/* タイプ（§2.8） */
+.rl-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--rl-text-2);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.rl-type__dot {
+  flex-shrink: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.rl-type--none {
+  color: var(--rl-muted-cell);
+}
+/* 最新の受験（§2.8） */
+.rl-td--latest {
+  color: var(--rl-text-2);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.rl-latest__time {
+  color: var(--rl-muted-cell);
+  font-size: 11.5px;
+}
+.rl-latest__prev {
+  display: block;
+  color: var(--rl-muted-cell);
+  font-size: 11.5px;
+}
+/* チームの選択（§2.10）。未設定は文字を弱くし、枠を破線（色は同じ） */
+.rl-team {
+  min-width: 118px;
+  height: 34px;
+  padding: 0 28px 0 9px;
+  border: 1px solid var(--rl-team-line);
+  border-radius: 8px;
+  background-color: #ffffff;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--rl-mark) 50%),
+    linear-gradient(135deg, var(--rl-mark) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) 14px,
+    calc(100% - 9px) 14px;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  color: var(--rl-text-2);
+  font-family: inherit;
+  font-size: 12.5px;
+  appearance: none;
+  cursor: pointer;
+}
+.rl-team[data-empty="true"] {
+  border-style: dashed;
+  color: var(--rl-muted-text);
+}
+.rl-team:hover {
+  border-color: var(--rl-team-line-hover);
+}
+/* 集計から除外（§2.11） */
+.rl-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px 0;
+  border: none;
+  background: none;
+  color: var(--rl-muted);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: inherit;
+  cursor: pointer;
+}
+.rl-switch__track {
+  position: relative;
+  flex-shrink: 0;
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--rl-switch-off);
+  transition: background 0.15s;
+}
+.rl-switch__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px var(--rl-knob-shadow);
+  transition: left 0.15s;
+}
+.rl-switch[aria-checked="true"] {
+  color: var(--rl-warn);
+  font-weight: 700;
+}
+.rl-switch[aria-checked="true"] .rl-switch__track {
+  background: var(--rl-warn);
+}
+.rl-switch[aria-checked="true"] .rl-switch__knob {
+  left: 16px;
+}
+/* 操作（§2.8）。「結果を見る」の文字はふだんもマウスのときも --rl-open-text（K-49 の表の 5）。押している間の指定は置かない */
+.rl-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.rl-open {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 12px;
+  border: 1px solid;
+  border-radius: 8px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.rl-open:link,
+.rl-open:visited {
+  border-color: var(--rl-primary-soft);
+  background: var(--rl-primary-soft);
+  color: var(--rl-open-text);
+  text-decoration: none;
+}
+.rl-open:link:hover,
+.rl-open:visited:hover {
+  border-color: var(--rl-primary-soft-2);
+  background: var(--rl-primary-soft-2);
+}
+.rl-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--rl-muted);
+  cursor: pointer;
+}
+.rl-more:hover {
+  background: var(--rl-line-soft);
+  color: var(--rl-text);
+}
+/* さらに表示・注記・取得の失敗（§2.1・§2.8） */
+.rl-show-more {
+  display: flex;
+  justify-content: center;
+  margin: 14px 0 4px;
+}
+.rl-note {
+  margin: 10px 0 0;
+  color: var(--rl-muted);
+  font-size: 12px;
+}
+.rl-load-failed {
+  margin: 0;
+  padding: 40px 0;
+  color: var(--rl-muted);
+  font-size: 13px;
+  text-align: center;
+}
+/* 0 件の表示（§2.19）。表の枠の中に出す */
+.rl-empty-box {
+  border: 1px solid var(--rl-line);
+  border-radius: 14px;
+  background: #ffffff;
+}
+.rl-empty {
+  padding: 44px 20px;
+  color: var(--rl-muted);
+  font-size: 13px;
+  text-align: center;
+}
+.rl-empty__title {
+  margin: 0 0 4px;
+  color: var(--rl-text-2);
+  font-size: 15px;
+  font-weight: 700;
+}
+.rl-empty__body {
+  margin: 0;
+}
+.rl-empty__btn {
+  min-height: 32px;
+  margin-top: 14px;
+  padding: 6px 12px;
+  border: 1px solid var(--rl-line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--rl-text-2);
+  font-family: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+/* 一覧の輪郭（§2.4。参照元の ad-app の焦点の指定）。部品ごとのクラスに当て、区分チップと「絞り込みを解除」には当てない
+   （管理画面に共通の焦点の枠が効く）。区分タブだけは隣のタブに重ならないようにタブの内側に描く（§2.6）。ダイアログの中には当てない */
+.rl-btn:focus-visible,
+.rl-card--alert:focus-visible,
+.rl-select:focus-visible,
+.rl-name:focus-visible,
+.rl-team:focus-visible,
+.rl-switch:focus-visible,
+.rl-open:focus-visible,
+.rl-more:focus-visible,
+.rl-empty__btn:focus-visible,
+.rl-menu__item:focus-visible {
+  outline: 2px solid #1f2933;
+  outline-offset: 2px;
+}
+.rl-tab:focus-visible {
+  outline: 2px solid #1f2933;
+  outline-offset: -4px;
+}
+
+/* メニュー（§2.12）。document.body の直下に描くので、根の .rl-menu に一覧の変数・書体・大きさ・行間（上の .rl-root, .rl-menu）を当てる。
+   影は開いている間だけ後ろにかかるので、コントラストの計算に入れない（§2.26） */
+.rl-menu {
+  position: fixed;
+  z-index: 9999;
+  min-width: 220px;
+  padding: 6px;
+  border: 1px solid var(--rl-line);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 10px 30px var(--rl-menu-shadow);
+}
+.rl-menu,
+.rl-menu *,
+.rl-menu *::before,
+.rl-menu *::after {
+  box-sizing: border-box;
+}
+.rl-menu__heading {
+  padding: 6px 10px 4px;
+  color: var(--rl-muted-text);
+  font-size: 11px;
+  font-weight: 700;
+}
+.rl-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--rl-text-2);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.rl-menu__item:hover {
+  background: var(--rl-hover-bg);
+}
+.rl-menu__note {
+  margin-left: auto;
+  color: var(--rl-menu-note);
+  font-size: 11.5px;
+}
+.rl-menu__item--danger {
+  color: var(--rl-danger);
+}
+.rl-menu__item--danger:hover {
+  background: var(--rl-danger-soft);
+}
+.rl-menu__item--danger .rl-menu__note {
+  color: var(--rl-menu-note-danger);
+}
+.rl-menu__sep {
+  margin: 5px 4px;
+  border-top: 1px solid var(--rl-line-soft);
+}
+
+/* 削除の確認と利用履歴のポップアップ（§2.16・§2.18。Dialog の className）。dialog は UA の色を持つので色を明示する。
+   中の部品の焦点は管理画面に共通の焦点の枠 */
+.dialog.rl-popup {
+  width: fit-content;
+  max-width: calc(100vw - 32px);
+  padding: 0;
+  border: 1px solid #d5d5d5;
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--rl-text);
+}
+.dialog.rl-popup::backdrop {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(4px);
+}
+.rl-popup .dialog__inner {
+  position: relative;
+  gap: 20px;
+  padding: 32px;
+}
+.rl-popup .dialog__header {
+  display: block;
+  padding: 0;
+  border-bottom: none;
+}
+.rl-popup .dialog__title {
+  margin: 0;
+  color: #000000;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -1px;
+  line-height: 1.25;
+}
+/* 閉じるアイコン（×。28px 四方、箱の上と右の端から 20px） */
+.rl-popup .dialog__header .icon-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #4c4b4b;
+  font-size: 28px;
+  line-height: 1;
+}
+.rl-popup .dialog__header .icon-btn:hover {
+  color: var(--rl-primary);
+}
+.rl-popup .dialog__header,
+.rl-popup .dialog__body,
+.rl-popup .dialog__footer {
+  width: 400px;
+  min-width: min(360px, 100%);
+  max-width: 100%;
+}
+.rl-popup .dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 0;
+  overflow: visible;
+}
+.rl-popup .dialog__footer {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 20px;
+  padding: 0;
+  border-top: none;
+}
+.rl-popup-text {
+  margin: 0;
+  color: var(--rl-text-2);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.rl-popup-btn {
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.rl-popup-btn--danger {
+  min-height: 50px;
+  border: none;
+  background: var(--rl-danger);
+  color: #ffffff;
+}
+.rl-popup-btn--cancel {
+  min-height: 46px;
+  border: 1px solid var(--rl-line);
+  background: #ffffff;
+  color: var(--rl-text-2);
+}
+/* マウス・押下は不透明度 70% のまま、「削除する」の地と「キャンセル」の文字を K-49 の色にする（K-49 の表の 12・13） */
+.rl-popup-btn:not([aria-disabled="true"]):hover,
+.rl-popup-btn:not([aria-disabled="true"]):active {
+  opacity: 0.7;
+}
+.rl-popup-btn--danger:not([aria-disabled="true"]):hover,
+.rl-popup-btn--danger:not([aria-disabled="true"]):active {
+  background: var(--rl-danger-hover);
+}
+.rl-popup-btn--cancel:not([aria-disabled="true"]):hover,
+.rl-popup-btn--cancel:not([aria-disabled="true"]):active {
+  color: var(--rl-cancel-hover-text);
+}
+.rl-popup-btn[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+/* 利用履歴（§2.18）。最小の幅 650px（画面の幅 − 32px を超えない）。表は入れ物の中で動かす */
+.dialog.rl-popup.rl-usage {
+  min-width: min(650px, calc(100vw - 32px));
+}
+.rl-usage .dialog__title {
+  color: var(--rl-text);
+}
+.rl-usage .dialog__header,
+.rl-usage .dialog__body,
+.rl-usage .dialog__footer {
+  width: auto;
+  max-width: 650px;
+}
+.rl-usage .dialog__body {
+  min-height: 0;
+}
+.rl-usage .dialog__footer {
+  align-items: flex-start;
+}
+.rl-usage__scroll {
+  min-height: 232px;
+  overflow: auto;
+}
+.rl-usage-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.rl-usage-table th,
+.rl-usage-table td {
+  width: 25%;
+  padding: 0 10px;
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.rl-usage-table th {
+  height: 40px;
+  background: var(--rl-hover-bg);
+  color: var(--rl-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.rl-usage-table th:first-child {
+  border-top-left-radius: 8px;
+}
+.rl-usage-table th:last-child {
+  border-top-right-radius: 8px;
+}
+.rl-usage-table td {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  color: var(--rl-text);
+  font-size: 13px;
+}
+.rl-usage-table tbody tr + tr td {
+  border-top: 1px solid rgba(213, 213, 213, 0.5);
+}
+.rl-usage-status {
+  margin: 0;
+  color: var(--rl-text);
+  font-size: 13px;
+}
+.rl-usage-close {
+  min-width: 60px;
+  min-height: 50px;
+  padding: 7px 10px;
+  border: 2px solid var(--rl-primary);
+  border-radius: 8px;
+  background: none;
+  color: var(--rl-primary-strong);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.rl-usage-close:hover,
+.rl-usage-close:active {
+  color: var(--rl-close-hover-text);
+  opacity: 0.7;
+}
+
+/* 入社日・退職日のダイアログ（§2.14）。dialog の内側の余白を 0 にして、暗幕を押したかを押した先が dialog 自身かで判定する。
+   日付の入力欄の暦のアイコンと空の表示の色は指定しない（ブラウザが描く。§2.26）。中の部品の焦点は管理画面に共通の焦点の枠 */
+.rl-dates {
+  width: 100%;
+  max-width: min(380px, calc(100vw - 32px));
+  padding: 0;
+  border: none;
+  border-radius: 18px;
+  background: #ffffff;
+  color: var(--rl-text);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+}
+.rl-dates::backdrop {
+  background: rgba(15, 23, 32, 0.45);
+}
+.rl-dates__box {
+  padding: 22px;
+}
+.rl-dates .rl-dates__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+.rl-dates__desc {
+  margin: 4px 0 0;
+  color: var(--rl-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.rl-dates__label {
+  display: block;
+  margin-top: 16px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.rl-dates__label--left {
+  margin-top: 14px;
+}
+.rl-dates__input {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--rl-date-line);
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--rl-text);
+  font-family: inherit;
+  font-size: 16px;
+}
+.rl-dates__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+.rl-dates__btn {
+  padding: 11px 22px;
+  border: none;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.rl-dates__btn--cancel {
+  background: #edf0f3;
+  color: var(--rl-dates-cancel-text);
+}
+.rl-dates__btn--save {
+  background: var(--rl-dates-save-bg);
+  color: #ffffff;
+}
+
+/* 狭い幅・中くらいの幅（§2.22、K-22）。画面の幅ではなく一覧の幅で切り替える */
+@container (width < 840px) {
+  .rl-head__actions {
+    width: 100%;
+    margin-left: 0;
+  }
+  .rl-head__actions .rl-btn {
+    flex: 1 1 0;
+  }
+  .rl-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .rl-tabs {
+    width: 100%;
+  }
+  .rl-tab {
+    flex: 1 1 0;
+  }
+  .rl-search {
+    width: 100%;
+  }
+  .rl-select {
+    flex: 1 1 40%;
+    min-width: 0;
+  }
+  .rl-count {
+    width: 100%;
+    margin-left: 0;
+  }
+  /* 表は枠と背景と見出しの行を消し、各行をカード（2 列 3 段: 受験者｜操作、タイプ｜最新の受験、チーム｜集計から除外）にする */
+  .rl-table {
+    display: block;
+    border: none;
+    background: none;
+  }
+  .rl-table thead {
+    display: none;
+  }
+  .rl-table tbody {
+    display: block;
+  }
+  .rl-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px 10px;
+    margin-bottom: 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--rl-line);
+    border-radius: 12px;
+    background: #ffffff;
+  }
+  .rl-td {
+    display: block;
+    padding: 0;
+    border-bottom: none;
+  }
+  .rl-row:hover .rl-td {
+    background: none;
+  }
+  .rl-td--person {
+    grid-row: 1;
+    grid-column: 1;
+  }
+  .rl-td--actions {
+    grid-row: 1;
+    grid-column: 2;
+  }
+  .rl-td--type {
+    grid-row: 2;
+    grid-column: 1;
+    align-self: center;
+  }
+  .rl-td--latest {
+    grid-row: 2;
+    grid-column: 2;
+    text-align: right;
+  }
+  .rl-td--team {
+    grid-row: 3;
+    grid-column: 1;
+  }
+  .rl-td--excl {
+    grid-row: 3;
+    grid-column: 2;
+    text-align: right;
+  }
+  .rl-team {
+    width: 100%;
+    min-height: 40px;
+  }
+  .rl-switch,
+  .rl-open,
+  .rl-more {
+    min-height: 40px;
+  }
+  .rl-more {
+    width: 40px;
+  }
+}
+@container (840px <= width < 1100px) {
+  .rl-search {
+    flex: 1 1 150px;
+    width: auto;
+    min-width: 140px;
+  }
+  .rl-count {
+    width: 100%;
+    margin-left: 0;
+    text-align: right;
+  }
+  .rl-th {
+    padding: 10px 10px;
+  }
+  .rl-td {
+    padding: 12px 10px;
+  }
+  .rl-team {
+    min-width: 104px;
+  }
+  .rl-switch[aria-checked="false"] .rl-switch__label,
+  .rl-latest__time {
+    display: none;
+  }
+}
+/* 指で操作する端末（§2.22）。幅にかかわらず押せる大きさを 40px にし、行のマウスの地を付けない */
+@media (pointer: coarse) {
+  .rl-open {
+    min-height: 40px;
+  }
+  .rl-more {
+    width: 40px;
+    min-height: 40px;
+  }
+  .rl-team {
+    height: 40px;
+  }
+  .rl-switch {
+    min-height: 40px;
+  }
+  .rl-row:hover .rl-td {
+    background: none;
+  }
 }

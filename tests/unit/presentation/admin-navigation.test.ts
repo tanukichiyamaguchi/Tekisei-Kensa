@@ -1,13 +1,7 @@
-// 管理画面の URL・日時・入力エラーの純関数（06 §1.3、§3.4.3、§10.3）
+// 管理画面の URL・日時・入力エラーの純関数（06 §1.3、§10.3）
 import { describe, expect, it } from "vitest";
 
-import {
-  hasResultFilters,
-  loginPath,
-  pageCount,
-  resultListHref,
-  safeNextPath,
-} from "@/lib/presentation/admin-navigation";
+import { loginPath, safeNextPath } from "@/lib/presentation/admin-navigation";
 import { fieldErrorsFrom, passwordProblem } from "@/lib/presentation/form-errors";
 import { formatDateTime } from "@/lib/presentation/format-datetime";
 
@@ -40,42 +34,6 @@ describe("safeNextPath（オープンリダイレクト防止）", () => {
   it("loginPath は next をエンコードする", () => {
     expect(loginPath("/admin?q=a b")).toBe("/admin/login?next=%2Fadmin%3Fq%3Da%20b");
     expect(loginPath()).toBe("/admin/login");
-  });
-});
-
-describe("resultListHref（既定値は URL に出さない）", () => {
-  it("既定値だけなら /admin", () => {
-    expect(resultListHref({})).toBe("/admin");
-    expect(resultListHref({ sort: "submittedAt", order: "desc", page: 1, pageSize: 50 })).toBe(
-      "/admin",
-    );
-  });
-
-  it("検索・区分・チーム・並び替え・ページを URL に反映する", () => {
-    expect(
-      resultListHref({
-        q: "山田",
-        kind: "executive",
-        teamCode: "none",
-        sort: "name",
-        order: "asc",
-        page: 3,
-        pageSize: 100,
-      }),
-    ).toBe(
-      "/admin?q=%E5%B1%B1%E7%94%B0&kind=executive&teamCode=none&sort=name&order=asc&page=3&pageSize=100",
-    );
-    expect(resultListHref({ sort: "submittedAt", order: "asc" })).toBe(
-      "/admin?sort=submittedAt&order=asc",
-    );
-  });
-
-  it("hasResultFilters・pageCount", () => {
-    expect(hasResultFilters({})).toBe(false);
-    expect(hasResultFilters({ teamCode: "A" })).toBe(true);
-    expect(pageCount(0, 50)).toBe(1);
-    expect(pageCount(50, 50)).toBe(1);
-    expect(pageCount(51, 50)).toBe(2);
   });
 });
 

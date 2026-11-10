@@ -1,72 +1,10 @@
-// E-16 チーム・除外・削除、E-17 組織内分類・利用履歴・アカウント、E-18 招待とパスワード設定（08 §3.4.3）
+// E-17 組織内分類・アカウント、E-18 招待とパスワード設定（08 §3.4.3）。
+// E-16（チーム・除外・削除）は回答一覧の作り直しで M7-list-39・43（list-operations.spec.ts）に、E-17 の利用履歴は M7-list-44 に移した
+// （11-2 §5.5。利用履歴はヘッダーではなく回答一覧の見出しの横から開く）
 import { emulatorTask } from "../support/admin";
-import {
-  E2E_ADMIN_PASSWORD,
-  expect,
-  loginViaUi,
-  openDialog,
-  resultRows,
-  test,
-} from "../support/admin-ui";
+import { E2E_ADMIN_PASSWORD, expect, loginViaUi, openDialog, test } from "../support/admin-ui";
 
-test("E-16 チーム・除外は即時 PATCH（失敗時は元に戻る）、削除は確認ダイアログ → DELETE → 一覧から消える", async ({
-  page,
-  adminOrg,
-}) => {
-  await loginViaUi(page, adminOrg.adminEmail);
-  const row = resultRows(page).filter({ hasText: "テストテスト 06" });
-  const team = row.getByRole("combobox");
-  await expect(team).toHaveValue("");
-
-  const [patch] = await Promise.all([
-    page.waitForRequest(
-      (r) => r.method() === "PATCH" && r.url().includes("/api/v1/admin/respondents/"),
-    ),
-    team.selectOption("C"),
-  ]);
-  expect(patch.postDataJSON()).toEqual({ teamCode: "C" });
-  await expect(team).toHaveValue("C");
-
-  // 失敗時は元に戻り、Toast を出す
-  await page.route("**/api/v1/admin/respondents/**", (route) =>
-    route.request().method() === "PATCH"
-      ? route.fulfill({
-          status: 500,
-          contentType: "application/json",
-          body: JSON.stringify({
-            error: { code: "INTERNAL_ERROR", message: "サーバでエラーが発生しました", details: {} },
-          }),
-        })
-      : route.continue(),
-  );
-  const exclude = row.getByRole("checkbox");
-  await exclude.check();
-  await expect(page.locator(".toast--error")).toHaveText("サーバでエラーが発生しました");
-  await expect(exclude).not.toBeChecked();
-  await page.unroute("**/api/v1/admin/respondents/**");
-
-  // 再読み込みしてもチームは C（保存されている）
-  await page.reload();
-  await expect(
-    resultRows(page).filter({ hasText: "テストテスト 06" }).getByRole("combobox"),
-  ).toHaveValue("C");
-
-  // 削除
-  await resultRows(page)
-    .filter({ hasText: "テストテスト 06" })
-    .getByRole("button", { name: /を削除$/ })
-    .click();
-  await expect(openDialog(page).locator(".dialog__title")).toHaveText("回答データを削除しますか？");
-  const [del] = await Promise.all([
-    page.waitForResponse((r) => r.request().method() === "DELETE"),
-    openDialog(page).getByRole("button", { name: "削除する" }).click(),
-  ]);
-  expect(del.status()).toBe(204);
-  await expect(resultRows(page).filter({ hasText: "テストテスト 06" })).toHaveCount(0);
-  await expect(page.locator(".result-filters__total")).toHaveText("全 7 件");
-});
-
-test("E-17 組織内分類の人数合計が一覧と一致し、分類・キャラクターのポップアップ、利用履歴、受検リンクのコピー、owner の招待リンク発行", async ({
+test("E-17 組織内分類の人数合計が一覧と一致し、分類・キャラクターのポップアップ、受検リンクのコピー、owner の招待リンク発行", async ({
   page,
   context,
   adminOrg,
@@ -87,12 +25,6 @@ test("E-17 組織内分類の人数合計が一覧と一致し、分類・キャ
   await page.keyboard.press("Escape");
   await page.getByTestId("classification-driving").locator(".character").first().click();
   await expect(openDialog(page).locator(".dialog__title")).toHaveText("えりか（レビュワータイプ）");
-  await page.keyboard.press("Escape");
-
-  await page.getByRole("button", { name: "利用履歴" }).click();
-  // 送信済みの 10 人。利用履歴は送信のときに作るので、送信前の下書きの履歴（未回答）は無い（11-1 §2.7.4）
-  await expect(openDialog(page).locator(".dialog__title")).toHaveText("利用履歴（全 10 件）");
-  await expect(openDialog(page).getByText("未回答")).toHaveCount(0);
   await page.keyboard.press("Escape");
 
   await page.goto("/admin/account");

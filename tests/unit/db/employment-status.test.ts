@@ -1,5 +1,5 @@
 // M7-exam-11 受験のときの区分（11-1 §3.5・§5.1、11-2 §3.1、K-28）と、M7-list-20 のうち役職と受検者区分の対応の分
-// （11-2 §3.2・§5.1、K-39 Q-02。effectiveStaffRole の分は回答一覧の画面の PR）
+// （11-2 §3.2・§5.1、K-39 Q-02。effectiveStaffRole の分は tests/unit/presentation/employment.test.ts）
 import { describe, expect, it } from "vitest";
 
 import { initialEmploymentStatus, respondentKindForStaffRole } from "@/lib/db/employment-status";
