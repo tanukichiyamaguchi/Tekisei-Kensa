@@ -3,8 +3,8 @@
 | 項目 | 内容 |
 |---|---|
 | 文書名 | 適性検査システム 基本設計 07 AI 解説・PDF 出力設計 |
-| 版 | 1.4 |
-| 作成日 | 2026-09-17（1.1 版: 2026-09-21、1.2 版: 2026-09-21 最終点検、1.3 版: 2026-09-21 K-06（Supabase → Firebase）に伴う部分改版、1.4 版: 2026-09-21 Firebase 化後の分冊間整合（02・04 の 2.1 版に合わせた）。§13） |
+| 版 | 1.6 |
+| 作成日 | 2026-09-17（1.1 版: 2026-09-21、1.2 版: 2026-09-21 最終点検、1.3 版: 2026-09-21 K-06（Supabase → Firebase）に伴う部分改版、1.4 版: 2026-09-21 Firebase 化後の分冊間整合（02・04 の 2.1 版に合わせた）、1.5 版: 2026-09-24 本番デプロイで判明した事項の反映、1.6 版: 2026-11-11 M7 の PR-7.8a（結果詳細の枠と上半分）で変わった描画完了の待ちの個数の注記（§9.6）。§13） |
 | 対象 | `lib/ai/`、`lib/pdf/`、印刷用ページ、`lib/services/ai-analysis.ts` / `pdf-export.ts` の 07 担当部分を実装する担当者。04（API）、06（管理者画面）、08（テスト）の担当者 |
 
 ## 0. 本書の位置づけ
@@ -1004,7 +1004,7 @@ export function visibilityForMode(mode: PdfMode, aiCompleted: boolean): PdfSecti
 |---|---|
 | 方式 | 印刷用ページでも画面と同じ `react-apexcharts`（`next/dynamic` の `ssr: false`。01 §3.2）でレーダーを描画し、Chromium がその SVG をベクターのまま PDF に印刷する。**PNG 化や `dataURI()` は使わない**（設計判断 D07-19。ベクターの方が拡大しても劣化せず、変換工程が減る） |
 | アニメーション | 06 D06-21 のとおり全画面で `chart.animations.enabled = false`。印刷用ページでは描画途中を取り込まないための必須条件 |
-| 描画完了の検知 | 印刷用ページに Client Component `PrintReadyMarker` を置き、期待するレーダー個数（4 個。16 軸 ×2、資質、ソーシャルスタイル）の `mounted` イベント（ApexCharts の `chart.events.mounted`。06 §9 の提案）を数え、全部揃ったら `document.documentElement.setAttribute("data-print-ready", "true")` を設定する。`lib/pdf/` は `page.waitForSelector('html[data-print-ready="true"]', { timeout: 20_000 })` で待つ。ApexCharts の `mounted` が使えない場合の代替は `.apexcharts-svg` の個数を `page.waitForFunction` で数える |
+| 描画完了の検知 | 印刷用ページに Client Component `PrintReadyMarker` を置き、期待するレーダー個数（4 個。16 軸 ×2、資質、ソーシャルスタイル）の `mounted` イベント（ApexCharts の `chart.events.mounted`。06 §9 の提案）を数え、全部揃ったら `document.documentElement.setAttribute("data-print-ready", "true")` を設定する。`lib/pdf/` は `page.waitForSelector('html[data-print-ready="true"]', { timeout: 20_000 })` で待つ。ApexCharts の `mounted` が使えない場合の代替は `.apexcharts-svg` の個数を `page.waitForFunction` で数える。1.6 版（M7 の PR-7.8a）: 16の特性のレーダーは ApexCharts を使わない自作の SVG（06 §6.2、11-4 §2.8.3）になり、印刷用ページの上半分は 11-4 の部品の印刷の形で描くので、期待する個数は旧のセクション 5・6 の 2 個（資質・ソーシャルスタイル。`PRINT_RADAR_COUNT`）になった。PR-7.8b で 0 個になり、描画完了の待ちの作り直しは 11-5 の PR-7.12（本節の改版も PR-7.12） |
 | ゲージ・スライダー・評価レター | 06 §6 のとおり SVG／CSS で Server Component が描くため待ち合わせ不要 |
 | イラスト | `img` 要素（06 §7 の方針。`next/image` を使わない）。`public/images/...`（00 §3.8）を同一オリジンから読み込む。`page.goto(url, { waitUntil: "networkidle0" })` で画像の読み込み完了を待つ |
 | フォント読み込み | `document.fonts.ready` を `page.evaluate` で待つ（§9.7） |
@@ -1248,3 +1248,4 @@ export async function renderResultPdf(args: RenderResultPdfArgs): Promise<Render
 | 1.1 | 2026-09-21 | レビュー指摘への対応。must: `restricted` の PDF に AI 解説を掲載しない（付録D §3 の必須引用のため。§7.2、§9.5、§10 PDF-03、§11、D07-15）。should: 印刷用ページのオリジンを `appBaseUrl()` に（§9.8、§9.13、D07-22）、環境変数の読み取りを `serverEnv()` / `isVercel()` に統一し非 null 断言を排除（§4.2、§5.2、§9.8）、`PDF_CHROMIUM_EXECUTABLE_PATH` の 00 §3.2 追記依頼と CI での設定（§9.12、§11）、Storage 仕様の 01／02 の食い違いを 01 §8.5 で確定（§9.11、§11、D07-21）、08 への回答（`schema.ts`、`parseAiOutputText()`、`.strict()`、stub の不正 JSON モードと `model`、U-11 の `{{…}}` 検査。§3.2、§5.4、§10、§11、D07-24）、フォント配置の理由とサブセット化の判断（§9.7、D07-20）、SelectPDF の記述を推定に（§9.2）、資質の 100 超と相性の負値の扱いの理由を揃えた（§2.2、§2.3、D07-04、D07-05）、`lib/pdf/` のツリーに `errors.ts` / `templates.ts` / `protection-bypass.ts` を追加（§9.8）、402 を `auth_error`・`retryable: false` に（§4.6、§5.3）、§4.4・§4.5 の参照誤りの訂正、キャッシュ TTL の命中条件（§4.4、D07-11） |
 | 1.4 | 2026-09-21 | Firebase 化後の分冊間整合。02 2.1 版・04 2.1 版に合わせ、§4.8（監査ログ `details` のトークン数は 04 §5.9 で確定）、§6.2（状態遷移は 02 の `markAiGenerationStarted`・`saveAiAnalysis`・`markAiGenerationFailed`・`countAiAnalysesSince` と 04 §5.9 の分担）、§6.3（GET で滞留を検知した場合も監査ログが残る）、§6.4（日次上限は `count()` 集計で確定）、§7.1（`generatedBy` で確定、同一バッチは `saveAiAnalysis()`）、§9.3・§9.4（印刷トークンの `adminUid`・`role`。可視性の再検証はトークンの `role` で行い `adminUsers` を再読しない）、§11 の 02・04 宛てを反映済みに更新。Claude API の呼び出し仕様・プロンプト・PDF の生成方式は変更なし |
 | 1.5 | 2026-09-24 | 本番デプロイで判明した事項の反映（§1.2・§2.2 のプロンプト `recruitment-v2`（アイリスト向け）と `AI_PROMPT_VERSION` の現在値、§2.3・§2.4・§3.2・§3.3 の職種例と「サロン」の文言（10 K-19。PR #13・#14）、§4.2 のワークスペースに属する API キー、§4.8・§9.8 の失敗時ログの `detail`、§9.8 の Chromium バイナリの同梱と `next build --webpack`、§10 PDF-08 の CI での同梱確認（PR #15）） |
+| 1.6 | 2026-11-11 | M7 の PR-7.8a（結果詳細の枠と上半分。11-4）。§9.6 の描画完了の検知に、期待するレーダーの個数が PR-7.8a から 2 個（資質・ソーシャルスタイル）、PR-7.8b で 0 個になる注記だけを足した（§9.4〜§9.6 の作り直しは 11-5 の PR-7.12。11 総論 6.1）。表の版と作成日に、1.5 版の記載が漏れていたのを足した |

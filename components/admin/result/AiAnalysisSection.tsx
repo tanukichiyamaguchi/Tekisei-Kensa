@@ -1,6 +1,7 @@
 "use client";
-// セクション 7 AI 解説（06 §3.5.9）。生成（POST …/ai-analysis。同期方式）、生成中のポーリング（GET）、失敗時の再試行。
-// ヘッダーの「AI解説を表示」ボタンとセクション内のボタンが同じ状態を共有するため Context にする
+// AI 解説（06 §3.5.9）。生成（POST …/ai-analysis。同期方式）、生成中のポーリング（GET）、失敗時の再試行。状態は Context に置く。
+// 結果詳細の新しいレイアウトでは、目次と概要の間の AI 解説の領域（id ai。目次の「AI解説」の行き先。11-4 §2.1）に置く。見出しの
+// 「AI解説を表示」ボタンは無くなった（11-6 の ai-04・ai-05。生成は領域の中のボタンで行う）。中身の作り直しは 11-6 の PR-7.9
 import {
   createContext,
   useCallback,
@@ -23,7 +24,7 @@ import {
 } from "@/lib/presentation/ai-analysis-view";
 import { AdminApiError, fetchAiAnalysis, requestAiAnalysis } from "@/lib/utils/admin-api";
 
-const SECTION_ID = "ai-analysis";
+const SECTION_ID = "ai";
 
 type Busy = "idle" | "requesting" | "polling";
 
@@ -179,21 +180,6 @@ export function AiAnalysisProvider(props: {
 
 function isWorking(ctx: AiAnalysisContextValue): boolean {
   return ctx.busy !== "idle";
-}
-
-/** ヘッダーの「AI解説を表示」（06 §3.5.2）。押すとセクション 7 へスクロールし、未生成なら生成を始める */
-export function AiAnalysisHeaderButton() {
-  const ctx = useAiAnalysis();
-  return (
-    <button
-      type="button"
-      className="btn btn--primary"
-      onClick={ctx.show}
-      disabled={isWorking(ctx) || ctx.locked}
-    >
-      {ADMIN_TEXTS.showAi}
-    </button>
-  );
 }
 
 export function AiAnalysisSection() {

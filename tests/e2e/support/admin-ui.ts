@@ -1,4 +1,5 @@
-// 管理画面の E2E の共通操作（08 §3.4.3 E-10〜E-18、11-2 §5.3 M7-list-34〜52、11-3 §5.3 M7-zaiseki-31〜43・48）。
+// 管理画面の E2E の共通操作（08 §3.4.3 E-10〜E-18、11-2 §5.3 M7-list-34〜52、11-3 §5.3 M7-zaiseki-31〜43・48、
+// 11-4 §5.3 M7-result-21〜35）。
 // ログインは画面から行い、Cookie の注入はしない（08 §3.4.1）
 import AxeBuilder from "@axe-core/playwright";
 import {
@@ -296,6 +297,96 @@ export const retRow = (page: Page, type: AptitudeTypeKey): Locator =>
 
 /** 「回答一覧を開く →」 */
 export const pgGo = (page: Page): Locator => page.locator(".ob-pg a.pg-go");
+
+// ---- 結果詳細（11-4 §2。要素の id は §2.1、クラスは別表D）の要素
+
+/** 比較の状態（#rs2 の data-comparison。11-4 §3.6） */
+export type ComparisonKind = "none" | "loading" | "ready" | "empty" | "error";
+
+/** 結果詳細の枠と見出しの塊・受験情報の 1 行・目次・新しいレイアウト */
+export const resultDetail = (page: Page) => ({
+  /** 画面に固定した枠 */
+  frame: page.locator("#rd"),
+  /** スクロールする領域 */
+  scroll: page.locator("#rd .rd-scroll"),
+  /** 枠の上の行の「回答一覧に戻る」 */
+  back: page.locator("#rd .rd-back"),
+  head: page.locator("#rd-head"),
+  title: page.locator("#rd-head h1"),
+  /** 比較組織のプルダウン（見えるラベルは無く、読み上げの名前「比較組織」） */
+  scope: page.getByRole("combobox", { name: "比較組織" }),
+  download: page.locator("#rd-head").getByRole("button", { name: "ダウンロード", exact: true }),
+  /** 受験情報の 1 行 */
+  meta: page.locator("#rsm"),
+  tocWrap: page.locator("#rsn-wrap"),
+  toc: page.getByRole("navigation", { name: "このページの目次" }),
+  tocLinks: page.locator("#rsn .links a"),
+  tocLink: (label: string) =>
+    page.locator("#rsn .links").getByRole("link", { name: label, exact: true }),
+  /** 固定の状態の「↑ 先頭へ」 */
+  toTop: page.getByRole("button", { name: "ページの先頭へ戻る" }),
+  /** 新しいレイアウトの根 */
+  layout: page.locator("#rs2"),
+});
+
+/** 比較の状態が kind になるまで待つ */
+export async function expectComparison(page: Page, kind: ComparisonKind): Promise<void> {
+  await expect(page.locator("#rs2")).toHaveAttribute("data-comparison", kind);
+}
+
+/** 結果詳細を開き、新しいレイアウトが比較の状態 kind で描かれるまで待つ（query は「?scope=organization」など） */
+export async function openResultDetail(
+  page: Page,
+  resultId: string,
+  query = "",
+  kind: ComparisonKind = query === "" ? "none" : "ready",
+): Promise<void> {
+  await page.goto(`/admin/results/${resultId}${query}`);
+  await expectComparison(page, kind);
+}
+
+/** 新しいレイアウトのセクション（11-4 §2.1 の id） */
+export const rdSection = (page: Page, id: string): Locator => page.locator(`#rs2 section#${id}`);
+
+/** セクションの見出しの行の「たたむ」「ひらく」のボタン */
+export const rdFold = (page: Page, id: string): Locator =>
+  rdSection(page, id).getByRole("button", { name: "この項目を開閉" });
+
+/** 比較なしの文言を出す 3 か所（概要の組織内のポジション・概要の組織との合致度・組織との相性の凡例。11-4 §2.6） */
+export const noComparisonPlaces = (page: Page): Locator[] => [
+  page.locator("#rs-hero .pos .empty"),
+  page.locator("#rs-gat .empty"),
+  page.locator("#rs-fitc .fitlg .empty"),
+];
+
+/** 16の特性の並び替えのボタン（点数の高い順・平均との差・項目順） */
+export const traitSortButtons = (page: Page): Locator => page.locator("#rs-trc .seg button");
+
+/** 16の特性の項目の説明のボタン（項目順の 16 個） */
+export const traitHelpButton = (page: Page, label: string): Locator =>
+  page.locator("#rs-trc .sk-b").getByRole("button", { name: label, exact: true });
+
+/** 16の特性の一覧の行の特性名（上から。札「最も高い」「最も低い」を除く） */
+export const traitRowNames = (page: Page): Promise<string[]> =>
+  page.locator("#rs-trc .tr .n").evaluateAll((cells) =>
+    cells.map((cell) =>
+      Array.from(cell.childNodes)
+        .filter((node) => node.nodeType === Node.TEXT_NODE)
+        .map((node) => node.textContent ?? "")
+        .join("")
+        .trim(),
+    ),
+  );
+
+/** 概要の「ほかの特性が高い場合を見る」「ほかの特性が低い場合を見る」のボタン（全角空白と全角の「＞」まで文言。11-4 §2.7.5） */
+export const moreTraitsButton = (page: Page, side: "high" | "low"): Locator =>
+  page.getByRole("button", {
+    name: `ほかの特性が${side === "high" ? "高" : "低"}い場合を見る\u3000＞`,
+    exact: true,
+  });
+
+/** 開いている「ほかの特性が高い／低い場合」のポップアップ（dialog.rd-pop。閉じたポップアップの要素も DOM に残る） */
+export const rdPopup = (page: Page): Locator => page.locator("dialog.rd-pop[open]");
 
 /** .ob-root の輪郭（参照元の ob-map の焦点の指定。#1F2933 の 2px を 2px 外側） */
 export const OB_ROOT_OUTLINE = {

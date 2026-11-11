@@ -1,5 +1,8 @@
 // 管理画面の文言（06 §10.5）。要件定義書・付録に文言があるものはそのまま、それ以外は 06 の設計判断。
-// 回答一覧と利用履歴の文言は result-list-texts.ts（11-2 §2.27。利用履歴・削除する・キャンセル・過去の受講経験・T-26・T-33 はここを使う）
+// 回答一覧と利用履歴の文言は result-list-texts.ts（11-2 §2.27。利用履歴・削除する・キャンセル・過去の受講経験・T-26・T-33 はここを使う）。
+// 結果詳細の文言は result-detail-texts.ts（11-4 §2.20）。結果詳細だけで使っていた B-09・T-02（移した）・T-04・T-10〜T-13・T-27・T-28 は
+// PR-7.8a で消した。showAi・hideAi は旧の AI 解説の領域（PR-7.9 で消す）、showSecondCandidate・showFirstCandidate は旧のセクション 5
+// （PR-7.8b で消す）が使う間だけ残す
 import type { AiFailureReason } from "@/lib/ai/errors";
 import type { RespondentKind } from "@/lib/db/types";
 
@@ -26,7 +29,6 @@ export const ADMIN_TEXTS = {
   retryAi: "再試行", // 06 §3.5.9 の failed 表示
   showSecondCandidate: "第二候補を見る", // B-07
   showFirstCandidate: "第一候補に戻る", // B-08
-  showAllTraits: "他項目のポジティブ・ネガティブを確認", // B-09
   copy: "コピーする", // B-10
   login: "ログイン", // B-11
   delete: "削除する", // B-13
@@ -42,20 +44,13 @@ export const ADMIN_TEXTS = {
   rotateConfirm: "新しいリンクを発行すると、これまでの管理者追加用リンクは使えなくなります。", // P-07
   notIssued: "未発行", // 06 §3.7
   sessionsRevokedNote: "変更すると、他の端末でのログインもすべて解除されます。", // P-08（06 §3.7）
-  resultTitle: (name: string) => `${name} 様の診断結果`, // T-01
-  selectComparison: "比較組織を選択", // T-02
+  resultTitle: (name: string) => `${name}様の診断結果`, // T-01（「様」の前に空白を入れない。PDF のページの見出しも同じ。11-4 §2.3.2）
   organizationScope: "組織全体", // T-03
-  comparisonRequired: "比較組織を選択すると表示されます", // T-04
   downloadFull: "全画面ダウンロード", // T-05
   downloadRestricted: "評価・組織との合致度・リスクを非表示にしてダウンロード", // T-06
   ownerOnly: "責任者のみ回答データを閲覧できます", // T-08
   aiDisclaimer:
     "※ 診断スコア（16特性・ソーシャルスタイル・リスク指標）をもとにAIが自動生成しています。生成結果は責任者が内容をご確認のうえご活用ください。", // T-09
-  populationEmpty:
-    "比較できる回答データがありません（除外されていない・現在の採点版の回答データが 0 件です）", // T-10
-  populationSubjectOnly: "比較対象は本人のみのため、合致度・偏差値は参考値です", // T-11
-  negativeValueNote: "※ 計算値が 0 未満のため左端に表示しています", // T-12
-  allTraitsEqual: "すべての尺度が同じ値です", // T-13
   accountUnavailable: "このアカウントは現在利用できません。組織の管理者にお問い合わせください。", // T-15
   resultNotFound: "回答データが見つかりません", // T-16
   aiGenerating: "AI解説を生成しています。1〜2 分かかることがあります。", // T-17
@@ -66,8 +61,6 @@ export const ADMIN_TEXTS = {
   resetLinkInvalid: "認証リンクが無効か期限切れです。もう一度お試しください", // T-23
   loginFailed: "メールアドレスまたはパスワードが正しくありません", // T-24
   alreadyDeleted: "この回答データはすでに削除されています", // T-26
-  populationSingleOther: "比較対象が 1 名のため、合致度・偏差値は参考値です", // T-27
-  subjectNotInPopulation: "（本人は母集団に含まれていません: 除外中または別チーム）", // T-28
   pollingTimeout: "時間内に完了しませんでした。ページを再読み込みしてください", // T-29
   pdfWithoutComparison: "比較対象がいないため、比較なしで出力します", // T-31
   pdfGenerating: "PDF を生成しています…", // 06 §3.5.11

@@ -1,11 +1,10 @@
-// U-04（08 §3.2）: resolveResultTexts の代表ケース、populationNote（X-11）、formatPopulationLabel、toPositionView
+// U-04（08 §3.2）: resolveResultTexts の代表ケース、formatPopulationLabel、toPositionView。populationNote（X-11）は PR-7.8a で消した
+// （母集団の注記を出さない。K-39 Q-27。11-4 §5.5）
 import { describe, expect, it } from "vitest";
 
-import { ADMIN_TEXTS } from "@/lib/presentation/admin-texts";
 import {
   formatPopulationLabel,
   formatScopeLabel,
-  populationNote,
   toPositionView,
 } from "@/lib/presentation/comparison-view";
 import { resolveResultTexts, resolveTraitDetails } from "@/lib/presentation/result-texts";
@@ -115,17 +114,6 @@ describe("resolveResultTexts", () => {
 });
 
 describe("comparison-view", () => {
-  it("X-11 populationNote", () => {
-    expect(populationNote(1, true)).toBe(ADMIN_TEXTS.populationSubjectOnly); // T-11
-    expect(populationNote(1, false)).toBe(ADMIN_TEXTS.populationSingleOther); // T-27
-    expect(populationNote(2, false)).toBe(ADMIN_TEXTS.subjectNotInPopulation); // T-28
-    expect(populationNote(2, true)).toBeNull();
-    expect(populationNote(0, false)).toBeNull();
-    expect(ADMIN_TEXTS.populationSubjectOnly).toBe(
-      "比較対象は本人のみのため、合致度・偏差値は参考値です",
-    );
-  });
-
   it("formatScopeLabel・formatPopulationLabel", () => {
     expect(formatScopeLabel({ kind: "organization" })).toBe("組織全体");
     expect(formatScopeLabel({ kind: "team", teamCode: "A" })).toBe("Aチーム");
@@ -135,13 +123,13 @@ describe("comparison-view", () => {
     );
   });
 
-  it("toPositionView は説明文を行に分け、画像パスは識別子そのもの", () => {
+  it("toPositionView は説明文を行に分けて各行の先頭の「・」を除き（11-4 §2.7.2・§2.11）、画像パスは識別子そのもの", () => {
     const view = toPositionView({ position: "cooperative_leader" });
     expect(view.label).toBe("協調性を重視するリーダータイプ");
     expect(view.descriptionLines).toEqual([
-      "・責任者とスタッフの橋渡し役として活躍出来る方が多い",
-      "・周りと協調性を保ちながらバランスを取って集団をリードするタイプ",
-      "・幹部候補として活躍が期待出来る",
+      "責任者とスタッフの橋渡し役として活躍出来る方が多い",
+      "周りと協調性を保ちながらバランスを取って集団をリードするタイプ",
+      "幹部候補として活躍が期待出来る",
     ]);
     expect(view.imagePath).toBe("/images/positions/cooperative_leader.svg");
   });

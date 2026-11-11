@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { AdminShell, type AdminNavKey } from "./AdminShell";
+import { AdminShell, type AdminFrame, type AdminNavKey } from "./AdminShell";
 import { AdminUnavailable } from "./AdminUnavailable";
 import { requireAdminFromCookies, type AdminContext } from "@/lib/auth/admin-context";
 import { loginPath } from "@/lib/presentation/admin-navigation";
@@ -33,11 +33,13 @@ async function resolve(): Promise<Resolved> {
 }
 
 /**
- * 認可を通してから本文を描画する。path は 401 のときのログイン後の戻り先（クエリを含む）
+ * 認可を通してから本文を描画する。path は 401 のときのログイン後の戻り先（クエリを含む）。
+ * frame は枠の種類（省くと "default"。結果詳細は "detail" でサイドメニューと共通ヘッダーを描かない。11-4 §2.1・§3.6、11-8 §2.1.2）
  */
 export async function renderAdminPage(options: {
   readonly path: string;
   readonly current: AdminNavKey | null;
+  readonly frame?: AdminFrame;
   readonly render: (ctx: AdminContext, me: MeDto) => Promise<ReactNode> | ReactNode;
 }): Promise<ReactNode> {
   const resolved = await resolve();
@@ -45,7 +47,7 @@ export async function renderAdminPage(options: {
   if (resolved.kind === "login") redirect(loginPath(options.path));
   if (resolved.kind === "unavailable") return <AdminUnavailable />;
   return (
-    <AdminShell me={resolved.me} current={options.current}>
+    <AdminShell me={resolved.me} current={options.current} frame={options.frame ?? "default"}>
       {await options.render(resolved.ctx, resolved.me)}
     </AdminShell>
   );

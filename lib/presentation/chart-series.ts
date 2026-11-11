@@ -1,37 +1,19 @@
-// グラフ用データ整形（06 §6.8）。画面部品は ScoreResult / ComparisonResult から直接系列を作らず、ここを通す。
-import { matchScoreColor, reliabilityColor, riskColor } from "./colors";
+// グラフ用データ整形（06 §6.8）。画面部品は ScoreResult から直接系列を作らず、ここを通す。レーダーの軸の順と値を返す
+// （ゲージ・スライダーの整形は PR-7.8a で消した。結果詳細の上半分はメーター・横棒・相性の線を CSS で描き、色はリスクの 4 段階と
+// 信頼係数の 3 段階（colors.ts）。11-4 §2.7・§2.10・§2.11）
 import { clampForRadar } from "./negative-values";
-import { toDisplayPercent } from "./rounding";
 import { APTITUDE_DEFINITIONS } from "@/lib/masters/indicators/aptitudes";
-import { COMPATIBILITY_DEFINITIONS } from "@/lib/masters/indicators/compatibility";
-import { RISK_DEFINITIONS } from "@/lib/masters/indicators/risks";
 import { SOCIAL_STYLE_DEFINITIONS } from "@/lib/masters/indicators/social-styles";
 import { TRAIT_DEFINITIONS } from "@/lib/masters/indicators/traits";
 import type {
   AptitudeKey,
   AptitudeScores,
-  ComparisonResult,
-  ScoreResult,
   SocialStyleKey,
   SocialStyleScores,
   TraitKey,
   TraitScores,
 } from "@/lib/scoring/types";
 
-export interface GaugeView {
-  readonly key: string;
-  readonly label: string;
-  readonly title: string;
-  readonly value: number; // 表示値。整数 0〜100
-  readonly color: string;
-}
-export interface SliderView {
-  readonly key: string;
-  readonly label: string;
-  readonly lowLabel: string;
-  readonly highLabel: string;
-  readonly value: number; // 保存値（整数、負値あり）。位置は clampForSlider で求める
-}
 export interface RadarAxis<K extends string> {
   readonly key: K;
   readonly label: string;
@@ -66,45 +48,4 @@ export function aptitudeRadarValues(aptitudes: AptitudeScores): readonly number[
 /** 負値は 0 に丸める（03 §8.4） */
 export function socialStyleRadarValues(styles: SocialStyleScores): readonly number[] {
   return SOCIAL_STYLE_RADAR_AXES.map((a) => clampForRadar(styles[a.key]));
-}
-
-export function reliabilityGauge(result: ScoreResult): GaugeView {
-  const value = toDisplayPercent(result.reliability);
-  return {
-    key: "reliability",
-    label: "信頼係数",
-    title: "信頼係数",
-    value,
-    color: reliabilityColor(value),
-  };
-}
-
-export function matchScoreGauge(comparison: ComparisonResult): GaugeView {
-  const value = toDisplayPercent(comparison.matchScore);
-  return {
-    key: "match_score",
-    label: "組織との合致度",
-    title: "組織との合致度",
-    value,
-    color: matchScoreColor(value),
-  };
-}
-
-/** リスク 7 件（sortOrder 順）。ラベルは短縮名、title は正式名。負値は 0% */
-export function riskGauges(result: ScoreResult): readonly GaugeView[] {
-  return bySortOrder(RISK_DEFINITIONS).map((d) => {
-    const value = toDisplayPercent(result.risks[d.key]);
-    return { key: d.key, label: d.shortLabel, title: d.label, value, color: riskColor(value) };
-  });
-}
-
-/** 相性 5 件（sortOrder 順）。値はそのまま（負値を含む） */
-export function compatSliders(result: ScoreResult): readonly SliderView[] {
-  return bySortOrder(COMPATIBILITY_DEFINITIONS).map((d) => ({
-    key: d.key,
-    label: d.label,
-    lowLabel: d.lowLabel,
-    highLabel: d.highLabel,
-    value: result.compatibility[d.key],
-  }));
 }

@@ -7,7 +7,7 @@ import type { PdfMode } from "./visibility";
 export const RESTRICTED_FOOTER_NOTE = "評価・合致度・リスク非表示";
 
 export interface PageMarginArgs {
-  readonly headerText: string; // 「{氏名} 様の診断結果」
+  readonly headerText: string; // 「{氏名}様の診断結果」（ADMIN_TEXTS.resultTitle）
   readonly submittedAtText: string; // 06 §10.3 で整形済み
   readonly generatedAtText: string; // 出力日時（Asia/Tokyo）
   readonly mode: PdfMode;
@@ -22,7 +22,7 @@ export function cssString(value: string): string {
   return `"${escaped}"`;
 }
 
-/** 左上「{氏名} 様の診断結果」、右上「回答日時 …」、左下「出力日時 …」、下中央「ページ / 総ページ」、右下（restricted のみ）の注記 */
+/** 左上「{氏名}様の診断結果」、右上「回答日時 …」、左下「出力日時 …」、下中央「ページ / 総ページ」、右下（restricted のみ）の注記 */
 export function buildPageMarginCss(args: PageMarginArgs): string {
   const box = 'font-family: "Noto Sans JP", sans-serif; font-size: 8px; color: #52606d;';
   const rules = [
