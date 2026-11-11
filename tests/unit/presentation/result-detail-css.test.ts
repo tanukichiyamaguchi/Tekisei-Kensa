@@ -1,11 +1,12 @@
-// M7-result-38・39（11-4 §2.2・§2.3.1・§2.5・§2.10・§2.7.5・§5.1 の PR-7.8a の分、総論 8.3 の配色の取り決め（14〜25））。
-// components/admin/result/result-detail.css（別表D）を読み、#rs2 の変数を解いて、K-49 の表の 1〜14（文字 4.5:1）・K-50 の表の 1〜5
+// M7-result-38・39（11-4 §2.2・§2.3.1・§2.5・§2.10・§2.7.5・§2.13・§2.14・§5.1、総論 8.3 の配色の取り決め（14〜25））。
+// components/admin/result/result-detail.css（別表D）を読み、#rs2 の変数を解いて、K-49 の表の 1〜15（文字 4.5:1）・K-50 の表の 1〜5
 // （部品 3:1。枠は外の地と中の地の両方、部品の縁に常に接する影は影の色とも比べる）と、届いていて変えない組を WCAG 2 の式で計算する
 // （axe が見ないマウス・押下・訪れたあとの色と、axe が調べない部品の 3:1 をここで確かめる）。不透明度 70% のマウス・押下は白に重ね、
 // 各成分を四捨五入（0.5 は切り上げ）して 8 ビットにしてから計算する。根の要素 #rs2 のグラデーションの上の文字はいちばん暗い上端
 // #EAF3F6 で計算する。焦点の枠の形（スクロールする領域の内側の余白、目次の白い影、目次のリンクと並び替えのボタンの内側の枠）と、
 // リンクの状態ごとの色の指定（.admin-root a より強い）も確かめる。結果詳細の文字は白い枠 #rd の上にあり、今のページの地 #F3F5F8 の上に
-// 置く文字は無い（選び直しは要らない）。15 の .ngok .ng b、育て方の小さいレーダーの線と点は PR-7.8b が足す
+// 置く文字は無い（選び直しは要らない）。育て方・接し方（PR-7.8b）の文字と、育て方の小さいレーダーの線と点（K-50 で確かめる。接し方の
+// 小さいレーダーは値を表の点数で読めるので対象外）、狭い幅と印刷の形の規則、旧のセクションと前回のグラフの CSS の片付けも確かめる
 import { describe, expect, it } from "vitest";
 
 import {
@@ -24,6 +25,7 @@ import {
   variablesOf,
   type Rgb,
 } from "./css-rules";
+import { MINI_RADAR_COLORS } from "@/components/charts/MiniRadarSvg";
 import { TRAIT_RADAR_COLORS } from "@/components/charts/TraitRadarSvg";
 import {
   RELIABILITY_TONE_COLORS,
@@ -775,5 +777,379 @@ describe("（ID なし）焦点の扱いのアプリの指定（§2.5。1.1 版�
     expect(
       compareSpecificity(specificity("#rd-head .rd-title:focus"), specificity(":focus-visible")),
     ).toBeGreaterThan(0);
+  });
+});
+
+// ---- 育て方・接し方（PR-7.8b。§2.2・§2.13・§2.14・§2.17・§2.18）
+
+describe("M7-result-38 育て方・接し方の文字（K-49 の表の 6・15 と、届いていて変えない文字）", () => {
+  it("K-49 の表の 6: 4 区分の表の下の注記 .qax・.qax2 は --mute2-tx #6A7888 でカードの白と 4.51:1（参照元 --mute2 #8592A0 は 3.17:1）", () => {
+    for (const selector of ["#rs2 .qax", "#rs2 .qax2"]) {
+      expect(decl(rules, selector, "color"), selector).toBe("var(--mute2-tx)");
+    }
+    expectRatios(
+      [
+        [
+          "6 .qax／カードの白",
+          color("#rs2 .qax", "color"),
+          color("#rs2 .card", "background"),
+          4.51,
+        ],
+        ["6 .qax2／カードの白", color("#rs2 .qax2", "color"), WHITE, 4.51],
+      ],
+      4.5,
+    );
+    expect(round2(contrastRatio(solid("var(--mute2)"), WHITE))).toBe(3.17);
+  });
+
+  it("K-49 の表の 15: 灰色の帯の札「×」の文字 #5D6875 と札の地 #E4E8ED で 4.61:1（参照元 --mute #5F6B78 は 4.42:1）", () => {
+    expect(value("#rs2 .ngok .ng b", "color").toUpperCase()).toBe("#5D6875");
+    expect(value("#rs2 .ngok .ng b", "background").toUpperCase()).toBe("#E4E8ED");
+    expectRatios(
+      [
+        [
+          "15 札「×」／札の地",
+          color("#rs2 .ngok .ng b", "color"),
+          color("#rs2 .ngok .ng b", "background"),
+          4.61,
+        ],
+      ],
+      4.5,
+    );
+    const reference = contrastRatio(solid("var(--mute)"), color("#rs2 .ngok .ng b", "background"));
+    expect(round2(reference)).toBe(4.42);
+    expect(reference).toBeLessThan(4.5);
+    // 緑の帯の札（白い文字と --good）は参照元の色のまま
+    expect(decl(rules, "#rs2 .ngok .ok b", "background")).toBe("var(--good)");
+  });
+
+  it("届いていて変えない文字（育て方）: 「× 優位感覚」と「第二候補を見る　＞」#2E7A90、札、イメージ画像の札、割合の名前と文字、12 項目の小見出しと文、区切り、囲みのラベルと文、第二候補の見出しの行", () => {
+    const card = color("#rs2 .card", "background");
+    const ink = solid("var(--ink)");
+    const plt = color("#rs2 .call", "background");
+    expect(value("#rs2 .learn .type .xs", "color").toUpperCase()).toBe("#2E7A90");
+    // 第二候補のボタンは §2.7.5 のボタン（#rs2 .more）の --p のまま（#2D788E は概要の下段のカード 1・2 の地の上だけ）
+    expect(decl(rules, "#rs2 .more", "color")).toBe("var(--p)");
+    expect(findDecl(rules, "#rs2 .learn .more", "color")).toBeUndefined();
+    expect(findDecl(rules, "#rs2 .lt b", "color")).toBeUndefined();
+    expect(findDecl(rules, "#rs2 .catch", "color")).toBeUndefined();
+    expectRatios(
+      [
+        ["「× 優位感覚「…」」／カードの白", color("#rs2 .learn .type .xs", "color"), card, 4.88],
+        ["「第二候補を見る　＞」／カードの白", color("#rs2 .more", "color"), card, 4.88],
+        [
+          "札「優位感覚：…」／札の地",
+          color("#rs2 .sense", "color"),
+          color("#rs2 .sense", "background"),
+          5.97,
+        ],
+        [
+          "イメージ画像の札の白い文字／#1F5F73",
+          color("#rs2 .lpic-cap", "color"),
+          color("#rs2 .lpic-cap", "background"),
+          7.14,
+        ],
+        ["割合の第一候補の名前／カードの白", color("#rs2 .lt .main", "color"), card, 16.52],
+        ["割合の文字（#rs2 の --ink）／カードの白", ink, card, 16.52],
+        ["12 項目の小見出し／カードの白", color("#rs2 .dl2 h4", "color"), card, 5.44],
+        ["12 項目の文／カードの白", color("#rs2 .dl2 p", "color"), card, 10.43],
+        ["区切りの見出し／カードの白", color("#rs2 .grp", "color"), card, 16.52],
+        ["囲みのラベル（--p-plt）／囲みの地", color("#rs2 .call .lbl", "color"), plt, 4.57],
+        ["囲みの文／囲みの地", color("#rs2 .call p", "color"), plt, 14.46],
+        [
+          "第二候補の見出しの行の小さい文字／カードの白",
+          color("#rs2 .sub2 .h span", "color"),
+          card,
+          5.44,
+        ],
+      ],
+      4.5,
+    );
+  });
+
+  it("届いていて変えない文字（接し方）: 4 区分のマス #5F6B78／#EEF2F6 と本人のマス、見出しの行の小さい行、キャッチと段落、関わり方のコツ、帯、吹き出し、タブ、タイプ別の接し方の文", () => {
+    const card = color("#rs2 .card", "background");
+    const ink = solid("var(--ink)");
+    expectRatios(
+      [
+        [
+          "マスの文字／マスの地",
+          color("#rs2 .quad div", "color"),
+          color("#rs2 .quad div", "background"),
+          4.83,
+        ],
+        [
+          "本人のマスの白い文字／#14202B",
+          color("#rs2 .quad div.on", "color"),
+          color("#rs2 .quad div.on", "background"),
+          16.52,
+        ],
+        [
+          "本人のマスの小さい文字 #C9D2DB／#14202B",
+          color("#rs2 .quad div.on small", "color"),
+          color("#rs2 .quad div.on", "background"),
+          10.8,
+        ],
+        ["見出しの行の小さい行／カードの白", color("#rs2 .shead .s", "color"), card, 5.44],
+        ["キャッチ（#rs2 の --ink）／カードの白", ink, card, 16.52],
+        ["段落／カードの白", color("#rs2 .desc", "color"), card, 10.43],
+        ["関わり方のコツの箇条書き／カードの白", color("#rs2 .how li", "color"), card, 10.43],
+        ["関わり方のコツの段落／カードの白", color("#rs2 .how p", "color"), card, 5.44],
+        [
+          "灰色の帯の文字／帯の地",
+          color("#rs2 .ngok .ng", "color"),
+          color("#rs2 .ngok .ng", "background"),
+          5.07,
+        ],
+        [
+          "緑の帯の文字／帯の地",
+          color("#rs2 .ngok .ok", "color"),
+          color("#rs2 .ngok .ok", "background"),
+          14.56,
+        ],
+        [
+          "緑の帯の札の白い文字／--good",
+          color("#rs2 .ngok .ok b", "color"),
+          color("#rs2 .ngok .ok b", "background"),
+          4.91,
+        ],
+        [
+          "吹き出し／吹き出しの地",
+          color("#rs2 .say div", "color"),
+          color("#rs2 .say div", "background"),
+          14.46,
+        ],
+        [
+          "タブ／白",
+          color("#rs2 .tabs button", "color"),
+          color("#rs2 .tabs button", "background"),
+          5.44,
+        ],
+        [
+          "選んでいるタブの白い文字／#14202B",
+          color("#rs2 .tabs button.on", "color"),
+          color("#rs2 .tabs button.on", "background"),
+          16.52,
+        ],
+        ["タイプ別の接し方の文／カードの白", color("#rs2 .mine p", "color"), card, 10.43],
+      ],
+      4.5,
+    );
+    // 選んでいるタブはマウスの規則が無く、選んだ状態の地が変わらない（.tabs button.on は .tabs button より後）
+    expect(indexOfRule("#rs2 .tabs button.on")).toBeGreaterThan(indexOfRule("#rs2 .tabs button"));
+  });
+
+  it("小さいレーダーの軸の名前（MINI_RADAR_COLORS）: #475569 とカードの白 7.58:1、強調する軸の #14202B と 16.52:1", () => {
+    expectRatios(
+      [
+        [
+          "軸の名前／カードの白",
+          solid(MINI_RADAR_COLORS.label),
+          color("#rs2 .card", "background"),
+          7.58,
+        ],
+        ["強調する軸の名前／カードの白", solid(MINI_RADAR_COLORS.labelStrong), WHITE, 16.52],
+      ],
+      4.5,
+    );
+  });
+
+  it("参照元の色のまま使う用途: 関わり方のコツの箇条書きの丸は --p2、緑の帯の札の地は --good（新しい色に置き換えていない）", () => {
+    expect(decl(rules, "#rs2 .how li::before", "background")).toBe("var(--p2)");
+    expect(decl(rules, "#rs2 .ngok .ok b", "background")).toBe("var(--good)");
+    expect(vars.get("--good")?.toUpperCase()).toBe("#15805E");
+  });
+});
+
+describe("M7-result-39 育て方・接し方の部品（K-50。PR-7.8b の分）", () => {
+  it("接し方の選んでいるタブの地と枠 #14202B はカードの白と 16.52:1", () => {
+    expect(decl(rules, "#rs2 .tabs button.on", "background")).toBe("var(--ink)");
+    expect(decl(rules, "#rs2 .tabs button.on", "border-color")).toBe("var(--ink)");
+    expectRatios(
+      [
+        [
+          "選んでいるタブの地／カードの白",
+          color("#rs2 .tabs button.on", "background"),
+          WHITE,
+          16.52,
+        ],
+      ],
+      3,
+    );
+  });
+
+  it("育て方の小さいレーダーの線と点 #2E7A90 は、外の地のカードの白と 4.88:1、下にある塗り rgba(46,122,144,.2) を白に重ねた #D5E4E9 と 3.74:1（目盛と軸の線とは比べない）", () => {
+    const line = solid(MINI_RADAR_COLORS.line);
+    const fill = over(parseColor(MINI_RADAR_COLORS.fill), WHITE);
+    expect(hexOf(fill)).toBe("#D5E4E9");
+    expect(MINI_RADAR_COLORS.point).toBe(MINI_RADAR_COLORS.line);
+    expectRatios(
+      [
+        ["線と点／カードの白", line, color("#rs2 .card", "background"), 4.88],
+        ["線と点／塗りを白に重ねた色", line, fill, 3.74],
+      ],
+      3,
+    );
+  });
+
+  it("新しいレイアウトの中のボタン（第二候補のボタン・タブ）の焦点の枠は #rs2 button:focus-visible（2px #1F2933・2px 外）のまま", () => {
+    for (const selector of ["#rs2 .more:focus-visible", "#rs2 .tabs button:focus-visible"]) {
+      expect(findDecl(rules, selector, "outline"), selector).toBeUndefined();
+      expect(findDecl(rules, selector, "outline-offset"), selector).toBeUndefined();
+    }
+    expect(decl(rules, "#rs2 button:focus-visible", "outline")).toBe(DARK_RING);
+    expect(decl(rules, "#rs2 button:focus-visible", "outline-offset")).toBe("2px");
+  });
+});
+
+describe("（ID なし）育て方・接し方の規則の置き方と値（別表D の 12〜14・17。§2.13・§2.14・§2.17・§2.18）", () => {
+  const at1023 = "@media (max-width: 1023px)";
+  const at760 = "@media (max-width: 760px)";
+
+  it("12・13 の規則は、同じセレクタの 14 の @media の規則より前に書く（同じ詳細度なので後ろの @media が勝つ）", () => {
+    for (const [selector, at] of [
+      ["#rs2 .learn", at1023],
+      ["#rs2 .learn", at760],
+      ["#rs2 .ss", at1023],
+      ["#rs2 .ss", at760],
+      ["#rs2 .dl2", at760],
+      ["#rs2 .how", at760],
+      ["#rs2 .quad", at1023],
+      ["#rs2 .qax", at1023],
+      ["#rs2 .quad div", at1023],
+      ["#rs2 .learn > .card:first-child", at760],
+    ] as const) {
+      const base = indexOfRule(selector);
+      expect(base, selector).toBeGreaterThanOrEqual(0);
+      expect(indexOfRule(selector, at), `${at} ${selector}`).toBeGreaterThan(base);
+    }
+  });
+
+  it("1440px の値: 育て方の 2 列（左 300px）と留まる左のカード（sticky・上 72px）、接し方の 2 列（左 320px）、12 項目と関わり方のコツの 2 列、4 区分の表の最大の幅 320px", () => {
+    expect(decl(rules, "#rs2 .learn", "grid-template-columns")).toBe("300px minmax(0, 1fr)");
+    expect(decl(rules, "#rs2 .learn", "align-items")).toBe("start");
+    expect(decl(rules, "#rs2 .learn > .card:first-child", "position")).toBe("sticky");
+    expect(decl(rules, "#rs2 .learn > .card:first-child", "top")).toBe("72px");
+    expect(decl(rules, "#rs2 .ss", "grid-template-columns")).toBe("320px minmax(0, 1fr)");
+    expect(decl(rules, "#rs2 .dl2", "grid-template-columns")).toBe("repeat(2, minmax(0, 1fr))");
+    expect(decl(rules, "#rs2 .how", "grid-template-columns")).toBe("repeat(2, minmax(0, 1fr))");
+    expect(decl(rules, "#rs2 .quad", "max-width")).toBe("320px");
+    expect(decl(rules, "#rs2 .qax", "max-width")).toBe("320px");
+    expect(decl(rules, "#rs2 .quad", "aspect-ratio")).toBe("1 / 1");
+    expect(decl(rules, "#rs2 .rs-mini svg", "max-width")).toBe("340px");
+  });
+
+  it("1023px 以下: 育て方の左 240px・接し方の左 250px、4 区分の表と注記 280px、マスの余白 10px・文字 11px・折り返さない。760px 以下: 育て方・接し方・12 項目・関わり方のコツが 1 列で、左のカードは留めない", () => {
+    expect(decl(rules, "#rs2 .learn", "grid-template-columns", at1023)).toBe(
+      "240px minmax(0, 1fr)",
+    );
+    expect(decl(rules, "#rs2 .ss", "grid-template-columns", at1023)).toBe("250px minmax(0, 1fr)");
+    expect(decl(rules, "#rs2 .quad", "max-width", at1023)).toBe("280px");
+    expect(decl(rules, "#rs2 .qax", "max-width", at1023)).toBe("280px");
+    expect(decl(rules, "#rs2 .quad div", "padding", at1023)).toBe("10px");
+    expect(decl(rules, "#rs2 .quad div", "font-size", at1023)).toBe("11px");
+    expect(decl(rules, "#rs2 .quad div", "white-space", at1023)).toBe("nowrap");
+    for (const selector of ["#rs2 .learn", "#rs2 .ss", "#rs2 .dl2", "#rs2 .how"]) {
+      expect(decl(rules, selector, "grid-template-columns", at760), selector).toBe("1fr");
+    }
+    expect(decl(rules, "#rs2 .learn > .card:first-child", "position", at760)).toBe("static");
+  });
+
+  it("印刷の形: #rs2 .learn[data-print] > .card:first-child は position: static（留めない。sticky の規則より強い）", () => {
+    const selector = "#rs2 .learn[data-print] > .card:first-child";
+    expect(decl(rules, selector, "position")).toBe("static");
+    expect(
+      compareSpecificity(specificity(selector), specificity("#rs2 .learn > .card:first-child")),
+    ).toBeGreaterThan(0);
+  });
+
+  it("見出し: 関わり方のコツ（.howt）とタイプ別の接し方の見出し（.mine h3。参照元は .mine h4。§2.21 の 1.2 版）は同じ 14px・太さ 700、関わり方のコツのカードの見出し（.how h4）も 14px・太さ 700", () => {
+    for (const selector of ["#rs2 .howt", "#rs2 .mine h3", "#rs2 .how h4"]) {
+      expect(decl(rules, selector, "font-size"), selector).toBe("14px");
+      expect(decl(rules, selector, "font-weight"), selector).toBe("700");
+    }
+    expect(indexOfRule("#rs2 .mine h4")).toBe(-1);
+  });
+
+  it("絵 #rs2 .lpic img は display: inline（Illustration の共通の .illustration の display: block より強く、絵と札を行の中に並べる要素にする）", () => {
+    expect(decl(rules, "#rs2 .lpic img", "display")).toBe("inline");
+    expect(decl(rules, "#rs2 .lpic", "text-align")).toBe("center");
+    expect(decl(rules, "#rs2 .lpic-cap", "display")).toBe("inline-block");
+    expect(
+      compareSpecificity(specificity("#rs2 .lpic img"), specificity(".illustration")),
+    ).toBeGreaterThan(0);
+  });
+});
+
+describe("（ID なし）旧のセクションと前回のグラフの CSS の片付け（11-4 §3.7・§4.2、総論 6.4）", () => {
+  const admin = parseCssRules(readCss("app/(admin)/admin.css"));
+  const adminText = readCss("app/(admin)/admin.css");
+  const print = parseCssRules(readCss("app/(admin)/admin/results/[resultId]/print/print.css"));
+  const printText = readCss("app/(admin)/admin/results/[resultId]/print/print.css");
+  const selectorsOf = (list: typeof rules) => list.flatMap((rule) => rule.selectors);
+
+  it("admin.css に旧のセクション・前回のグラフの規則（.radar-chart・.apexcharts-・.result-grid・.panel__header・.type-card__name・.style-card・.guide-list）と変数（--chart-・--band-・--reliability-・--gauge-track・--style-）が無い", () => {
+    for (const name of [
+      ".radar-chart",
+      ".apexcharts-",
+      ".result-grid",
+      ".panel__header",
+      ".type-card__name",
+      ".style-card",
+      ".guide-list",
+    ]) {
+      expect(
+        selectorsOf(admin).filter((selector) => selector.includes(name)),
+        name,
+      ).toEqual([]);
+    }
+    for (const name of ["--chart-", "--band-", "--reliability-", "--gauge-track", "--style-"]) {
+      expect(adminText.includes(name), name).toBe(false);
+    }
+  });
+
+  it("admin.css に、使う部品が残る指定（旧の AI 解説の領域の .result-section・.panel と、.muted・.small・.pre-line・.illustration）は残る", () => {
+    for (const selector of [
+      ".result-section",
+      ".result-section > h2",
+      ".result-section .panel",
+      ".panel",
+      ".muted",
+      ".small",
+      ".pre-line",
+      ".illustration",
+    ]) {
+      expect(selectorsOf(admin), selector).toContain(selector);
+    }
+  });
+
+  it("print.css に前回のグラフの指定と、要素の無くなった旧のセクションの指定が無い（AI 解説の印刷の塊の .result-section・.panel は残る）", () => {
+    for (const name of [
+      ".apexcharts-",
+      ".radar-chart",
+      ".result-subline",
+      ".result-grid",
+      ".gauge-row",
+      ".type-card",
+      ".position-view",
+      ".guide-list",
+      ".trait-summary",
+      ".donut-gauge",
+    ]) {
+      expect(
+        selectorsOf(print).filter((selector) => selector.includes(name)),
+        name,
+      ).toEqual([]);
+      expect(printText.includes(name), name).toBe(false);
+    }
+    for (const selector of [
+      ".print-root",
+      ".print-root h1",
+      ".print-root .result-section",
+      ".print-root .result-section > h2",
+      ".print-root .panel",
+    ]) {
+      expect(selectorsOf(print), selector).toContain(selector);
+    }
   });
 });

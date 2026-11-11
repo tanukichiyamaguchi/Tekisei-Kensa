@@ -10,7 +10,7 @@ export function clampPercent(value: number): number {
   return Math.min(100, Math.max(0, value));
 }
 
-/** ソーシャルスタイルのレーダー: 負値は 0 に丸めて描画する（D3-06。最大値 30 は軸の設定で固定） */
+/** 小さいレーダー（MiniRadarSvg）で負の値を 0 の位置に描く（D3-06。最大値は miniRadarMax） */
 export function clampForRadar(value: number): number {
   return Math.max(0, value);
 }

@@ -1,19 +1,20 @@
-// 結果詳細（M-05）の画面の文言（11-4 §2.20 が正。PR-7.8a の分: 枠・見出し・受験情報の 1 行・目次・比較なしの文言・折りたたみ・
-// 概要・16の特性・特性の詳細・リスク・組織との相性・人物像・2 つのポップアップ）。JSX に直書きせず、この定数を使う（06 §10.5）。
-// 差し込みのある文言は関数にする。K-19 で置き換えた文言は、参照元の原文をコメントに残す（11-4 §0.5）。「〜」は波ダッシュ（U+301C）、
-// 「—」は全角ダーシ（U+2014）、「＞」と空白は全角（空白は \u3000 と書く）で、参照元の文字のまま書く（§2.2）。
+// 結果詳細（M-05）の画面の文言（11-4 §2.20 が正: 枠・見出し・受験情報の 1 行・目次・比較なしの文言・折りたたみ・概要・16の特性・
+// 特性の詳細・リスク・組織との相性・人物像・育て方・接し方・2 つのポップアップ）と表示用の定数（§3.4）。JSX に直書きせず、この定数を
+// 使う（06 §10.5）。差し込みのある文言は関数にする。K-19 で置き換えた文言は、参照元の原文をコメントに残す（11-4 §0.5）。
+// 「〜」は波ダッシュ（U+301C）、「—」は全角ダーシ（U+2014）、「＞」と空白は全角（空白は \u3000 と書く）で、参照元の文字のまま書く（§2.2）。
 // 「回答一覧に戻る」（B-02。404 の画面）・「ダウンロード」（B-03。ダウンロードのポップアップの題）・見出しの文（T-01 の resultTitle。
 // PDF のページの見出し）は結果詳細の部品の外でも使うので ADMIN_TEXTS を参照し、比較組織の名前（「組織全体」「Aチーム」）は
 // comparison-view.ts の formatScopeLabel、リスクの段階の名前（低い・やや低い・注意・高い）は colors.ts の RISK_LEVEL_STYLES の label
-// を使う（ここに写さない）。付録C の文（タイプ・特性の説明・項目詳細・
-// 特性の詳細・立ち位置）は lib/masters/texts から buildResultDetailView と comparison-view.ts が読む。画面の部品（Client Component）が
-// 読むので、文言マスタ（lib/masters/texts）を読まない（11-4 §2.21）。依頼主の確認が要る文言は無い（11-4 7 章）。
-// 育て方・接し方の文言（LEARN_ITEM_GROUPS・STYLE_QUADRANTS を含む）は PR-7.8b が足す
+// を使う（ここに写さない）。付録C の文（タイプ・特性の説明・項目詳細・特性の詳細・立ち位置・育成方法・ソーシャルスタイル別文言・
+// タイプ別の接し方）は lib/masters/texts から buildResultDetailView と comparison-view.ts が読む。画面の部品（Client Component）が
+// 読むので、文言マスタ（lib/masters/texts）を読まない（11-4 §2.21）。育て方の 12 項目の名前（LEARN_ITEM_GROUPS）と 4 区分の表の
+// 名前（STYLE_QUADRANTS）は、マスタの名前（DEVELOPMENT_GUIDE_ITEMS の label・SOCIAL_STYLE_DEFINITIONS の labelKatakana）と同じ文を
+// ここに書く（同じ文であることは単体テストで確かめる）。依頼主の確認が要る文言は無い（11-4 7 章）
 import { ADMIN_TEXTS } from "./admin-texts";
 import type { TraitSortOrder } from "./result-detail-rules";
 import type { ResultSectionId } from "./result-view-state";
-import type { TraitDetailCategoryKey } from "@/lib/masters/texts/types";
-import type { RiskKey, TraitKey } from "@/lib/scoring/types";
+import type { DevelopmentGuideItemKey, TraitDetailCategoryKey } from "@/lib/masters/texts/types";
+import type { RiskKey, SocialStyleKey, TraitKey } from "@/lib/scoring/types";
 
 /** 凡例の「本人」（16の特性と組織との相性。氏名は出さない。result-M2） */
 const SUBJECT = "本人";
@@ -132,6 +133,32 @@ export const RESULT_DETAIL_TEXTS = {
     suitableJobs: "向いている仕事",
     advice: "本人へのアドバイス",
   },
+  // 育て方（§2.13）。区切りの見出しと 12 項目の名前は LEARN_ITEM_GROUPS
+  learn: {
+    type: "育成タイプ", // 左のカードのラベル
+    senseX: (short: string) => `× 優位感覚「${short}」`, // 第一候補の名前の下の行（「×」は U+00D7。short は優位感覚の短い名前）
+    senseTag: (full: string) => `優位感覚：${full}`, // 札（full は優位感覚の全文）
+    imageCaption: (short: string) => `優位感覚「${short}」のイメージ画像`, // 絵の後ろの札
+    showSecond: "第二候補を見る\u3000＞", // 第二候補を出していないときのボタン（全角空白と全角の「＞」まで文言）
+    hideSecond: "第二候補を閉じる", // 出しているときのボタン
+    approach: "このタイプへの関わり方", // 囲みのラベル（第一候補と第二候補）
+    second: "第二候補", // 第二候補の見出しの行の 1 行目
+    secondSense: (full: string) => `\u3000優位感覚：${full}`, // 第二候補の表示名の後ろ（全角空白から）
+    radarLabel: "レーダーチャート", // 小さいレーダーの読み上げの名前（育て方と接し方で共用。§2.13.2）
+  },
+  // 接し方（§2.14）。4 区分の名前と〇〇派は STYLE_QUADRANTS、タブの名前は buildResultDetailView の style.interactions の label
+  style: {
+    label: "ソーシャルスタイル", // 左のカードのラベル
+    assertLow: "← 主張が控えめ", // 4 区分の表の下の左
+    assertHigh: "主張が強い →", // 同じ行の右
+    rows: "上段：感情を表に出さない／下段：感情を表に出す", // その下の行
+    separator: "\u3000・\u3000", // 見出しの行の小さい行の区切り（全角空白・中黒・全角空白）
+    catchCopy: (text: string) => `「${text}」`, // キャッチ（text は本文の「「…」タイプ」の「」の中）
+    howTo: "関わり方のコツ", // 小見出し
+    praiseTitle: "褒め方", // 関わり方のコツのカードの題（マスタの見出しが「褒めるなら」で始まるとき。howToTitle）
+    ngMark: "×", // 灰色の帯の札（U+00D7。「✕」で始まる行も同じ札）
+    mine: "あなた（責任者・上司）のタイプ別の接し方", // カードの見出し。参照元: あなた（院長・上司）のタイプ別の接し方。K-19
+  },
   // ほかの特性が高い／低い場合の 2 つのポップアップ（§2.15）
   popup: {
     high: "項目のポイントが大きい場合の特性",
@@ -246,3 +273,68 @@ export const DETAIL_CATEGORY_ICONS: Readonly<Record<TraitDetailCategoryKey, Resu
     environment: "globe",
     emotion: "heart",
   });
+
+/** 育て方の 12 項目の区切り（§2.13.3）。「優位感覚」は左のカードの札、「本タイプへのアプローチ」は囲みに出すので含めない */
+export interface LearnItemGroup {
+  readonly title: "教え方・話し方" | "人となり"; // 区切りの見出し（2 列にまたがる）
+  readonly items: ReadonlyArray<{
+    readonly key: DevelopmentGuideItemKey; // 育成方法のマスタのキー（文は DEVELOPMENT_GUIDES[資質].items[key]）
+    readonly label: string; // 小見出し（DEVELOPMENT_GUIDE_ITEMS の label と同じ文）
+    readonly icon: ResultIconName; // 小見出しの左の .cic
+  }>;
+}
+
+function learnGroup(
+  title: LearnItemGroup["title"],
+  items: ReadonlyArray<readonly [DevelopmentGuideItemKey, string, ResultIconName]>,
+): LearnItemGroup {
+  return Object.freeze({
+    title,
+    items: Object.freeze(items.map(([key, label, icon]) => Object.freeze({ key, label, icon }))),
+  });
+}
+
+/** 育て方の 2 つの区切りと 12 項目の順・アイコン（§2.13.3 の表の順） */
+export const LEARN_ITEM_GROUPS: readonly LearnItemGroup[] = Object.freeze([
+  learnGroup("教え方・話し方", [
+    ["learning_style", "学習スタイル", "book"],
+    ["listening", "聞き方", "ear"],
+    ["speaking", "話し方", "chat"],
+    ["compatibility", "他タイプとの相性", "users"],
+  ]),
+  learnGroup("人となり", [
+    ["characteristics", "特徴", "spark"],
+    ["thinking", "思考", "bulb"],
+    ["personality", "性格", "heart"],
+    ["emotion", "感情", "smile"],
+    ["behavior", "行動", "zap"],
+    ["interpersonal", "対人関係", "users"],
+    ["top_priority", "最優先対象", "target"],
+    ["impression", "周りからの印象", "smile"],
+  ]),
+]);
+
+/** 接し方の 4 区分の表のマス 1 つ（§2.14.1） */
+export interface StyleQuadrant {
+  readonly key: SocialStyleKey;
+  readonly name: string; // マスの名前（SOCIAL_STYLE_DEFINITIONS の labelKatakana と同じ文）
+  readonly kind: string; // 名前の下の小さい文字（〇〇派）
+  readonly align: "left" | "right"; // 揃え（右の列の 2 つは右揃え。.rt）
+}
+
+function quadrant(
+  key: SocialStyleKey,
+  name: string,
+  kind: string,
+  align: StyleQuadrant["align"],
+): StyleQuadrant {
+  return Object.freeze({ key, name, kind, align });
+}
+
+/** 4 区分の表のマスの順（左上・右上・左下・右下。§2.14.1 の表）・名前・〇〇派・揃え */
+export const STYLE_QUADRANTS: readonly StyleQuadrant[] = Object.freeze([
+  quadrant("analytical", "アナリティカル", "思考派", "left"),
+  quadrant("driving", "ドライビング", "行動派", "right"),
+  quadrant("amiable", "エミアブル", "協調派", "left"),
+  quadrant("expressive", "エクスプレッシブ", "感覚派", "right"),
+]);

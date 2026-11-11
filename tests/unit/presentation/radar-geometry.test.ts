@@ -1,10 +1,13 @@
-// M7-result-11 radar-geometry.ts（11-4 §2.8.3・§3.5・§5.1。PR-7.8a の分: 16の特性のレーダーの寸法・座標・軸の名前の揃え）。
-// 小さいレーダーの MINI_RADAR・miniRadarMax は PR-7.8b
+// M7-result-11 radar-geometry.ts（11-4 §2.8.3・§2.13.2・§3.5・§5.1）。16の特性のレーダー（TRAIT_RADAR）と、育て方・接し方の
+// 小さいレーダー（MINI_RADAR・miniRadarMax）の寸法・座標・軸の名前の揃え・最大値
 import { describe, expect, it } from "vitest";
 
 import {
+  formatCoordinate,
   formatPoint,
   labelAnchor,
+  MINI_RADAR,
+  miniRadarMax,
   radarPoint,
   TRAIT_RADAR,
 } from "@/lib/presentation/radar-geometry";
@@ -81,5 +84,97 @@ describe("M7-result-11 radar-geometry（16の特性のレーダー）", () => {
       "middle",
       ...Array<string>(7).fill("end"),
     ]);
+  });
+});
+
+describe("M7-result-11 radar-geometry（小さいレーダー。§2.13.2）", () => {
+  const mini = MINI_RADAR;
+
+  it("寸法は §2.13.2 の表のとおり（viewBox 0 0 340 250、中心 (170, 125)、半径 70、目盛は最大値の 1/3・2/3・1、名前は半径 84・y + 4、揃えの許し 6）", () => {
+    expect(MINI_RADAR).toEqual({
+      width: 340,
+      height: 250,
+      cx: 170,
+      cy: 125,
+      radius: 70,
+      gridRatios: [1 / 3, 2 / 3, 1],
+      labelOffset: 14,
+      labelDy: 4,
+      anchorTolerance: 6,
+    });
+    // 目盛の 4 角形の半径 23.3・46.7・70、軸の名前は P(i, 84)、中央揃えの範囲は x 164〜176
+    expect(mini.gridRatios.map((ratio) => formatCoordinate(mini.radius * ratio))).toEqual([
+      "23.3",
+      "46.7",
+      "70.0",
+    ]);
+    expect(mini.radius + mini.labelOffset).toBe(84);
+    expect([mini.cx - mini.anchorTolerance, mini.cx + mini.anchorTolerance]).toEqual([164, 176]);
+  });
+
+  it("radarPoint(170, 125, i, 4, 70): 角度 −90° + 90° × i（最初の軸が真上、時計回り）で (170,55)・(240,125)・(170,195)・(100,125)", () => {
+    const at = (i: number) => radarPoint(mini.cx, mini.cy, i, 4, mini.radius);
+    for (const [i, x, y] of [
+      [0, 170, 55],
+      [1, 240, 125],
+      [2, 170, 195],
+      [3, 100, 125],
+    ] as const) {
+      expect(at(i).x, `i=${i}`).toBeCloseTo(x, 9);
+      expect(at(i).y, `i=${i}`).toBeCloseTo(y, 9);
+    }
+    expect([0, 1, 2, 3].map((i) => formatPoint(at(i)))).toEqual([
+      "170.0,55.0",
+      "240.0,125.0",
+      "170.0,195.0",
+      "100.0,125.0",
+    ]);
+  });
+
+  it.each([
+    [163.9, "end"],
+    [164, "middle"],
+    [170, "middle"],
+    [176, "middle"],
+    [176.1, "start"],
+  ])("labelAnchor(%f, 170, 6) → %s", (x, anchor) => {
+    expect(labelAnchor(x, mini.cx, mini.anchorTolerance)).toBe(anchor);
+  });
+
+  it("4 本の軸の名前の位置と揃え: 上 middle・右 start・下 middle・左 end（y は 4 足す）", () => {
+    const labels = [0, 1, 2, 3].map((i) => {
+      const p = radarPoint(mini.cx, mini.cy, i, 4, mini.radius + mini.labelOffset);
+      return [
+        formatCoordinate(p.x),
+        formatCoordinate(p.y + mini.labelDy),
+        labelAnchor(p.x, mini.cx, mini.anchorTolerance),
+      ];
+    });
+    expect(labels).toEqual([
+      ["170.0", "45.0", "middle"],
+      ["254.0", "129.0", "start"],
+      ["170.0", "213.0", "middle"],
+      ["86.0", "129.0", "end"],
+    ]);
+  });
+
+  it.each([
+    [[], 10],
+    [[8, 9.5], 10],
+    [[10], 10],
+    [[10.25], 20],
+    [[26.25, 24, 30, 12], 30],
+    [[31], 40],
+    [[-3], 10],
+  ])("miniRadarMax(%j) → %d", (values, max) => {
+    expect(miniRadarMax(values)).toBe(max);
+  });
+
+  it("miniRadarMax: 10 から始め、値を順に見て、そのときの最大値より大きい値で 10 単位に切り上げる（並びによらず同じ結果）", () => {
+    expect(miniRadarMax([30, 31])).toBe(40);
+    expect(miniRadarMax([31, 30])).toBe(40);
+    expect(miniRadarMax([0, 0, 0, 0])).toBe(10);
+    expect(miniRadarMax([-1.5, 8.5, 6, 4.75])).toBe(10); // 接し方の見本の負の値を含む 4 値
+    expect(miniRadarMax([45, 37.5, 2.5, 0])).toBe(50); // 育て方の見本（E2E の資質の値）
   });
 });

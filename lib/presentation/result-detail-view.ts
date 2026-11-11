@@ -1,17 +1,34 @@
-// 結果詳細の表示用データ（11-4 §3.5 の result-detail-view.ts。PR-7.8a の分）。Server Component（結果詳細のページと印刷用ページ）が
+// 結果詳細の表示用データ（11-4 §3.5 の result-detail-view.ts）。Server Component（結果詳細のページと印刷用ページ）が
 // ResultDetailDto から組み立てて Client の部品に渡す純関数。比較に依存しない値だけを持つ（比較の値と組織内のポジションは、部品が
-// ComparisonDto から comparison-view.ts を通して描く）。文言マスタの全体をブラウザに送らないよう、本人のタイプ・特性・資質の文だけを
-// 入れ、ほかのタイプの TYPE_TEXTS とソーシャルスタイルの文（STYLE_TEXTS）は入れない。個人情報は氏名だけ（受検者 ID・チーム・区分・
-// 過去の受講経験を入れない。11-4 §2.21）。育て方・接し方（learn・style）は PR-7.8b が足す
+// ComparisonDto から comparison-view.ts を通して描く）。文言マスタの全体をブラウザに送らないよう、本人のタイプ・特性の文と、
+// 資質の第一候補・第二候補の育成方法の文、本人のソーシャルスタイルの文（STYLE_TEXTS）と、本人のスタイルの列のタイプ別の接し方 4 つ
+// （STYLE_INTERACTIONS の [見ている人][本人]。接し方のタブで切り替える分）だけを入れ、ほかのタイプ・資質・スタイルの文は入れない。
+// 個人情報は氏名だけ（受検者 ID・チーム・区分・過去の受講経験を入れない。11-4 §2.21）。Client の部品はこのファイルから型だけを
+// import する（マスタをブラウザのバンドルに入れない）
+import { APTITUDE_RADAR_AXES, SOCIAL_STYLE_RADAR_AXES } from "./chart-series";
 import type { RiskLevel } from "./colors";
 import { formatYmd } from "./format-datetime";
-import { aptitudeOfHeading, detailHeading, rankRisks, senseShortName } from "./result-detail-rules";
+import {
+  aptitudeOfHeading,
+  detailHeading,
+  howToTitle,
+  rankRisks,
+  senseShortName,
+  splitHowTo,
+  splitStyleBody,
+  type HowToParts,
+  type StyleBodyParts,
+} from "./result-detail-rules";
 import {
   DETAIL_CATEGORY_ICONS,
+  LEARN_ITEM_GROUPS,
   RISK_RESULT_LABELS,
+  STYLE_QUADRANTS,
   TRAIT_ICONS,
+  type LearnItemGroup,
   type ResultIconName,
 } from "./result-detail-texts";
+import { resolveTraitDetails } from "./result-texts";
 import { pickHighestTrait, pickLowestTrait } from "./trait-highlights";
 import { APTITUDE_TYPE_DEFINITIONS } from "@/lib/masters/indicators/aptitude-types";
 import { APTITUDE_DEFINITIONS } from "@/lib/masters/indicators/aptitudes";
@@ -21,22 +38,46 @@ import { TRAIT_DEFINITIONS } from "@/lib/masters/indicators/traits";
 import { getOccupationLabel } from "@/lib/masters/occupations";
 import {
   DEVELOPMENT_GUIDES,
+  STYLE_INTERACTIONS,
+  STYLE_TEXTS,
   TRAIT_DESCRIPTIONS,
-  TRAIT_DETAIL_CATEGORIES,
-  TRAIT_DETAIL_CATEGORY_KEYS,
-  TRAIT_DETAIL_SENTENCES,
   TRAIT_HIGHLIGHT_TEXTS,
   TYPE_TEXTS,
+  type DevelopmentGuideItemKey,
+  type SocialStyleTexts,
   type TraitDetailCategoryKey,
 } from "@/lib/masters/texts";
 import {
   TRAIT_KEYS,
+  type AptitudeKey,
   type AptitudeTypeKey,
   type CompatibilityKey,
   type RiskKey,
+  type ScoreResult,
+  type SocialStyleKey,
   type TraitKey,
 } from "@/lib/scoring/types";
 import type { ResultDetailDto } from "@/lib/services/dto/result";
+
+/** 育て方の候補 1 つ（§2.13。資質の第一候補と第二候補。第二候補も同じ育成方法のマスタの文。K-32 ⑨） */
+export interface LearnCandidateView {
+  readonly key: AptitudeKey;
+  readonly label: string; // 資質の表示名（柔軟型など。内部名は出さない）
+  readonly imagePath: string; // /images/aptitudes/{key}.svg（K-05）
+  readonly sense: string; // 優位感覚の全文（視覚（Visual））
+  readonly senseShort: string; // 優位感覚の短い名前（視覚）
+  readonly approach: string; // 本タイプへのアプローチ（「このタイプへの関わり方」の囲み）
+  /** 12 項目（§2.13.3 の区切りと順）。文の無い項目と、項目が 1 つも無い区切りは含めない */
+  readonly groups: ReadonlyArray<{
+    readonly title: LearnItemGroup["title"];
+    readonly items: ReadonlyArray<{
+      readonly key: DevelopmentGuideItemKey;
+      readonly label: string;
+      readonly icon: ResultIconName;
+      readonly text: string; // マスタの文のまま（改行を含む。行頭の空白は CSS で出さない）
+    }>;
+  }>;
+}
 
 export interface ResultDetailView {
   readonly resultId: string;
@@ -103,13 +144,54 @@ export interface ResultDetailView {
     readonly icon: ResultIconName;
     readonly sentences: readonly string[];
   }>;
+  /** 育て方（§2.13） */
+  readonly learn: {
+    readonly first: LearnCandidateView; // 資質の第一候補（scores.aptitudeFirst）
+    readonly second: LearnCandidateView; // 資質の第二候補（scores.aptitudeSecond。第二候補を出したときだけ描く）
+    /** 小さいレーダーと資質の割合の値（APTITUDE_RADAR_AXES の順 = 軸の順。値は丸めない。割合の行の並べ替えは部品） */
+    readonly aptitudes: ReadonlyArray<{
+      readonly key: AptitudeKey;
+      readonly label: string;
+      readonly value: number;
+    }>;
+  };
+  /** 接し方（§2.14）。本人のソーシャルスタイル（scores.socialStyle）の文 */
+  readonly style: {
+    readonly key: SocialStyleKey;
+    readonly typeName: string; // スタイル名（エミアブルタイプ）
+    readonly katakana: string; // カタカナ名（エミアブル）
+    readonly greatPersonName: string; // 偉人名
+    readonly imagePath: string; // /images/styles/{key}.svg（K-05）
+    readonly body: StyleBodyParts; // 本文の振り分け（splitStyleBody）
+    /** 4 区分の表（STYLE_QUADRANTS の順。value は scores.socialStyles の値を丸めず負のまま） */
+    readonly quad: ReadonlyArray<{
+      readonly key: SocialStyleKey;
+      readonly name: string; // アナリティカル など
+      readonly kind: string; // 思考派 など
+      readonly align: "left" | "right";
+      readonly value: number;
+    }>;
+    /** 小さいレーダー（SOCIAL_STYLE_RADAR_AXES の順 = 軸の順。値は丸めず負のまま。0 の位置に描くのは部品） */
+    readonly radar: ReadonlyArray<{
+      readonly key: SocialStyleKey;
+      readonly label: string;
+      readonly value: number;
+    }>;
+    /** 関わり方のコツ（見分け方・褒め方・効果的な対応・声かけ例の順。文の無いカードは含めない） */
+    readonly howTo: ReadonlyArray<{ readonly title: string; readonly parts: HowToParts }>;
+    /** タイプ別の接し方のタブ（SOCIAL_STYLE_RADAR_AXES の順。text は STYLE_INTERACTIONS[viewer][本人のスタイル]） */
+    readonly interactions: ReadonlyArray<{
+      readonly viewer: SocialStyleKey;
+      readonly label: string; // タブの名前（見ている人のスタイルのカタカナ名）
+      readonly text: string;
+    }>;
+  };
 }
 
 const APTITUDE_TYPES = new Map(APTITUDE_TYPE_DEFINITIONS.map((t) => [t.key, t]));
 const APTITUDE_LABELS = new Map(APTITUDE_DEFINITIONS.map((a) => [a.key, a.label]));
 const STYLE_KATAKANA = new Map(SOCIAL_STYLE_DEFINITIONS.map((s) => [s.key, s.labelKatakana]));
 const TRAIT_LABELS = new Map(TRAIT_DEFINITIONS.map((t) => [t.key, t.label]));
-const CATEGORY_LABELS = new Map(TRAIT_DETAIL_CATEGORIES.map((c) => [c.key, c.label]));
 
 /** 職業の表示名（§2.4。コード 10 は「責任者」、旧コード 9 は「その他」）。未知のコードは "" にして、受験情報の項目を出さない */
 function occupationLabelOf(code: number): string {
@@ -121,24 +203,121 @@ function occupationLabelOf(code: number): string {
   }
 }
 
-/** 特性の詳細（§2.9）: カテゴリごとに、本人のタイプが「表示するタイプ」に入る文をカテゴリの中の定義順に並べる */
+/** 特性の詳細（§2.9）: resolveTraitDetails の 5 カテゴリ（本人のタイプが「表示するタイプ」に入る文を、カテゴリの中の定義順に並べる） */
 function detailsOf(aptitudeType: AptitudeTypeKey): ResultDetailView["details"] {
   return Object.freeze(
-    TRAIT_DETAIL_CATEGORY_KEYS.map((category) =>
+    resolveTraitDetails(aptitudeType).map((group) =>
       Object.freeze({
-        category,
-        heading: detailHeading(CATEGORY_LABELS.get(category) ?? ""),
-        icon: DETAIL_CATEGORY_ICONS[category],
-        sentences: Object.freeze(
-          TRAIT_DETAIL_SENTENCES.filter(
-            (s) => s.category === category && s.appliesTo.includes(aptitudeType),
-          )
-            .sort((a, b) => a.sortOrder - b.sortOrder)
-            .map((s) => s.text),
-        ),
+        category: group.category,
+        heading: detailHeading(group.label),
+        icon: DETAIL_CATEGORY_ICONS[group.category],
+        sentences: group.sentences,
       }),
     ),
   );
+}
+
+/**
+ * 育て方の 12 項目（§2.13.3）: LEARN_ITEM_GROUPS の区切りと順に、文（前後の空白を除いて空）の無い項目を除き、項目が 1 つも無い区切りを
+ * 除く。items は育成方法のマスタの 1 資質分（DEVELOPMENT_GUIDES[資質].items）
+ */
+export function learnGroupsOf(
+  items: Readonly<Record<DevelopmentGuideItemKey, string>>,
+): LearnCandidateView["groups"] {
+  return Object.freeze(
+    LEARN_ITEM_GROUPS.map((group) => ({
+      title: group.title,
+      items: group.items
+        .filter((item) => items[item.key].trim() !== "")
+        .map((item) =>
+          Object.freeze({
+            key: item.key,
+            label: item.label,
+            icon: item.icon,
+            text: items[item.key],
+          }),
+        ),
+    }))
+      .filter((group) => group.items.length > 0)
+      .map((group) => Object.freeze({ title: group.title, items: Object.freeze(group.items) })),
+  );
+}
+
+/** 育て方の候補 1 つ（§2.13.1・§2.13.4）。第一候補と第二候補で同じ作り（第二候補の「話し方」も入れ替えない。K-32 ⑨） */
+function learnCandidateOf(key: AptitudeKey): LearnCandidateView {
+  const items = DEVELOPMENT_GUIDES[key].items;
+  return Object.freeze({
+    key,
+    label: APTITUDE_LABELS.get(key) ?? "",
+    imagePath: `/images/aptitudes/${key}.svg`,
+    sense: items.dominant_sense,
+    senseShort: senseShortName(items.dominant_sense),
+    approach: items.approach,
+    groups: learnGroupsOf(items),
+  });
+}
+
+/** 関わり方のコツの 4 枚（§2.14.3）: [マスタの見出し, 文] の順（見分け方・褒め方・効果的な対応・声かけ例） */
+const HOW_TO_CARDS = [
+  ["identifyHeading", "identify"],
+  ["praiseHeading", "praise"],
+  ["responseHeading", "response"],
+  ["phrasesHeading", "phrases"],
+] as const;
+
+/**
+ * 関わり方のコツ（§2.14.3）: 見分け方・褒め方・効果的な対応・声かけ例の順に、題（howToTitle）と中身の振り分け（splitHowTo。声かけ例の
+ * カードだけ「・」の行を吹き出しにする）。文（前後の空白を除いて空）の無いカードは含めない。texts はソーシャルスタイル別文言の 1 スタイル分
+ */
+export function howToCardsOf(texts: SocialStyleTexts): ResultDetailView["style"]["howTo"] {
+  return Object.freeze(
+    HOW_TO_CARDS.filter(([, field]) => texts[field].trim() !== "").map(([heading, field]) =>
+      Object.freeze({
+        title: howToTitle(texts[heading]),
+        parts: splitHowTo(texts[field], field === "phrases"),
+      }),
+    ),
+  );
+}
+
+/** 接し方（§2.14）: 本人のスタイルの文と 4 区分の表・小さいレーダーの値、本人のスタイルの列のタイプ別の接し方 4 つ */
+function styleOf(scores: ScoreResult): ResultDetailView["style"] {
+  const key = scores.socialStyle;
+  const texts = STYLE_TEXTS[key];
+  return Object.freeze({
+    key,
+    typeName: texts.typeName,
+    katakana: STYLE_KATAKANA.get(key) ?? "",
+    greatPersonName: texts.greatPersonName,
+    imagePath: `/images/styles/${key}.svg`,
+    body: splitStyleBody(texts.body),
+    quad: Object.freeze(
+      STYLE_QUADRANTS.map((q) =>
+        Object.freeze({
+          key: q.key,
+          name: q.name,
+          kind: q.kind,
+          align: q.align,
+          value: scores.socialStyles[q.key],
+        }),
+      ),
+    ),
+    radar: Object.freeze(
+      SOCIAL_STYLE_RADAR_AXES.map((axis) =>
+        Object.freeze({ key: axis.key, label: axis.label, value: scores.socialStyles[axis.key] }),
+      ),
+    ),
+    howTo: howToCardsOf(texts),
+    interactions: Object.freeze(
+      SOCIAL_STYLE_RADAR_AXES.map((axis) =>
+        Object.freeze({
+          viewer: axis.key,
+          label: axis.label,
+          text: STYLE_INTERACTIONS[axis.key][key],
+        }),
+      ),
+    ),
+  });
 }
 
 /** ResultDetailDto から、比較に依存しない画面の値をすべて組み立てる（11-4 §3.5） */
@@ -215,5 +394,15 @@ export function buildResultDetailView(detail: ResultDetailDto): ResultDetailView
         ),
     ),
     details: detailsOf(scores.aptitudeType),
+    learn: Object.freeze({
+      first: learnCandidateOf(scores.aptitudeFirst),
+      second: learnCandidateOf(scores.aptitudeSecond),
+      aptitudes: Object.freeze(
+        APTITUDE_RADAR_AXES.map((axis) =>
+          Object.freeze({ key: axis.key, label: axis.label, value: scores.aptitudes[axis.key] }),
+        ),
+      ),
+    }),
+    style: styleOf(scores),
   });
 }

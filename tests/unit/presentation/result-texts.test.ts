@@ -1,17 +1,17 @@
-// U-04（08 §3.2）: resolveResultTexts の代表ケース、formatPopulationLabel、toPositionView。populationNote（X-11）は PR-7.8a で消した
-// （母集団の注記を出さない。K-39 Q-27。11-4 §5.5）
-import { describe, expect, it } from "vitest";
+// U-04（08 §3.2）: resolveTraitDetails（特性の詳細の 5 カテゴリ）、formatPopulationLabel、toPositionView。populationNote（X-11）は
+// PR-7.8a で消した（母集団の注記を出さない。K-39 Q-27）。resolveResultTexts は消し、その観点（タイプ別の接し方の順と対象者の列、
+// 育成方法の名前は表示名）は buildResultDetailView の M7-result-14（result-detail-view.test.ts）に移した（11-4 §5.5）
+import { describe, expect, it, vi } from "vitest";
 
 import {
   formatPopulationLabel,
   formatScopeLabel,
   toPositionView,
 } from "@/lib/presentation/comparison-view";
-import { resolveResultTexts, resolveTraitDetails } from "@/lib/presentation/result-texts";
-import { scoreAnswers } from "@/lib/scoring/score";
-import type { ScoreResult } from "@/lib/scoring/types";
-
-import { cyclicAnswers, uniformAnswers } from "../scoring/helpers";
+import type * as MasterTexts from "@/lib/masters/texts";
+import { TRAIT_DETAIL_CATEGORY_KEYS } from "@/lib/masters/texts/types";
+import { resolveTraitDetails } from "@/lib/presentation/result-texts";
+import { APTITUDE_TYPE_KEYS } from "@/lib/scoring/types";
 
 describe("resolveTraitDetails（付録C §2 のコンダクタータイプの表示例）", () => {
   it("該当する文だけをカテゴリ順・定義順に並べる", () => {
@@ -58,58 +58,41 @@ describe("resolveTraitDetails（付録C §2 のコンダクタータイプの表
       },
     ]);
   });
-});
 
-describe("resolveResultTexts", () => {
-  const cyclic = scoreAnswers(cyclicAnswers());
-
-  it("タイプ・キャラクター名・最高/最低の尺度・育成方法・スタイルを結果から引く", () => {
-    const texts = resolveResultTexts(cyclic);
-    expect(texts.type.key).toBe(cyclic.aptitudeType);
-    expect(texts.characterName).not.toBe("");
-    // P-01: 最高 rule_compliance、最低 humility
-    expect(texts.highest.highlight.key).toBe("rule_compliance");
-    expect(texts.highest.label).toBe("規則遵守力");
-    expect(texts.highest.positive).toBe("決まりを守る、集団行動を好む");
-    expect(texts.highest.negative).toBe("細かいマニュアルが必要、自分で判断出来ない");
-    expect(texts.lowest.highlight.key).toBe("humility");
-    expect(texts.lowest.label).toBe("謙虚さ");
-    expect(texts.lowest.positive).toBe("自信家、積極的");
-    expect(texts.lowest.negative).toBe("発言が強気、態度が大きい");
-    expect(texts.allTraitsEqual).toBe(false);
-    expect(texts.developmentFirst.key).toBe(cyclic.aptitudeFirst);
-    expect(texts.developmentSecond.key).toBe(cyclic.aptitudeSecond);
-    expect(texts.style.key).toBe(cyclic.socialStyle);
+  it("5 カテゴリを常に返す: 16 タイプとも、カテゴリの順（対人関係・行動特性・業務対応・環境適応・情緒及び精神面）の 5 つ", () => {
+    for (const type of APTITUDE_TYPE_KEYS) {
+      const groups = resolveTraitDetails(type);
+      expect(
+        groups.map((g) => g.category),
+        type,
+      ).toEqual([...TRAIT_DETAIL_CATEGORY_KEYS]);
+      expect(Object.isFrozen(groups), type).toBe(true);
+    }
   });
 
-  it("タイプ別の対処法は 4 見出しを付録C §5 の表の行順で出し、対象者のスタイルの列を使う", () => {
-    const result: ScoreResult = { ...cyclic, socialStyle: "amiable" };
-    const texts = resolveResultTexts(result);
-    expect(texts.styleInteractions.map((s) => s.heading)).toEqual([
-      "ドライビングなあなたは",
-      "エクスプレッシブなあなたは",
-      "エミアブルなあなたは",
-      "アナリティカルなあなたは",
-    ]);
-    expect(texts.styleInteractions[0]!.text.startsWith("穏やかに話したいエミアブル")).toBe(true);
-  });
-
-  it("育成方法の見出しは表示名（内部名は出さない）", () => {
-    const result: ScoreResult = {
-      ...cyclic,
-      aptitudeFirst: "sensory_open",
-      aptitudeSecond: "inquiry_logical",
-    };
-    const texts = resolveResultTexts(result);
-    expect(texts.developmentFirst.label).toBe("直感型");
-    expect(texts.developmentSecond.label).toBe("専門追求型");
-    expect(texts.developmentFirst.guide.items.characteristics).not.toBe("");
-  });
-
-  it("全尺度同点なら allTraitsEqual = true（06 D06-12）で、最高・最低が同じ尺度", () => {
-    const texts = resolveResultTexts(scoreAnswers(uniformAnswers(3)));
-    expect(texts.allTraitsEqual).toBe(true);
-    expect(texts.highest.highlight.key).toBe(texts.lowest.highlight.key);
+  it("本人のタイプに当たる文が 0 件のカテゴリも、空の配列で返す（合成のマスタ: 業務対応の文を除く）", async () => {
+    vi.resetModules();
+    vi.doMock("@/lib/masters/texts", async (importOriginal) => {
+      const actual = await importOriginal<typeof MasterTexts>();
+      return {
+        ...actual,
+        TRAIT_DETAIL_SENTENCES: actual.TRAIT_DETAIL_SENTENCES.filter((s) => s.category !== "work"),
+      };
+    });
+    try {
+      const { resolveTraitDetails: resolve } = await import("@/lib/presentation/result-texts");
+      const groups = resolve("conductor");
+      expect(groups.map((g) => g.category)).toEqual([...TRAIT_DETAIL_CATEGORY_KEYS]);
+      expect(groups.find((g) => g.category === "work")).toEqual({
+        category: "work",
+        label: "業務対応",
+        sentences: [],
+      });
+      expect(groups.find((g) => g.category === "interpersonal")?.sentences).toHaveLength(3);
+    } finally {
+      vi.doUnmock("@/lib/masters/texts");
+      vi.resetModules();
+    }
   });
 });
 

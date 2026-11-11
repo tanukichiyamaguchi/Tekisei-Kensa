@@ -1,7 +1,7 @@
 // 結果詳細の画面の状態（11-4 §2.18・§3.5 の result-view-state.ts）。たたんでいるセクション・16の特性の並び・開いている項目の説明・
 // 第二候補を出しているか・接し方のタブの 5 項目と、PDF（11-5）の要求と印刷トークンに載せるクエリの形。純関数で、React・window・
 // Next.js に触れない。画面の状態は保存しない（部品の Context とモジュールの変数だけ。11-4 §3.1）。
-// 第二候補とタブを画面で使うのは PR-7.8b だが、往復の確かめ（M7-result-13）のため 5 項目で作る。AI 解説の表示中のタブ（11-6）は
+// 第二候補（secondOpen）は育て方、タブ（viewerStyle）は接し方の部品が使う（§2.13.4・§2.14.4）。AI 解説の表示中のタブ（11-6）は
 // 同じ形で後の PR が足す。セクションの id は印刷用ページの改ページの規則（11-5 の PDF_SECTION_IDS）と同じ
 import { DEFAULT_VIEWER_STYLE, type TraitSortOrder } from "./result-detail-rules";
 import {

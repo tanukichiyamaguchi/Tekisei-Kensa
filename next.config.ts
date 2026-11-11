@@ -26,7 +26,7 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      // ApexCharts と Next.js のインラインスクリプトのため。開発サーバは eval を使うため dev のみ許可する
+      // Next.js のインラインスクリプトのため。開発サーバは eval を使うため dev のみ許可する
       `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",

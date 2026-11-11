@@ -1,8 +1,8 @@
 // 管理画面の文言（06 §10.5）。要件定義書・付録に文言があるものはそのまま、それ以外は 06 の設計判断。
 // 回答一覧と利用履歴の文言は result-list-texts.ts（11-2 §2.27。利用履歴・削除する・キャンセル・過去の受講経験・T-26・T-33 はここを使う）。
-// 結果詳細の文言は result-detail-texts.ts（11-4 §2.20）。結果詳細だけで使っていた B-09・T-02（移した）・T-04・T-10〜T-13・T-27・T-28 は
-// PR-7.8a で消した。showAi・hideAi は旧の AI 解説の領域（PR-7.9 で消す）、showSecondCandidate・showFirstCandidate は旧のセクション 5
-// （PR-7.8b で消す）が使う間だけ残す
+// 結果詳細の文言は result-detail-texts.ts（11-4 §2.20）。結果詳細だけで使っていた B-07〜B-09・T-02（移した）・T-04・T-10〜T-13・
+// T-27・T-28 は消した（第二候補のボタンの文は RESULT_DETAIL_TEXTS.learn の showSecond・hideSecond）。showAi・hideAi は旧の AI 解説の
+// 領域が使う間だけ残す（PR-7.9 で消す）
 import type { AiFailureReason } from "@/lib/ai/errors";
 import type { RespondentKind } from "@/lib/db/types";
 
@@ -27,8 +27,6 @@ export const ADMIN_TEXTS = {
   showAi: "AI解説を表示", // B-05
   hideAi: "AI解説を非表示", // B-06
   retryAi: "再試行", // 06 §3.5.9 の failed 表示
-  showSecondCandidate: "第二候補を見る", // B-07
-  showFirstCandidate: "第一候補に戻る", // B-08
   copy: "コピーする", // B-10
   login: "ログイン", // B-11
   delete: "削除する", // B-13
