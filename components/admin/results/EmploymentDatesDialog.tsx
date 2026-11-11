@@ -3,7 +3,9 @@
 // 一覧の根（.rl-root）の中に描き、一覧の色の変数と管理画面に共通の焦点の枠を効かせる。開いたら入社日の入力欄に焦点、閉じたら開いた操作の
 // 要素（⋮・区分チップ）に焦点を戻す。Esc では閉じない（cancel と Escape の keydown を止める）、暗幕を押すと閉じる（保存しない）。
 // 暗幕の判定は押した先が dialog 要素自身か（dialog の内側の余白を 0 にし、余白は中の箱に付ける）。
-// 保存は employmentFromDates で、退職日が入社日より前なら通知を出して閉じない（通知はこのダイアログの中に出る。Toast）
+// 保存は employmentFromDates で、退職日が入社日より前なら通知を出して閉じない（通知はこのダイアログの中に出る。Toast）。
+// 日付の欄に途中までの入力や実在しない日があると、ブラウザは値を空にして validity.badInput を立てるので、空の欄（null で保存）と
+// 区別して通知「日付が正しくありません」を出し、閉じない（保存しない。前後の判定より先。11-2 §2.14 の 1.3 版）
 import { useEffect, useId, useRef, useState } from "react";
 
 import { useToast } from "@/components/ui/Toast";
@@ -87,8 +89,15 @@ function DatesForm(props: {
   const leftId = useId();
   const [hiredOn, setHiredOn] = useState(props.target.employment.hiredOn ?? "");
   const [leftOn, setLeftOn] = useState(props.target.employment.leftOn ?? "");
+  const hiredInput = useRef<HTMLInputElement>(null);
+  const leftInput = useRef<HTMLInputElement>(null);
 
   const save = () => {
+    // 途中までの入力・実在しない日（値は空で validity.badInput）。空の欄として保存すると日付が消えるので止める
+    if (hiredInput.current?.validity.badInput || leftInput.current?.validity.badInput) {
+      toast.show(RESULT_LIST_TEXTS.toast.invalidDate);
+      return;
+    }
     const result = employmentFromDates(
       props.target.employment,
       hiredOn === "" ? null : hiredOn,
@@ -111,6 +120,7 @@ function DatesForm(props: {
         {t.hiredOn}
       </label>
       <input
+        ref={hiredInput}
         id={hiredId}
         className="rl-dates__input"
         type="date"
@@ -121,6 +131,7 @@ function DatesForm(props: {
         {t.leftOn}
       </label>
       <input
+        ref={leftInput}
         id={leftId}
         className="rl-dates__input"
         type="date"

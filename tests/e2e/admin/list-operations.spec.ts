@@ -126,7 +126,7 @@ test("M7-list-39 チームの変更と未設定への戻し、除外のスイッ
   await page.unroute("**/api/v1/admin/respondents/**");
 });
 
-test("M7-list-40 区分メニューで退職にすると今日の退職のチップ、入社日・退職日のダイアログは前後の誤りで閉じず、Esc では閉じない", async ({
+test("M7-list-40 区分メニューで退職にすると今日の退職のチップ、入社日・退職日のダイアログは前後の誤りと途中までの入力で閉じず、Esc では閉じない", async ({
   page,
   adminOrg,
 }) => {
@@ -183,6 +183,39 @@ test("M7-list-40 区分メニューで退職にすると今日の退職のチッ
   await page.keyboard.press("Escape");
   await page.keyboard.press("Escape");
   await expect(dialog).toBeVisible();
+
+  // 途中までの入力（区切りの一部を消した値）: ブラウザは値を空にして validity.badInput を立てる。空の欄（null で保存して日付が
+  // 消える）と区別して通知「日付が正しくありません」を出し、閉じず、送らない（§2.14 の 1.3 版）。fill では作れないのでキーボードで作る
+  let badInputPatches = 0;
+  const countPatch = (request: { url(): string; method(): string }) => {
+    if (isPatch(request.url(), request.method())) badInputPatches += 1;
+  };
+  page.on("request", countPatch);
+  for (const [label, field] of [
+    ["入社日", hired],
+    ["退職日", left],
+  ] as const) {
+    await hired.fill("2025-04-01");
+    await left.fill("2026-03-31");
+    await field.focus();
+    await page.keyboard.press("Backspace");
+    await expect(field, label).toHaveValue("");
+    const badInput = await field.evaluate((el) => (el as HTMLInputElement).validity.badInput);
+    expect(badInput, label).toBe(true);
+    await dialog.getByRole("button", { name: "保存する" }).click();
+    await expect(inDialog, label).toHaveText("日付が正しくありません");
+    await expect(dialog, label).toBeVisible();
+  }
+  await page.waitForTimeout(300);
+  page.off("request", countPatch);
+  expect(badInputPatches).toBe(0);
+  // 欄を入れ直すと途中までの入力ではなくなる
+  await hired.fill("2025-04-01");
+  await left.fill("");
+  for (const field of [hired, left]) {
+    const badInput = await field.evaluate((el) => (el as HTMLInputElement).validity.badInput);
+    expect(badInput).toBe(false);
+  }
 
   // 直して保存: 求職者で入社日だけ → 在籍（§2.14）
   await left.fill("");

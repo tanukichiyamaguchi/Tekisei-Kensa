@@ -213,6 +213,7 @@ export const RESULT_LIST_TEXTS = {
       `${name}さんを「${EMPLOYMENT_STATUS_LABELS[status]}」にしました`,
     datesSaved: (name: string) => `${name}さんの日付を保存しました`,
     leftBeforeHired: "退職日が入社日より前になっています",
+    invalidDate: "日付が正しくありません", // 確認まで案（11-2 7 章の 4。日付の欄に途中までの入力があるとき）
     roleChanged: (name: string, role: StaffRole) =>
       `${name}さんの役職を「${STAFF_ROLE_LABELS[role]}」にしました`,
     linkCopied: (kind: ResultListLinkKind) => `${LINK_KIND_LABELS[kind]}をコピーしました`,
