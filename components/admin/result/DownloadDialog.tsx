@@ -1,6 +1,8 @@
 "use client";
-// P-02 ダウンロード設定（06 §3.5.11）。2 モードの選択と、現在の比較状態の引き継ぎ（D06-16）
-import { useState } from "react";
+// P-02 ダウンロード設定（06 §3.5.11）。2 モードの選択と、現在の比較状態の引き継ぎ（D06-16）。
+// 結果詳細の見出しのボタンは className と icon で見た目を受け取る（クラス rd-btn と丸の中の下向き矢印。11-4 §2.3.2）。
+// ダイアログの中身は変えない（作り直しは 11-5 の PR-7.12）
+import { useState, type ReactNode } from "react";
 
 import { useComparison } from "./ComparisonProvider";
 import { Dialog } from "@/components/ui/Dialog";
@@ -23,11 +25,18 @@ function saveBlob(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-export function DownloadButton(props: { readonly resultId: string }) {
+export function DownloadButton(props: {
+  readonly resultId: string;
+  /** ボタンの class（省くと btn） */
+  readonly className?: string;
+  /** 文字の前に置くアイコン（読み上げない） */
+  readonly icon?: ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" className="btn" onClick={() => setOpen(true)}>
+      <button type="button" className={props.className ?? "btn"} onClick={() => setOpen(true)}>
+        {props.icon}
         {ADMIN_TEXTS.download}
       </button>
       {open ? <DownloadDialog resultId={props.resultId} onClose={() => setOpen(false)} /> : null}

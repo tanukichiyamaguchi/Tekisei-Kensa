@@ -334,7 +334,7 @@ test("M7-list-41 ⋮メニュー: 最初の項目に焦点、↓↑で回る、E
   await more.click();
   await menuItem(page, "1回目の結果を開く").click();
   await page.waitForURL(`**/admin/results/${first.resultId}`);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(`${name} 様の診断結果`);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(`${name}様の診断結果`);
 });
 
 test("M7-list-42 オーナーが幹部にすると札と「現在の役職」。オーナー以外が責任者にすると通知のあと行が消え、オーナーの一覧には出る", async ({

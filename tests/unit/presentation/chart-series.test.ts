@@ -1,14 +1,11 @@
-// X-10（06 §10.6）とゲージ・スライダーの整形（06 §6.8）
+// X-10（06 §10.6）のレーダーの軸の順と値。ゲージ・スライダーの整形（06 §6.8）は PR-7.8a で消した（結果詳細の上半分はメーター・
+// 横棒・相性の線を CSS で描く。色の段階は colors.test.ts の M7-result-04・05。11-4 §5.5）
 import { describe, expect, it } from "vitest";
 
 import { TRAIT_DEFINITIONS } from "@/lib/masters/indicators/traits";
 import {
   APTITUDE_RADAR_AXES,
   aptitudeRadarValues,
-  compatSliders,
-  matchScoreGauge,
-  reliabilityGauge,
-  riskGauges,
   SOCIAL_STYLE_RADAR_AXES,
   socialStyleRadarValues,
   TRAIT_RADAR_AXES,
@@ -20,7 +17,6 @@ import {
   COMPARISON_SERIES_NAME,
   RADAR_MAX,
 } from "@/lib/presentation/chart-theme";
-import { compareWithPopulation } from "@/lib/scoring/compare";
 import { scoreAnswers } from "@/lib/scoring/score";
 import { TRAIT_KEYS } from "@/lib/scoring/types";
 
@@ -61,52 +57,6 @@ describe("X-10 レーダーの軸順と値", () => {
     expect(socialStyleRadarValues(scoreAnswers(uniformAnswers(5)).socialStyles)).toEqual([
       0, 0, 0, 0,
     ]);
-  });
-});
-
-describe("ゲージ・スライダー（06 §6.8）", () => {
-  it("信頼係数: 四捨五入と緑系の色", () => {
-    expect(reliabilityGauge(scoreAnswers(cyclicAnswers()))).toEqual({
-      key: "reliability",
-      label: "信頼係数",
-      title: "信頼係数",
-      value: 79,
-      color: "#7cb342",
-    });
-    expect(reliabilityGauge(scoreAnswers(uniformAnswers(1))).color).toBe("#1b7f4b");
-  });
-  it("リスク 7 件: 短縮名・正式名・負値は 0%", () => {
-    const gauges = riskGauges(scoreAnswers(uniformAnswers(5)));
-    expect(gauges).toHaveLength(7);
-    expect(gauges[0]).toEqual({
-      key: "misconduct",
-      label: "不祥事",
-      title: "不祥事が発生するリスク",
-      value: 0,
-      color: "#8ecae6",
-    });
-    expect(riskGauges(scoreAnswers(cyclicAnswers())).map((g) => g.value)).toEqual([
-      28, 48, 30, 58, 43, 53, 43,
-    ]);
-  });
-  it("合致度", () => {
-    const subject = scoreAnswers(uniformAnswers(1));
-    const other = scoreAnswers(uniformAnswers(3));
-    const comparison = compareWithPopulation(subject, [subject, other], { kind: "organization" });
-    expect(matchScoreGauge(comparison)).toMatchObject({
-      value: 96,
-      color: "#d32f2f",
-      label: "組織との合致度",
-    });
-  });
-  it("相性スライダー 5 件は保存値のまま（負値を含む）", () => {
-    const sliders = compatSliders(scoreAnswers(cyclicAnswers()));
-    expect(sliders.map((s) => s.value)).toEqual([-3, 0, 11, -13, -7]);
-    expect(sliders[0]).toMatchObject({
-      label: "適応する環境",
-      lowLabel: "個人優先型",
-      highLabel: "組織優先型",
-    });
   });
 });
 

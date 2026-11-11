@@ -1,5 +1,8 @@
 // E-20 AI 解説（stub）（08 §3.4.3、06 §3.5.9、要件定義書 §6.2 A-09、付録D §1）
 // E-21 PDF ダウンロード（06 §3.5.11、07 §9、要件定義書 §6.2 A-10）
+// PR-7.8a（11-4 §5.5）: 結果詳細の見出しの「AI解説を表示」は無くなり（11-6 の ai-04・ai-05）、AI 解説は目次と新しいレイアウトの間の
+// 領域（#ai）の中のボタンで生成する。PDF の上半分は結果詳細と同じ部品の印刷の形（11-4 §2.18）で、文字の期待を新しいレイアウトの文に
+// 改めた（ダウンロードのポップアップの文と PDF の作りの改めは 11-5 の PR-7.12）
 import { readFile } from "node:fs/promises";
 
 import type { Page } from "@playwright/test";
@@ -43,8 +46,9 @@ test("E-20 AI解説を表示 → 生成中 → 7 ブロック → 非表示 → 
     }
   });
 
-  // ヘッダーのボタンから生成（セクション 7 へスクロールし、生成中表示）
-  await page.locator(".result-header").getByRole("button", { name: "AI解説を表示" }).click();
+  // AI 解説の領域（目次と新しいレイアウトの間の #ai。11-4 §2.1）の中のボタンから生成（生成中表示）
+  await expect(page.locator("#ai").getByTestId("ai-analysis-section")).toBeVisible();
+  await section.getByRole("button", { name: "AI解説を表示" }).click();
   await expect(section.getByRole("status")).toContainText(
     "AI解説を生成しています。1〜2 分かかることがあります。",
   );
@@ -74,15 +78,18 @@ test("E-20 AI解説を表示 → 生成中 → 7 ブロック → 非表示 → 
   expect(posts).toHaveLength(1);
 });
 
+/** リスクの結果詳細の表示名（11-4 §2.10） */
 const RISK_LABELS = [
-  "不祥事",
-  "苦情",
-  "メンタル面の不服",
-  "不注意ミス",
-  "退職時トラブル",
-  "コミュニケーション起因の業務支障",
-  "モチベーション不足による就業辞退",
+  "不祥事が発生する",
+  "苦情を強く主張する",
+  "メンタル面の不服が起こる",
+  "不注意からミスが発生する",
+  "退職時におけるトラブル発生",
+  "コミュニケーションが原因で業務に支障がでる",
+  "モチベーションの不足により就業辞退に繋がる",
 ];
+/** 比較なしの文言（11-4 §2.6） */
+const NO_COMPARISON = "右上で比較組織を選ぶと表示されます";
 
 /**
  * PDF のテキスト。Chromium が埋め込む Noto Sans JP の ToUnicode は一部の漢字を康熙部首（例: 立 → ⽴）に写すため
@@ -130,12 +137,15 @@ test("E-21 PDF: 2 モード、ファイル名、restricted の非表示、比較
   await loginViaUi(page, adminOrg.ownerEmail);
   await page.goto(`/admin/results/${resultId}`);
   // AI 解説を completed にしておく（full には掲載、restricted には掲載しない）
-  await page.locator(".result-header").getByRole("button", { name: "AI解説を表示" }).click();
+  await page
+    .getByTestId("ai-analysis-section")
+    .getByRole("button", { name: "AI解説を表示" })
+    .click();
   await expect(page.getByTestId("ai-analysis-body")).toBeVisible({ timeout: 30_000 });
 
-  // 比較組織を選んだ状態でダウンロード
+  // 比較組織を選んだ状態でダウンロード（合致度のカードの「組織全体（n人）と比べた近さ」で待つ）
   await page.getByLabel("比較組織").selectOption("organization");
-  await expect(page.getByTestId("population-label")).toBeVisible();
+  await expect(page.locator("#rs-gat .s")).toContainText("組織全体（");
   await page.getByRole("button", { name: "ダウンロード", exact: true }).click();
   await expect(page.locator("dialog[open]").getByTestId("pdf-comparison")).toContainText(
     "比較対象: 組織全体",
@@ -148,11 +158,11 @@ test("E-21 PDF: 2 モード、ファイル名、restricted の非表示、比較
   expect(full.bytes.subarray(0, 5).toString("latin1")).toBe("%PDF-");
   const fullText = await pdfText(full.bytes);
   expect(fullText).toContain("様の診断結果");
-  expect(fullText).toContain("個別特性評価");
+  expect(fullText).toContain("組織内のポジション");
   expect(fullText).toContain("組織との合致度");
   for (const label of RISK_LABELS) expect(fullText).toContain(label);
-  expect(fullText).toContain("比較対象内での立ち位置");
-  expect(fullText).not.toContain("比較組織を選択すると表示されます");
+  expect(fullText).toContain("色分けの目安");
+  expect(fullText).not.toContain(NO_COMPARISON);
   expect(fullText).toContain("AI解説");
   expect(fullText).toContain("この人物の要約");
   expect(fullText).toContain("診断スコア(16特性・ソーシャルスタイル・リスク指標)");
@@ -161,16 +171,17 @@ test("E-21 PDF: 2 モード、ファイル名、restricted の非表示、比較
   expect(restricted.filename).toBe(`result-${resultId.slice(0, 8)}-restricted.pdf`);
   expect(restricted.filename).not.toMatch(/テスト/);
   const restrictedText = await pdfText(restricted.bytes);
-  // 評価（レター）・合致度（ゲージ）・リスク 7 ゲージの見出しと AI 解説（セクション 7）が無い
-  expect(restrictedText).not.toContain("個別特性評価");
+  // 評価の箱・合致度のカード・注意したいリスクのカード・リスクのセクション（と目次の「リスク」）と、AI 解説の領域（と目次の
+  // 「AI解説」）が無い（11-4 §2.18）
   expect(restrictedText).not.toContain("組織との合致度");
   for (const label of RISK_LABELS) expect(restrictedText).not.toContain(label);
-  expect(restrictedText).not.toContain("比較対象内での立ち位置・リスク");
+  expect(restrictedText).not.toContain("注意したいリスク");
+  expect(restrictedText).not.toContain("色分けの目安");
   expect(restrictedText).not.toContain("AI解説");
   expect(restrictedText).not.toContain("この人物の要約");
   expect(restrictedText).not.toContain("診断スコア(16特性・ソーシャルスタイル・リスク指標)");
-  // 立ち位置（名称）は印字する（06 D06-26）。フッターに非表示の注記
-  expect(restrictedText).toContain("比較対象内での立ち位置");
+  // 組織内のポジションは印字する（K-15、06 D06-26）。フッターに非表示の注記
+  expect(restrictedText).toContain("組織内のポジション");
   expect(restrictedText).toContain("評価・合致度・リスク非表示");
 
   // 比較組織を外すと、比較項目は固定文言のまま印字する（06 D06-16）
@@ -181,7 +192,7 @@ test("E-21 PDF: 2 モード、ファイル名、restricted の非表示、比較
   );
   await page.keyboard.press("Escape");
   const noScope = await pdfText((await downloadVia(page, "full")).bytes);
-  expect(noScope).toContain("比較組織を選択すると表示されます");
+  expect(noScope).toContain(NO_COMPARISON);
 });
 
 test("E-21 印刷用ページはトークンなしで 404（ログイン画面へ転送しない）、検索避けと Referer 抑止のヘッダー", async ({

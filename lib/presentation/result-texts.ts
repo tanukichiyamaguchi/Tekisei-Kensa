@@ -1,4 +1,6 @@
-// 結果詳細の比較に依存しない文言の出し分け（06 §4.3・§4.4）。lib/masters と trait-highlights だけに依存する純関数
+// 結果詳細の比較に依存しない文言の出し分け（06 §4.3・§4.4）。lib/masters と trait-highlights だけに依存する純関数。
+// PR-7.8a の間は旧のセクション 5・6（育成方法・ソーシャルスタイル）が resolveResultTexts を使う（PR-7.8b で buildResultDetailView に
+// 置き換える）。項目の名前（traitLabel）は buildResultDetailView の traits[].label に置き換えて消した
 import { pickHighestTrait, pickLowestTrait, type TraitHighlight } from "./trait-highlights";
 import { APTITUDE_TYPE_DEFINITIONS } from "@/lib/masters/indicators/aptitude-types";
 import { APTITUDE_DEFINITIONS } from "@/lib/masters/indicators/aptitudes";
@@ -24,7 +26,6 @@ import {
   type AptitudeTypeKey,
   type ScoreResult,
   type SocialStyleKey,
-  type TraitKey,
 } from "@/lib/scoring/types";
 
 export interface TraitDetailGroup {
@@ -71,10 +72,6 @@ const VIEWER_ORDER: readonly SocialStyleKey[] = [...SOCIAL_STYLE_DEFINITIONS]
   .sort((a, b) => a.chartOrder - b.chartOrder)
   .map((s) => s.key);
 
-export function traitLabel(key: TraitKey): string {
-  return TRAIT_LABELS.get(key) ?? key;
-}
-
 /** 特性詳細: appliesTo に該当する文をカテゴリ順・定義順に並べる。該当 0 件のカテゴリは含めない */
 export function resolveTraitDetails(aptitudeType: AptitudeTypeKey): readonly TraitDetailGroup[] {
   return Object.freeze(
@@ -100,7 +97,7 @@ function highlightView(highlight: TraitHighlight, side: "high" | "low"): TraitHi
   const texts = TRAIT_HIGHLIGHT_TEXTS[highlight.key];
   return Object.freeze({
     highlight,
-    label: traitLabel(highlight.key),
+    label: TRAIT_LABELS.get(highlight.key) ?? highlight.key,
     positive: side === "high" ? texts.highPositive : texts.lowPositive,
     negative: side === "high" ? texts.highNegative : texts.lowNegative,
   });

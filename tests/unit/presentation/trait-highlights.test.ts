@@ -1,11 +1,8 @@
-// P-01・P-02（03 §10.8）
+// P-01・P-02（03 §10.8）。項目一覧のポップアップの並べ替え（sortTraitsForList）は PR-7.8a で消した（2 つのポップアップは 16 行を
+// 項目順。11-4 §2.15。一覧の並び替えは result-detail-rules.test.ts の M7-result-06）
 import { describe, expect, it } from "vitest";
 
-import {
-  pickHighestTrait,
-  pickLowestTrait,
-  sortTraitsForList,
-} from "@/lib/presentation/trait-highlights";
+import { pickHighestTrait, pickLowestTrait } from "@/lib/presentation/trait-highlights";
 import { scoreAnswers } from "@/lib/scoring/score";
 
 import { cyclicAnswers, uniformAnswers } from "../scoring/helpers";
@@ -20,15 +17,5 @@ describe("最高・最低尺度", () => {
     const { traits } = scoreAnswers(uniformAnswers(3));
     expect(pickHighestTrait(traits).key).toBe("cooperativeness");
     expect(pickLowestTrait(traits).key).toBe("cooperativeness");
-  });
-  it("一覧ポップアップ: 値の降順、同点は軸順", () => {
-    const { traits } = scoreAnswers(cyclicAnswers());
-    const list = sortTraitsForList(traits);
-    expect(list).toHaveLength(16);
-    expect(list[0]).toEqual({ key: "rule_compliance", value: 18.5 });
-    expect(list.map((x) => x.key).slice(-3)).toEqual(["humility", "persistence", "creativity"]);
-    for (let i = 1; i < list.length; i += 1) {
-      expect(list[i - 1]!.value).toBeGreaterThanOrEqual(list[i]!.value);
-    }
   });
 });

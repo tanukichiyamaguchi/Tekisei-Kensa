@@ -42,10 +42,6 @@ body {
   --style-analytical: rgb(65, 166, 123);
   --style-amiable: rgb(65, 148, 175);
 
-  /* 相性スライダー（付録E §4。具体値は設計判断） */
-  --slider-track: #e5e7eb;
-  --slider-marker: #1fa463;
-
   /* ゲージ */
   --gauge-track: #e5e7eb;
 
@@ -398,66 +394,6 @@ body {
 .radar-chart {
   display: inline-block;
 }
-.donut-gauge {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  margin: 0;
-}
-.donut-gauge figcaption {
-  margin-top: 4px;
-  font-size: 13px;
-  text-align: center;
-}
-.compat-slider {
-  margin-bottom: 16px;
-}
-.compat-slider__label {
-  font-weight: 700;
-  margin-bottom: 4px;
-}
-.compat-slider__row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.compat-slider__track {
-  position: relative;
-  height: 10px;
-  border-radius: 5px;
-  background: var(--slider-track);
-  flex: 1;
-}
-.compat-slider__marker {
-  position: absolute;
-  top: -4px;
-  width: 14px;
-  height: 18px;
-  border-radius: 2px;
-  background: var(--slider-marker);
-}
-.compat-slider__end {
-  width: 160px;
-  font-size: 13px;
-  color: var(--admin-text-muted);
-}
-.compat-slider__end:last-child {
-  text-align: right;
-}
-.compat-slider__note {
-  font-size: 12px;
-  color: var(--admin-text-muted);
-  margin: 4px 0 0;
-}
-.grade-letter {
-  font-size: 64px;
-  font-weight: 800;
-  line-height: 1;
-}
-.grade-letter__placeholder {
-  margin: 0;
-  color: var(--admin-text-muted);
-}
 
 /* ---- E-01（利用不可） */
 .admin-unavailable {
@@ -478,40 +414,6 @@ body {
 }
 .pre-line {
   white-space: pre-line;
-}
-.plain-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.back-link {
-  display: inline-block;
-  margin-bottom: 12px;
-}
-.result-header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
-}
-.result-header h1 {
-  margin: 0;
-}
-.field--inline {
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-}
-.field--inline select {
-  width: 200px;
-}
-.result-subline {
-  margin: 8px 0 24px;
-  color: var(--admin-text-muted);
-}
-.notice-inline {
-  color: var(--admin-danger);
 }
 .result-section {
   margin-bottom: 32px;
@@ -556,51 +458,9 @@ body {
 .panel__header h3 {
   margin: 0;
 }
-.gauge-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 24px;
-  margin-bottom: 12px;
-}
-.gauge-row--wrap {
-  flex-wrap: wrap;
-  gap: 12px 16px;
-}
-.grade-cell,
-.gauge-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 140px;
-  min-height: 120px;
-  text-align: center;
-}
-.gauge-placeholder__label {
-  margin: 0 0 8px;
-  font-weight: 700;
-}
-.grade-block {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-.comparison-placeholder {
-  margin: 0;
-  color: var(--admin-text-muted);
-}
-.type-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-}
 .type-card__name {
   margin: 8px 0 0;
   font-size: 18px;
-  font-weight: 700;
-}
-.type-card__heading {
   font-weight: 700;
 }
 .illustration {
@@ -615,16 +475,6 @@ body {
   border-radius: var(--admin-radius);
   background: var(--admin-primary-soft);
   text-align: center;
-}
-.position-view {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-}
-.position-view__label {
-  margin: 0 0 8px;
-  font-size: 16px;
-  font-weight: 700;
 }
 .style-card {
   display: flex;
@@ -644,25 +494,6 @@ body {
 }
 .guide-list__item dd {
   margin: 4px 0 0;
-}
-.slider-legend {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 8px 0 0;
-}
-.slider-legend__mark {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border-radius: 2px;
-  background: var(--slider-marker);
-}
-.trait-list__row--highest {
-  background: rgba(0, 162, 255, 0.12);
-}
-.trait-list__row--lowest {
-  background: rgba(142, 202, 230, 0.25);
 }
 .admin-root .visually-hidden {
   position: absolute;
@@ -700,11 +531,6 @@ body {
 }
 .ai-analysis__failed .notice {
   margin-bottom: 4px;
-}
-.result-header__actions {
-  display: flex;
-  align-items: flex-end;
-  gap: 12px;
 }
 .spinner {
   display: inline-block;

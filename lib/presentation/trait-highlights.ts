@@ -1,4 +1,6 @@
-// 項目詳細の最高・最低尺度（03 §8.3）。同点時は TRAIT_KEYS（レーダー軸順）で先の尺度（D3-11）。
+// 項目詳細の最高・最低尺度（03 §8.3）。同点時は TRAIT_KEYS（レーダー軸順）で先の尺度（D3-11）。結果詳細の概要のいちばん高い・低い特性と、
+// 16の特性の一覧の札に使う（11-4 §2.7.5・§2.8.5）。項目一覧のポップアップの並べ替え（sortTraitsForList）は PR-7.8a で消した（2 つの
+// ポップアップは 16 行を項目順。11-4 §2.15）
 import { TRAIT_KEYS } from "@/lib/scoring/types";
 import type { TraitKey, TraitScores } from "@/lib/scoring/types";
 
@@ -22,13 +24,4 @@ export function pickHighestTrait(traits: TraitScores): TraitHighlight {
 
 export function pickLowestTrait(traits: TraitScores): TraitHighlight {
   return pick(traits, (candidate, best) => candidate < best);
-}
-
-/** 一覧ポップアップ用: 値の降順、同点は TRAIT_KEYS 順（安定ソート） */
-export function sortTraitsForList(traits: TraitScores): readonly TraitHighlight[] {
-  return Object.freeze(
-    TRAIT_KEYS.map((key, index) => ({ key, value: traits[key], index }))
-      .sort((a, b) => b.value - a.value || a.index - b.index)
-      .map(({ key, value }) => Object.freeze({ key, value })),
-  );
 }

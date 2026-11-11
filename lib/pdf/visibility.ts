@@ -2,11 +2,11 @@
 export type PdfMode = "full" | "restricted";
 
 export interface PdfSectionVisibility {
-  readonly showGrade: boolean; // 評価レター（セクション 1）
-  readonly showMatchScore: boolean; // 合致度ゲージ（セクション 1、2）
-  readonly showRisks: boolean; // リスク 7 ゲージ（セクション 1、4）
-  readonly showPosition: boolean; // 立ち位置・偏差値（セクション 1、4）。06 D06-26: 当面は restricted でも true
-  readonly showAiAnalysis: boolean; // AI 解説（セクション 7）。completed かつ full のときのみ true
+  readonly showGrade: boolean; // 概要の評価の箱 rs-hyo（11-4 §2.18）
+  readonly showMatchScore: boolean; // 概要の組織との合致度のカード rs-gat
+  readonly showRisks: boolean; // 概要の注意したいリスクのカード rs-risk1 とリスクのセクション rs-rk（目次の「リスク」も）
+  readonly showPosition: boolean; // 組織内のポジション。06 D06-26: restricted でも true（11-4 の部品はいつも描く。K-15）
+  readonly showAiAnalysis: boolean; // AI 解説の領域 ai（目次の「AI解説」も）。completed かつ full のときのみ true
 }
 
 /** 画面（結果詳細）と同じ表示 */
