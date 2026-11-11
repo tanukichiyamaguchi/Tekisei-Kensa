@@ -138,6 +138,29 @@ export interface ClassificationPersonDto {
   readonly employmentStatus: EmploymentStatus; // 代表の受験の区分
 }
 
+/**
+ * GET /api/v1/admin/employment（11-3 §3.3）。クエリを受け取らず、閲覧範囲の人（組織内分類と同じ人。11-3 §2.2）と基準日を返す。
+ * タブの振り分け・勤続・分析は画面で行う（lib/presentation/retention.ts）
+ */
+export interface EmploymentDto {
+  readonly today: string; // 基準日 YYYY-MM-DD（Asia/Tokyo。データをサーバで読んだ時刻の日付）
+  readonly people: readonly EmploymentPersonDto[]; // 代表の submittedAt の降順（同じなら resultId の昇順）
+}
+
+/** 在籍・退職の人 1 人（11-3 §3.3）。電話番号は在籍・退職の画面に出さないので返さない */
+export interface EmploymentPersonDto {
+  readonly resultId: string; // 代表の受験
+  readonly respondentId: string; // 代表の受検者（区分・入社日・退職日の更新に使う。11-3 §3.4）
+  readonly aptitudeType: AptitudeTypeKey;
+  readonly name: string;
+  readonly occupationLabel: string | null; // 職業の表示名（00 §1.10。未知のコードは null）
+  readonly teamCode: TeamCode | null;
+  readonly submittedAt: string; // 代表の受験の送信日時（ISO 8601）
+  readonly employmentStatus: EmploymentStatus; // 代表の受験の区分
+  readonly hiredOn: string | null; // 入社日 YYYY-MM-DD
+  readonly leftOn: string | null; // 退職日 YYYY-MM-DD
+}
+
 /** GET /api/v1/admin/usage-logs（04 §5.8、11-2 §3.8）。送信済みの全件（ページングなし）。total は items の件数 */
 export interface UsageLogListDto {
   readonly items: readonly UsageLogItemDto[];

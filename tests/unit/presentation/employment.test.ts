@@ -1,13 +1,15 @@
 // lib/presentation/employment.ts（11-2 §2.3・§2.13・§2.14・§3.1・§3.11・§5.1）。M7-list-12 employmentFromMenu、
 // M7-list-13 employmentFromDates、M7-list-18 のうち isValidCalendarDate（calendarDateSchema が同じ判定になることは
 // tests/unit/db/schemas.test.ts、updatePersonInputSchema の分は tests/unit/services/admin-respondents-schemas.test.ts）、
-// M7-list-20 のうち effectiveStaffRole（役職と受検者区分の対応の分は tests/unit/db/employment-status.test.ts）と、todayInTokyo
+// M7-list-20 のうち effectiveStaffRole（役職と受検者区分の対応の分は tests/unit/db/employment-status.test.ts）と、todayInTokyo。
+// M7-zaiseki-19 employmentFromEditDialog（在籍・退職の変更ダイアログ。11-3 §2.15・§3.7・§5.1）
 import { describe, expect, it } from "vitest";
 
 import {
   effectiveStaffRole,
   EMPLOYMENT_STATUS_LABELS,
   employmentFromDates,
+  employmentFromEditDialog,
   employmentFromMenu,
   isValidCalendarDate,
   STAFF_ROLE_LABELS,
@@ -190,6 +192,108 @@ describe("M7-list-13 employmentFromDates（入社日・退職日のダイアロ�
       ok: true,
       value: employed,
     });
+  });
+});
+
+describe("M7-zaiseki-19 employmentFromEditDialog（在籍・退職の変更ダイアログ。11-3 §2.15）", () => {
+  const dialog = (status: Employment["status"], hiredOn: string, leftOn: string) =>
+    employmentFromEditDialog({ status, hiredOn, leftOn, todayIso: TODAY });
+
+  it("退職で退職日が空なら今日（todayIso）、入れた退職日はそのまま", () => {
+    expect(dialog("left", "2025-04-01", "")).toEqual({
+      ok: true,
+      value: { status: "left", hiredOn: "2025-04-01", leftOn: TODAY },
+    });
+    expect(dialog("left", "", "")).toEqual({
+      ok: true,
+      value: { status: "left", hiredOn: null, leftOn: TODAY },
+    });
+    expect(dialog("left", "2025-04-01", "2026-10-31")).toEqual({
+      ok: true,
+      value: { status: "left", hiredOn: "2025-04-01", leftOn: "2026-10-31" },
+    });
+  });
+
+  it("在籍・求職者なら退職日は null（退職日の欄の値は見ない）、入社日は保つ（求職者でも）", () => {
+    expect(dialog("employed", "2025-04-01", "2026-10-31")).toEqual({
+      ok: true,
+      value: { status: "employed", hiredOn: "2025-04-01", leftOn: null },
+    });
+    expect(dialog("candidate", "2025-04-01", "2026-10-31")).toEqual({
+      ok: true,
+      value: { status: "candidate", hiredOn: "2025-04-01", leftOn: null },
+    });
+    // 退職日の欄に範囲の外・実在しない日・入社日より前の値があっても、区分が退職でなければ見ない
+    for (const leftOn of ["1899-12-31", "2101-01-01", "2026-02-30", "2025-03-31"]) {
+      expect(dialog("employed", "2025-04-01", leftOn), leftOn).toEqual({
+        ok: true,
+        value: { status: "employed", hiredOn: "2025-04-01", leftOn: null },
+      });
+      expect(dialog("candidate", "", leftOn), leftOn).toEqual({
+        ok: true,
+        value: { status: "candidate", hiredOn: null, leftOn: null },
+      });
+    }
+  });
+
+  it("空の入社日は null", () => {
+    expect(dialog("employed", "", "")).toEqual({
+      ok: true,
+      value: { status: "employed", hiredOn: null, leftOn: null },
+    });
+    expect(dialog("candidate", "", "")).toEqual({
+      ok: true,
+      value: { status: "candidate", hiredOn: null, leftOn: null },
+    });
+  });
+
+  it("退職日 < 入社日は left_before_hired、同じ日は ok", () => {
+    expect(dialog("left", "2025-04-02", "2025-04-01")).toEqual({
+      ok: false,
+      reason: "left_before_hired",
+    });
+    expect(dialog("left", "2026-01-01", "2025-12-31")).toEqual({
+      ok: false,
+      reason: "left_before_hired",
+    });
+    // 退職日が空のときの今日（todayIso）と比べる
+    expect(dialog("left", "2026-11-11", "")).toEqual({ ok: false, reason: "left_before_hired" });
+    expect(dialog("left", "2025-04-01", "2025-04-01")).toEqual({
+      ok: true,
+      value: { status: "left", hiredOn: "2025-04-01", leftOn: "2025-04-01" },
+    });
+  });
+
+  it.each(["1899-12-31", "2101-01-01", "2026-02-30"])(
+    "入社日・退職日のどちらかが %s（範囲の外・実在しない日）なら invalid_date",
+    (date) => {
+      expect(dialog("employed", date, "")).toEqual({ ok: false, reason: "invalid_date" });
+      expect(dialog("candidate", date, "")).toEqual({ ok: false, reason: "invalid_date" });
+      expect(dialog("left", date, "2026-10-31")).toEqual({ ok: false, reason: "invalid_date" });
+      expect(dialog("left", "2025-04-01", date)).toEqual({ ok: false, reason: "invalid_date" });
+      expect(dialog("left", "", date)).toEqual({ ok: false, reason: "invalid_date" });
+    },
+  );
+
+  it("範囲の外と前後の逆が重なると invalid_date（日付の検査を先にする）", () => {
+    expect(dialog("left", "2101-01-01", "2026-10-31")).toEqual({
+      ok: false,
+      reason: "invalid_date",
+    });
+    expect(dialog("left", "2025-04-01", "1899-12-31")).toEqual({
+      ok: false,
+      reason: "invalid_date",
+    });
+  });
+
+  it("渡した値を変えない", () => {
+    const input = { status: "left", hiredOn: "2024-04-01", leftOn: "", todayIso: TODAY } as const;
+    const copy = { ...input };
+    expect(employmentFromEditDialog(input)).toEqual({
+      ok: true,
+      value: { status: "left", hiredOn: "2024-04-01", leftOn: TODAY },
+    });
+    expect(input).toEqual(copy);
   });
 });
 

@@ -72,6 +72,16 @@ export function formatCalendarDate(ymd: string): string {
   return `${Number(m[1])}/${Number(m[2])}/${Number(m[3])}`;
 }
 
+/**
+ * 暦日 YYYY-MM-DD → "2025/04/01"（月日を 0 で埋める。在籍・退職の一覧の入社日・退職日。11-3 §2.14）。
+ * 日時ではないので時間帯の変換をしない（文字列を分けるだけ）。形の違う値はそのまま返す（formatCalendarDate と同じ）
+ */
+export function formatCalendarDateSlashPadded(ymd: string): string {
+  const m = CALENDAR_DATE_PATTERN.exec(ymd);
+  if (!m) return ymd;
+  return `${m[1]}/${m[2]}/${m[3]}`;
+}
+
 /** ISO 8601（UTC）→ "2026/9/07 09:05"（年 4 けた、月は 0 で埋めない、日・時・分は 2 けた。利用履歴の回答日時。11-2 §2.18） */
 export function formatUsageLogDateTime(iso: string): string {
   const p = tokyoParts(iso);

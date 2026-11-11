@@ -27,6 +27,7 @@ export type AuditAction =
   | "respondent.delete"
   | "usage_log.view"
   | "classification.view"
+  | "employment.view"
   | "account.update"
   | "organization.rotate_invite_token"
   // 以下はリポジトリ・スクリプト（02 §9.6、§9.9）が書く。AuditAction の全集合は 02 §11 の表と一致させる

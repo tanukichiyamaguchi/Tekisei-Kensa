@@ -3,7 +3,7 @@
 // 03・04・07 が B、06・08・10 が未設定）。タイプは seed の回答で決まり、オーナーの人は 9 人（除外中の 10 を数えない）:
 // アナリティカル 2（04 れい・07 あいり）、ドライビング 3（03・08 ひなた、05 まい）、エミアブル 0、エクスプレッシブ 4（01・02・09 はるか、
 // 06 のぞみ）。区分は画面と同じ API（PATCH /api/v1/admin/respondents/{id}）で変える。チームが 1 種類の組織は受験の無い組織に
-// 1 人を送信して作る。在籍・退職の画面の分（M7-zaiseki-41・42 の残り）は PR-7.7b
+// 1 人を送信して作る。在籍・退職の画面の分（M7-zaiseki-41・42 の残り）は employment.spec.ts
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 

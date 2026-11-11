@@ -1,8 +1,6 @@
 // M7-list-39 チーム・除外、M7-list-40 区分・入社日・退職日、M7-list-41 ⋮メニュー、M7-list-42 役職、M7-list-43 削除、
 // M7-list-44 利用履歴（11-2 §5.3。E-16・E-17 の改め。§2.10〜§2.18・§2.20）。
 // 再受験のつながりは、seed:local と同じリポジトリの関数で前回の候補を付けて登録・送信して作る（直接は書かない）
-import type { Page } from "@playwright/test";
-
 import {
   addReexam,
   alertToast,
@@ -22,30 +20,11 @@ import {
   statusToast,
   test,
   todayInTokyo,
+  watchToastLifetime,
 } from "../support/admin-ui";
 
 const isPatch = (url: string, method: string) =>
   method === "PATCH" && url.includes("/api/v1/admin/respondents/");
-
-/** 通知が出てから消えるまでの時間（ミリ秒）を測り始める。返す関数で結果を待つ */
-async function watchToastLifetime(page: Page): Promise<() => Promise<number>> {
-  await page.evaluate(() => {
-    (window as unknown as { __toastLife: Promise<number> }).__toastLife = new Promise((resolve) => {
-      let shownAt = 0;
-      const observer = new MutationObserver(() => {
-        const toast = document.querySelector(".toast");
-        if (toast && shownAt === 0) shownAt = performance.now();
-        if (!toast && shownAt !== 0) {
-          observer.disconnect();
-          resolve(performance.now() - shownAt);
-        }
-      });
-      observer.observe(document.body, { subtree: true, childList: true });
-    });
-  });
-  return () =>
-    page.evaluate(() => (window as unknown as { __toastLife: Promise<number> }).__toastLife);
-}
 
 test("M7-list-39 チームの変更と未設定への戻し、除外のスイッチは通知を出して保存され、失敗すると元に戻る", async ({
   page,

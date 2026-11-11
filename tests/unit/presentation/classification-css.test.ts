@@ -4,7 +4,8 @@
 // 下の地（白）に重ね、各成分を四捨五入（0.5 は切り上げ）して 8 ビットにしてから計算する。ページの地は 11-8 §4.5 に従い #F7F9FC として
 // 計算する（今の .admin-root の地 #F3F5F8 は PR-7.13a で #F7F9FC になる）。分類ごとの色は部品が style 属性の CSS 変数で置くので、
 // 部品を見本の人で renderToStaticMarkup し、変数の値と QUADRANTS の対応を確かめる。あわせて、§2.19 のコンテナクエリと @media の値
-// （狭い幅の E2E は PR-7.13a まで fixme。総論 5.1）と、取得の失敗の文の比。在籍・退職の分（K-49 の表の 25〜30、K-50 の表の 2）は PR-7.7b
+// （狭い幅の E2E は PR-7.13a まで fixme。総論 5.1）と、取得の失敗の文の比。在籍・退職の分（K-49 の表の 25〜30、K-50 の表の 2、
+// リンクの 4 つの状態の色、通知の丸形、変更ダイアログの焦点の枠、在籍・退職の規則の範囲）は employment-css.test.ts
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -751,14 +752,5 @@ describe("（ID なし）§2.19 のコンテナクエリと @media の値（狭�
     expect(hexOf(text)).toBe("#5F6B78");
     expect(round2(contrastRatio(text, PAGE_BG))).toBe(5.16);
     expect(round2(contrastRatio(text, solid("#F3F5F8")))).toBe(4.98);
-  });
-
-  it("組織内分類の規則は .ob-root・.ob-panel・.ob-about の中だけに当て、在籍・退職の規則（.ob-pg・.ob-edit）はまだ無い（PR-7.7b）", () => {
-    for (const rule of rules) {
-      for (const selector of rule.selectors) {
-        expect(selector, selector).not.toMatch(/\.ob-pg|\.ob-edit|\.ret-|\.pg-/);
-      }
-    }
-    expect(findDecl(rules, ".ob-root", "--mut")).toBe("#6c7784");
   });
 });
