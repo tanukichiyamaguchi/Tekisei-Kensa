@@ -11,7 +11,12 @@ export const RESPONDENT_KIND_LABELS: Readonly<Record<RespondentKind, string>> = 
 
 export const ADMIN_TEXTS = {
   appTitle: "適性検査", // H-01（05 §9.1 と同じ仮置き）
-  nav: { results: "回答一覧", classification: "組織内分類", account: "アカウント" }, // N-01〜N-03
+  nav: {
+    results: "回答一覧",
+    classification: "組織内分類",
+    employment: "在籍・退職",
+    account: "アカウント",
+  }, // N-01〜N-04
   usageLogs: "利用履歴", // B-01
   backToResults: "回答一覧に戻る", // B-02
   download: "ダウンロード", // B-03

@@ -1,7 +1,8 @@
 "use client";
-// 画面下部の通知（06 §2.5、11-2 §2.20・§3.12）。1 件ずつ出し、新しい通知は前の通知を置き換えて表示の時間を数え直す。
-// 時間は情報 2.2 秒・エラー 6 秒（durationMs で上書き）。title は本文の前の行に出す。読み上げは通知の要素の role
-// （エラーは alert、ほかは status）で、空の role="status" の領域は置かない。
+// 画面下部の通知（06 §2.5、11-2 §2.20・§3.12、11-3 §2.20）。1 件ずつ出し、新しい通知は前の通知を置き換えて表示の時間を数え直す。
+// 時間は情報 2.2 秒・エラー 6 秒（durationMs で上書き）。title は本文の前の行に出す。shape: "pill" は丸形の見た目（在籍・退職の
+// 保存の通知。class に toast--pill を足すだけで、位置と色は同じ）。読み上げは通知の要素の role（エラーは alert、ほかは status）で、
+// 空の role="status" の領域は置かない。
 // モーダルの dialog 要素が開いている間に出した通知は、その dialog の中に描く（showModal の外は inert で、暗幕の下になり読み上げられない
 // ため）。その dialog が閉じたら元の場所に戻す。最初の描画ではポータルを使わない（サーバの描画で使えるように）
 import {
@@ -24,6 +25,8 @@ export interface ToastOptions {
   readonly title?: string;
   /** 表示の時間（ミリ秒）。省くと情報 2,200・エラー 6,000 */
   readonly durationMs?: number;
+  /** 丸形の見た目（在籍・退職の通知。11-3 §2.20） */
+  readonly shape?: "pill";
 }
 
 interface ToastItem {
@@ -31,6 +34,7 @@ interface ToastItem {
   readonly kind: ToastKind;
   readonly title: string | null;
   readonly message: string;
+  readonly shape: "pill" | null;
 }
 
 interface ToastApi {
@@ -43,6 +47,17 @@ const ToastContext = createContext<ToastApi | null>(null);
 export const TOAST_INFO_MS = 2200;
 export const TOAST_ERROR_MS = 6000;
 let nextId = 1;
+
+/** 通知の要素の class（toast に、エラーなら toast--error、丸形なら toast--pill を足す） */
+function toastClassName(item: ToastItem): string {
+  return [
+    "toast",
+    item.kind === "error" ? "toast--error" : null,
+    item.shape === "pill" ? "toast--pill" : null,
+  ]
+    .filter((name) => name !== null)
+    .join(" ");
+}
 
 /** 開いているモーダルの dialog 要素（無ければ null。:modal を読めない古いブラウザでも null） */
 function openModalDialog(): HTMLDialogElement | null {
@@ -64,7 +79,7 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
     const id = nextId++;
     if (timer.current !== null) clearTimeout(timer.current);
     setHost(openModalDialog());
-    setItem({ id, kind, title: o.title ?? null, message });
+    setItem({ id, kind, title: o.title ?? null, message, shape: o.shape ?? null });
     timer.current = setTimeout(
       () => {
         timer.current = null;
@@ -99,7 +114,7 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
       {item ? (
         <div
           key={item.id}
-          className={item.kind === "error" ? "toast toast--error" : "toast"}
+          className={toastClassName(item)}
           role={item.kind === "error" ? "alert" : "status"}
         >
           {item.title !== null ? <span className="toast__title">{item.title}</span> : null}

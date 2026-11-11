@@ -306,6 +306,14 @@ body {
 .toast__title {
   display: block;
 }
+/* 丸形（在籍・退職の保存の通知。11-3 §2.20・§2.22）。位置・背景 #1F2933・白字は .toast-region と .toast のまま */
+.toast--pill {
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
 
 /* ---- ダイアログ（dialog 要素。06 §2.4） */
 .dialog {
@@ -728,14 +736,15 @@ body {
 }
 
 /* ---- 組織内分類・在籍・退職（11-3 §2.22）。クラス名の接頭辞は ob-。参照元の ob-map の CSS を写し、セレクタを改めた（#obm → .ob-root、
-   #obd → .ob-panel）。参照元の CSS の指定と参照元の画面で効いている値が違う 6 か所は画面の値にし、K-49・K-50 の表の色（値の後ろに
-   参照元の色）と、参照元に定めの無い部品の焦点の枠と、象限の見出しのボタンの焦点の輪郭の位置だけを改めた。参照元に無い 3 つの規則
-   （取得の失敗の文、キャラクターのパネルの本文の焦点の枠、「組織内分類とは」の閉じるアイコンの表示）は 11-3 1.1 版で §2.22 に足した。
-   比は総論 8.3 の配色の取り決めで計算した。分類ごとの色は style 属性の CSS 変数（象限の --qc・--qbg・--qmid・--qsub、枠の --cbg・
-   --lc、パネルの上部の --qc・--qbg と本文の --qd・--qn。値は lib/presentation/classification-view.ts の QUADRANTS）。在籍・退職の
-   規則は PR-7.7b が足す */
+   #obd → .ob-panel、#ob-pg → .ob-pg、#pg-dlg → .ob-edit、在籍・退職の見出し h2 → h1）。参照元の CSS の指定と参照元の画面で効いている
+   値が違う 6 か所は画面の値にし、K-49・K-50 の表の色（値の後ろに参照元の色）と、参照元に定めの無い部品の焦点の枠と、象限の見出しの
+   ボタンの焦点の輪郭の位置と、リンクの 4 つの状態の色の明示だけを改めた。参照元に無い 3 つの規則（取得の失敗の文、キャラクターの
+   パネルの本文の焦点の枠、「組織内分類とは」の閉じるアイコンの表示）は 11-3 1.1 版で §2.22 に足した。比は総論 8.3 の配色の取り決めで
+   計算した。分類ごとの色は style 属性の CSS 変数（象限の --qc・--qbg・--qmid・--qsub、枠の --cbg・--lc、パネルの上部の --qc・--qbg と
+   本文の --qd・--qn。値は lib/presentation/classification-view.ts の QUADRANTS）と、在籍・退職の一覧のタイプの丸と退職の割合の棒の
+   style 属性の background（分類の濃い色） */
 /* K-49: --mut は白の上の文字の色（参照元の値は #7A8592。K-49 の表の 28）。--mut-pale は足した変数（#F7F9FA・#FFF7E6・#F7F9FC の上の
-   文字。K-49 の表の 23・29・30） */
+   文字。K-49 の表の 23・29・30。30 の分析の脚注は、11-8 の PR-7.13a までは今のページの地 #F3F5F8 で選んだ色を .ob-root .ret-ft に書く） */
 .ob-root {
   --ink: #1f2933;
   --sub: #5f6b78;
@@ -763,10 +772,11 @@ body {
   outline: 2px solid #1f2933;
   outline-offset: 2px;
 }
-/* アプリ: 参照元に焦点の見た目の定めが無い部品（ダイアログの中の部品）は、管理画面に共通の焦点の枠と同じ指定。dialog の要素のクラスで
-   当て、.admin-root の外に描いても効くようにする（詳細パネルの「×」は下の .ob-panel .x の指定。変更ダイアログの .ob-edit は PR-7.7b） */
+/* アプリ: 参照元に焦点の見た目の定めが無い部品（3 つのダイアログの中の部品）は、管理画面に共通の焦点の枠と同じ指定。dialog の要素の
+   クラスで当て、.admin-root の外に描いても効くようにする（詳細パネルの「×」は下の .ob-panel .x の指定） */
 .ob-panel :focus-visible,
-.ob-about :focus-visible {
+.ob-about :focus-visible,
+.ob-edit :focus-visible {
   outline: 2px solid #3f8da5;
   outline-offset: 2px;
 }
@@ -1721,6 +1731,484 @@ body {
   font-weight: 700;
   line-height: 1.5;
   white-space: pre-wrap;
+}
+
+/* 在籍・退職（§2.13〜§2.15。.ob-root の中の .ob-pg。参照元の #ob-pg）。タブと「変更」の焦点は .ob-root の輪郭のまま、
+   「回答一覧を開く →」は焦点の指定を書かない（管理画面に共通の焦点の枠が効く）。色はページの地 #F7F9FC（11-8 の .admin-root）で
+   計算した。ただし、ページの地の上の 3 つの文字（一覧の見出しの行・「回答一覧を開く →」・分析の脚注。K-49 の表の 25・27・30）は、
+   11-8 の PR-7.13a までは今の地 #F3F5F8 の上で同じ方法で選んだ色（表の値は今の地の上で 4.35〜4.44:1。11-3 §2.22 の 1.2 版、
+   11 総論 8.5）。PR-7.13a で地を #F7F9FC にするときに、表の値（#6A7480・#2E7A94・var(--mut-pale)）に戻す */
+.ob-pg {
+  font-family: inherit;
+  color: #1f2933;
+  padding: 4px 0 10px;
+}
+.ob-pg h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+.ob-pg .pg-sub {
+  margin: 6px 0 16px;
+  font-size: 13px;
+  color: #5f6b78;
+  line-height: 1.7;
+}
+.ob-pg .pg-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.ob-pg .pg-tabs button {
+  border: 1px solid #d5dce3;
+  background: #ffffff;
+  border-radius: 999px;
+  padding: 9px 18px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: #3a4651;
+  cursor: pointer;
+}
+.ob-pg .pg-tabs button.on {
+  background: #1f2933;
+  border-color: #1f2933;
+  color: #ffffff;
+}
+.ob-pg .pg-tabs button b {
+  margin-left: 6px;
+  font-weight: 800;
+}
+.ob-pg .pg-list {
+  display: grid;
+  gap: 8px;
+}
+.ob-pg .pg-row {
+  display: grid;
+  grid-template-columns:
+    minmax(120px, 1.4fr) minmax(120px, 1.2fr) minmax(90px, 1fr) minmax(90px, 1fr)
+    90px 72px;
+  gap: 6px 14px;
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #e3e8ee;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 14px;
+}
+/* K-49（参照元は #7A8591。K-49 の表の 25。PR-7.13a までは今の地で選んだ #66717C。表の値は #6A7480） */
+.ob-pg .pg-row.hd {
+  background: transparent;
+  border: 0;
+  padding: 0 16px;
+  font-size: 12px;
+  color: #66717c;
+  font-weight: 700;
+}
+.ob-pg .pg-nm {
+  font-weight: 700;
+}
+.ob-pg .pg-ty {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/* タイプの丸の色は style 属性の分類の濃い色（QUADRANTS[].colors.dark。タイプ名に添えた印で K-50 の対象外） */
+.ob-pg .pg-ty i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+  flex: none;
+}
+.ob-pg .pg-ten {
+  font-weight: 700;
+}
+/* K-49（参照元は #8A95A1。K-49 の表の 26） */
+.ob-pg .pg-mu {
+  color: #6b7885;
+}
+/* K-49（同）。狭い幅でだけ見える値の前のラベル（§2.19） */
+.ob-pg .pg-lb {
+  display: none;
+  font-size: 11px;
+  color: #6b7885;
+  margin-right: 6px;
+}
+.ob-pg .pg-emp {
+  padding: 28px 16px;
+  text-align: center;
+  color: #5f6b78;
+  background: #ffffff;
+  border: 1px dashed #d5dce3;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.8;
+}
+/* K-49（参照元は #2F7C96。K-49 の表の 27。PR-7.13a までは今の地で選んだ #2E7992。表の値は #2E7A94） */
+.ob-pg .pg-go {
+  display: inline-block;
+  margin-top: 14px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #2e7992;
+  text-decoration: none;
+}
+/* アプリ（4 つの状態の色を明示し、.admin-root a（#0B5CAD）とブラウザの既定の色を当てない。参照元も状態で色を変えない。§2.22 の
+   「リンクの色」） */
+.ob-pg .pg-go:link,
+.ob-pg .pg-go:visited,
+.ob-pg .pg-go:hover,
+.ob-pg .pg-go:active {
+  color: #2e7992;
+}
+.ob-pg .pg-ed button {
+  border: 1px solid #d5dce3;
+  background: #ffffff;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: #2f7c96;
+  cursor: pointer;
+}
+/* 本文の幅で切り替える（§2.19。.ob-root のコンテナクエリ。参照元は @media） */
+@container (max-width: 700px) {
+  .ob-pg .pg-row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .ob-pg .pg-row.hd {
+    display: none;
+  }
+  .ob-pg h1 {
+    font-size: 20px;
+  }
+  .ob-pg .pg-lb {
+    display: inline;
+  }
+  .ob-pg .pg-nm {
+    grid-column: 1/-1;
+  }
+  .ob-pg .pg-ed {
+    grid-column: 1/-1;
+    text-align: right;
+  }
+}
+
+/* 分析（§2.16）。退職の割合の棒は CSS で描く（10 K-23。棒の地は style 属性の分類の濃い色。値を文字でも出す棒で K-50 の対象外） */
+.ob-root .ob-ret {
+  margin-top: 36px;
+}
+.ob-root .ret-h h2 {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.4;
+  margin: 0;
+}
+.ob-root .ret-h p {
+  font-size: 13px;
+  color: var(--sub);
+  margin: 4px 0 0;
+}
+.ob-root .ret-kpi {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+.ob-root .ret-k {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+.ob-root .ret-k .k {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--sub);
+}
+.ob-root .ret-k .v {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.ob-root .ret-k .v small {
+  font-size: 13px;
+  font-weight: 700;
+  margin-left: 2px;
+  color: var(--sub);
+}
+.ob-root .ret-k .s {
+  font-size: 12px;
+  color: var(--mut);
+  margin-top: 2px;
+}
+.ob-root .ret-k.warn {
+  background: #fff7e6;
+  border-color: #f3dda8;
+}
+/* K-49（参照元は var(--mut) の #7A8592。K-49 の表の 29） */
+.ob-root .ret-k.warn .s {
+  color: var(--mut-pale);
+}
+.ob-root .ret-note {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #fff7e6;
+  border: 1px solid #f3dda8;
+  color: #8a5a00;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.ob-root .ret-tb {
+  margin-top: 16px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.ob-root .ret-r {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.3fr) 56px 56px minmax(140px, 1.6fr) 110px 110px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line);
+}
+.ob-root .ret-r:first-child {
+  border-top: 0;
+}
+.ob-root .ret-r.hd {
+  background: #f6f8fa;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--sub);
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+.ob-root .ret-r .n {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+.ob-root .ret-r .tn {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.ob-root .ret-who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.ob-root .ret-who img {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: top;
+  background: #eef2f5;
+  flex: none;
+}
+.ob-root .ret-who b {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.ob-root .ret-who span {
+  display: block;
+  font-size: 12px;
+  color: var(--sub);
+}
+.ob-root .ret-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ob-root .ret-bar i {
+  display: block;
+  flex: 1;
+  height: 10px;
+  border-radius: 6px;
+  background: #edf0f3;
+  position: relative;
+  overflow: hidden;
+}
+.ob-root .ret-bar i u {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 6px;
+  display: block;
+}
+.ob-root .ret-bar em {
+  font-style: normal;
+  font-weight: 800;
+  font-size: 13px;
+  min-width: 44px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.ob-root .ret-bar small {
+  display: inline-block;
+  min-width: 2.6em;
+  font-size: 11px;
+  color: var(--mut);
+}
+/* K-49（参照元は var(--mut)。K-49 の表の 30。PR-7.13a までは今の地で選んだ #66717D。表の値は var(--mut-pale) の #697380） */
+.ob-root .ret-ft {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #66717d;
+  line-height: 1.7;
+}
+/* 本文の幅で切り替える（§2.19。.ob-root のコンテナクエリ。参照元は @media）。勤続のラベルの色は --mut（K-49 の表の 28） */
+@container (max-width: 760px) {
+  .ob-root .ret-r {
+    grid-template-columns: 1fr 48px 48px;
+    row-gap: 6px;
+  }
+  .ob-root .ret-r.hd .c4,
+  .ob-root .ret-r.hd .c5,
+  .ob-root .ret-r.hd .c6 {
+    display: none;
+  }
+  .ob-root .ret-r .c4 {
+    grid-column: 1/-1;
+  }
+  .ob-root .ret-r .c5,
+  .ob-root .ret-r .c6 {
+    grid-column: 1/-1;
+    display: flex;
+    justify-content: space-between;
+  }
+  .ob-root .ret-r .c5::before {
+    content: "勤続（退職した人）";
+    color: var(--mut);
+    font-size: 12px;
+  }
+  .ob-root .ret-r .c6::before {
+    content: "勤続（在籍中）";
+    color: var(--mut);
+    font-size: 12px;
+  }
+}
+
+/* 変更ダイアログ（§2.15。参照元は body の直下の div #pg-dlg。アプリは dialog 要素を .ob-root の外に描く）。dialog の内側の余白は 0 で、
+   カードが要素いっぱいを占める（カードの外を押したときだけ event.target が dialog 自身になる） */
+.ob-edit {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  width: calc(100% - 32px);
+  max-width: 380px;
+  overflow: visible;
+  color: #1f2933;
+  font-family: Inter, "Noto Sans JP", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1;
+}
+.ob-edit::backdrop {
+  background: rgba(15, 23, 32, 0.45);
+}
+.ob-edit * {
+  box-sizing: border-box;
+}
+.ob-edit .pgd-card {
+  background: #ffffff;
+  border-radius: 18px;
+  width: 100%;
+  padding: 22px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+}
+.ob-edit .pgd-h {
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+.ob-edit .pgd-s {
+  font-size: 12px;
+  color: #5f6b78;
+  margin-top: 4px;
+  line-height: 1.6;
+}
+.ob-edit .pgd-seg {
+  display: flex;
+  gap: 6px;
+  margin-top: 16px;
+}
+.ob-edit .pgd-seg button {
+  flex: 1;
+  border: 1px solid #d5dce3;
+  background: #ffffff;
+  border-radius: 999px;
+  padding: 9px 0;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: #3a4651;
+  cursor: pointer;
+}
+.ob-edit .pgd-seg button.on {
+  background: #1f2933;
+  border-color: #1f2933;
+  color: #ffffff;
+}
+.ob-edit label {
+  display: block;
+  margin-top: 14px;
+  font-size: 13px;
+  font-weight: 700;
+}
+/* K-50（枠。参照元は #D5DCE3。K-50 の表の 2）。暦のアイコンと空の欄の表示は色を指定しない（ブラウザの既定のまま。11-3 6 章の 12） */
+.ob-edit input {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1px solid #8297ac;
+  border-radius: 10px;
+  font-size: 16px;
+  font-family: inherit;
+  color: #1f2933;
+  background: #ffffff;
+}
+.ob-edit .pgd-b {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+.ob-edit .pgd-b button {
+  border: 0;
+  border-radius: 999px;
+  padding: 11px 22px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  background: #edf0f3;
+  color: #3a4651;
+}
+.ob-edit .pgd-b button.ok {
+  background: #2f7c96;
+  color: #ffffff;
+}
+.ob-edit .pgd-e {
+  color: #c0392b;
+  font-size: 12px;
+  margin-top: 10px;
+  min-height: 1em;
 }
 
 /* ---- アカウント（06 §3.7） */

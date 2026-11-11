@@ -1,4 +1,4 @@
-// 管理画面の E2E の共通操作（08 §3.4.3 E-10〜E-18、11-2 §5.3 M7-list-34〜52、11-3 §5.3 M7-zaiseki-31〜36・41〜43・48）。
+// 管理画面の E2E の共通操作（08 §3.4.3 E-10〜E-18、11-2 §5.3 M7-list-34〜52、11-3 §5.3 M7-zaiseki-31〜43・48）。
 // ログインは画面から行い、Cookie の注入はしない（08 §3.4.1）
 import AxeBuilder from "@axe-core/playwright";
 import {
@@ -177,6 +177,26 @@ export const listTools = (page: Page) => ({
 export const statusToast = (page: Page): Locator => page.locator(".toast[role=status]");
 export const alertToast = (page: Page): Locator => page.locator(".toast[role=alert]");
 
+/** 通知が出てから消えるまでの時間（ミリ秒）を測り始める。返す関数で結果を待つ（11-2 §2.20・11-3 §2.20） */
+export async function watchToastLifetime(page: Page): Promise<() => Promise<number>> {
+  await page.evaluate(() => {
+    (window as unknown as { __toastLife: Promise<number> }).__toastLife = new Promise((resolve) => {
+      let shownAt = 0;
+      const observer = new MutationObserver(() => {
+        const toast = document.querySelector(".toast");
+        if (toast && shownAt === 0) shownAt = performance.now();
+        if (!toast && shownAt !== 0) {
+          observer.disconnect();
+          resolve(performance.now() - shownAt);
+        }
+      });
+      observer.observe(document.body, { subtree: true, childList: true });
+    });
+  });
+  return () =>
+    page.evaluate(() => (window as unknown as { __toastLife: Promise<number> }).__toastLife);
+}
+
 /** 表示中のダイアログ（閉じたダイアログの中身も DOM に残るため open のものに限る） */
 export const openDialog = (page: Page) => page.locator("dialog[open]");
 
@@ -249,6 +269,33 @@ export const obSeg = (page: Page, mode: "all" | "stay" | "left"): Locator =>
 
 /** チームの選択欄（チームが 2 種類以上のときだけある） */
 export const obTeam = (page: Page): Locator => page.locator(".ob-team select");
+
+// ---- 在籍・退職（11-3 §2.13〜§2.16。data-testid は 11-3 §3.8）の要素
+
+/** 在籍・退職のタブ（an = 分析、stay = 在籍者、left = 退職者、seek = 求職者） */
+export const emTab = (page: Page, tab: "an" | "stay" | "left" | "seek"): Locator =>
+  page.getByTestId(`em-tab-${tab}`);
+
+/** 在籍・退職の一覧の人の行（代表の resultId） */
+export const emRow = (page: Page, resultId: string): Locator =>
+  page.getByTestId(`em-row-${resultId}`);
+
+/** 一覧の行の「変更」 */
+export const emEditButton = (row: Locator): Locator =>
+  row.getByRole("button", { name: "変更", exact: true });
+
+/** 開いている変更ダイアログ（dialog.ob-edit。閉じたダイアログの要素も DOM に残るため open のものに限る） */
+export const emEdit = (page: Page): Locator => page.locator("dialog.ob-edit[open]");
+
+/** 分析の数字のカードの並び */
+export const retKpi = (page: Page): Locator => page.getByTestId("ret-kpi");
+
+/** 分析のタイプ別の表の行 */
+export const retRow = (page: Page, type: AptitudeTypeKey): Locator =>
+  page.getByTestId(`ret-row-${type}`);
+
+/** 「回答一覧を開く →」 */
+export const pgGo = (page: Page): Locator => page.locator(".ob-pg a.pg-go");
 
 /** .ob-root の輪郭（参照元の ob-map の焦点の指定。#1F2933 の 2px を 2px 外側） */
 export const OB_ROOT_OUTLINE = {

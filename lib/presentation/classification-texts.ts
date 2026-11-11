@@ -1,11 +1,13 @@
-// 組織内分類（M-06）の画面の文言（11-3 §2.23 が正。§2.5〜§2.12 の文言）。JSX に直書きせず、この定数を使う（06 §10.5）。
-// 差し込みのある文言は関数にする。付録C の文言（分類の説明文・位置の説明・特徴・適性・適性職種・軸の語・0 人の文言）は
-// lib/masters/texts から読み、ここに写さない（軸は CLASSIFICATION_AXES の語から作る。0 人の文は CLASSIFICATION_EMPTY_MESSAGE）。
-// 取得の失敗の文は回答一覧と同じ RESULT_LIST_TEXTS.loadFailed、チームの名前（「Aチーム」）は comparison-scope-params.ts の
-// teamLabel、区分の名前（「在籍」「退職」）は employment.ts の EMPLOYMENT_STATUS_LABELS を使う。
-// K-19 の置き換えは無い（11-3 §0.5）。在籍・退職（11-3 §2.13〜§2.17）の文言は PR-7.7b がこのファイルに足す
+// 組織内分類（M-06）と在籍・退職（M-08）の画面の文言（11-3 §2.23 が正。組織内分類は §2.5〜§2.12、在籍・退職は §2.13〜§2.17・
+// §2.20 と 7 章の文言）。JSX に直書きせず、この定数を使う（06 §10.5）。差し込みのある文言は関数にする。付録C の文言（分類の
+// 説明文・位置の説明・特徴・適性・適性職種・軸の語・0 人の文言）は lib/masters/texts から読み、ここに写さない（軸は
+// CLASSIFICATION_AXES の語から作る。0 人の文は CLASSIFICATION_EMPTY_MESSAGE）。取得の失敗の文は回答一覧と同じ
+// RESULT_LIST_TEXTS.loadFailed、チームの名前（「Aチーム」）は comparison-scope-params.ts の teamLabel、区分の名前（「在籍」
+// 「退職」「求職者」）は employment.ts の EMPLOYMENT_STATUS_LABELS、サイドメニューの名前は admin-texts.ts の ADMIN_TEXTS.nav を
+// 使う。在籍・退職の分析の表の狭い幅の勤続のラベル（「勤続（退職した人）」「勤続（在籍中）」）は CSS の content（11-3 §2.22）に
+// あり、ここに写さない。K-19 の置き換えは無い（11-3 §0.5）
 import type { ClassificationMode } from "./classification-view";
-import { EMPLOYMENT_STATUS_LABELS } from "./employment";
+import { EMPLOYMENT_STATUS_LABELS, type EmploymentStatus } from "./employment";
 import { CLASSIFICATION_AXES } from "@/lib/masters/texts";
 
 /** 「組織内分類とは」の本文（11-3 §2.5）。空白と改行は原文どおり（画面は white-space: pre-wrap で出す） */
@@ -111,5 +113,119 @@ export const CLASSIFICATION_SCREEN_TEXTS = {
     phoneNumber: "電話番号",
     noName: "（未入力）",
     none: "—", // 職業・チーム・電話番号が無いとき
+  },
+} as const;
+
+/** 変更ダイアログの区分のボタン（11-3 §2.15）。並びは 在籍・退職・求職者 */
+const EDIT_STATUSES: readonly { readonly status: EmploymentStatus; readonly label: string }[] =
+  Object.freeze(
+    (["employed", "left", "candidate"] as const).map((status) =>
+      Object.freeze({ status, label: EMPLOYMENT_STATUS_LABELS[status] }),
+    ),
+  );
+
+/** 在籍・退職（M-08。11-3 §2.13〜§2.17・§2.20・§2.23・7 章）の文言 */
+export const EMPLOYMENT_SCREEN_TEXTS = {
+  // 見出し・説明（§2.13）
+  title: "在籍・退職",
+  description:
+    "在籍している人と退職した人の一覧と、辞めやすいタイプの分析です。入社日・退職日は、各行の右端にある「変更」から入れられます。",
+  // タブ（§2.13）。在籍者・退職者・求職者は名前の後ろに数（b）
+  tabs: {
+    an: "分析",
+    stay: "在籍者",
+    left: "退職者",
+    seek: "求職者",
+  },
+  // 一覧（§2.14）。headers は見出しの行（「変更」の列は見出しなし）、labels は狭い幅でだけ見える値の前のラベル（§2.19）
+  list: {
+    headers: {
+      name: "お名前",
+      type: "タイプ",
+      hiredOn: "入社日",
+      leftOn: "退職日", // 退職者のタブ
+      occupation: "職業", // 在籍者・求職者のタブ
+      tenure: "勤続",
+    },
+    labels: {
+      hiredOn: "入社",
+      leftOn: "退職",
+      occupation: "職業",
+      tenure: "勤続",
+    },
+    noName: "（お名前なし）", // 氏名が空のとき
+    none: "—", // 入社日・退職日・職業が無いとき
+    edit: "変更",
+    goList: "回答一覧を開く →",
+  },
+  // 一覧の 0 人（§2.14）。タブごとの 1 行目と、改行して共通の 2 行目（hint）
+  empty: {
+    stay: "在籍している人がいません。",
+    left: "退職した人はまだいません。",
+    seek: "面接だけの人（求職者）はまだいません。",
+    hint: "ほかのタブの一覧にある「変更」で区分を変えると、ここに出てきます。",
+  },
+  // 勤続（§2.17。retention.ts の formatTenure が組み立てる。「{n}年{m}か月」は years と months をつなぐ）
+  tenure: {
+    months: (n: number) => `${n}か月`,
+    years: (n: number) => `${n}年`,
+    none: "—", // 計算できないとき
+  },
+  // 変更ダイアログ（§2.15）。invalidDate は参照元に無い検査の文（7 章の 1。依頼主の確認までは案）
+  edit: {
+    title: (name: string) => `${name}さん`, // 氏名が空なら「さん」
+    description: "区分と、入社日・退職日を変えられます。わかる分だけでも大丈夫です。",
+    statuses: EDIT_STATUSES,
+    hiredOn: "入社日",
+    leftOn: "退職日",
+    cancel: "やめる",
+    save: "保存する",
+    leftBeforeHired: "退職日が入社日より前になっています。",
+    invalidDate: "日付が正しくありません。",
+  },
+  // 通知（§2.20）
+  toast: {
+    saved: (name: string) => `${name}さんを保存しました`,
+  },
+  // 分析「辞めやすいタイプと勤続年数」（§2.16）
+  analysis: {
+    title: "辞めやすいタイプと勤続年数",
+    teamPrefix: (teamLabel: string) => `${teamLabel}の`, // チームで絞っているときの説明の先頭（「Aチームの」「未設定の」）
+    lead: "在籍中と退職した人を、キャラクター別に集計しています。回答者がいないタイプは省いています。",
+    // 数字のカード（項目名・補足）。値の後ろの small は unit
+    cards: {
+      left: "退職した人",
+      leftRate: (p: number) => `全体の ${p}%`, // 「全体の」と数の間に半角の空白
+      stay: "在籍中の人",
+      stayNote: "求職者は含みません",
+      leftTenure: "平均の勤続（退職した人）",
+      averageOf: (n: number) => `${n}人の平均`,
+      stayTenure: "平均の勤続（在籍中）",
+      averageOfToday: (n: number) => `${n}人の平均（今日まで）`,
+      missing: "勤続未入力者",
+      missingDetail: (hire: number, leave: number) => `入社日${hire}人／退職日${leave}人が未入力`,
+      unit: "人",
+    },
+    // 注意書き（退職 0 人と 1〜2 人。3 人以上は出さない）
+    notes: {
+      noLeft:
+        "退職として登録された人がまだいません。在籍者の一覧で「変更」を押し、区分を「退職」にすると、ここに出ます。",
+      fewLeft: (n: number) =>
+        `退職した人がまだ${n}人なので、割合は参考値です。人数が増えるほど、傾向が確かになります。`,
+    },
+    // タイプ別の表
+    table: {
+      type: "タイプ",
+      stay: EMPLOYMENT_STATUS_LABELS.employed,
+      left: EMPLOYMENT_STATUS_LABELS.left,
+      rate: "退職の割合",
+      leftTenure: "勤続（退職した人）",
+      stayTenure: "勤続（在籍中）",
+      percent: (p: number) => `${p}%`,
+      reference: "参考", // 在籍 + 退職が 3 人未満のタイプ
+      noRows: "回答者がいません", // 行が 1 つも無いとき
+    },
+    footnote:
+      "勤続年数は、入社日から退職日（在籍中の人は今日）までで計算しています。入社日が入っていない人は、勤続の平均に入りません。人数が3人に満たないタイプには「参考」を付けています。",
   },
 } as const;

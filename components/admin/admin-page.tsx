@@ -1,4 +1,4 @@
-// 認証済みページ（M-04〜M-07）の共通処理（06 §1.3）。Server Component から呼ぶ。
+// 認証済みページ（M-04〜M-08）の共通処理（06 §1.3）。Server Component から呼ぶ。
 // requireAdmin の ApiError を画面の振る舞いに変換する: 401 → ログイン画面へ、403（停止・未登録）→ E-01
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";

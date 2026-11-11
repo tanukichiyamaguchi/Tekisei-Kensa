@@ -1,12 +1,14 @@
-// 組織内分類の表示の状態（11-3 §2.18）。チーム（既定「すべて」）・対象（既定「全員」）・折りたたみ（押した象限だけの開閉。既定は
-// 押していない）を、ブラウザのメモリ（このモジュールの変数）に凍結したオブジェクトで持つ。サイドメニューでの画面の移動（next/link）では
-// 残り、ページを読み込み直すと既定に戻る。Cookie・sessionStorage・localStorage・Firestore には置かず、個人情報を持たない。
+// 組織内分類と在籍・退職の表示の状態（11-3 §2.18）。チーム（既定「すべて」。2 つの画面に効く）・対象（既定「全員」。組織内分類）・
+// 折りたたみ（押した象限だけの開閉。既定は押していない。組織内分類）・タブ（既定「分析」。在籍・退職）を、ブラウザのメモリ（この
+// モジュールの変数）に凍結したオブジェクトで持つ。サイドメニューでの画面の移動（next/link）では残り、ページを読み込み直すと既定に戻る。
+// Cookie・sessionStorage・localStorage・Firestore には置かず、個人情報を持たない。
 // Client Component から useClassificationViewState()（useSyncExternalStore）で読む。サーバの描画では既定の値だけを使い
-// （getServerSnapshot）、書き換え（setTeam・setMode・setFold）はブラウザのイベントと、チームを正規化したあとの useEffect からだけ
-// 行う（サーバのモジュールの変数は書かない。リクエストをまたいで状態が混ざらないように）。在籍・退職のタブは PR-7.7b が足す
+// （getServerSnapshot）、書き換え（setTeam・setMode・setFold・setTab）はブラウザのイベントと、チームを正規化したあとの useEffect
+// からだけ行う（サーバのモジュールの変数は書かない。リクエストをまたいで状態が混ざらないように）
 import { useSyncExternalStore } from "react";
 
 import type { ClassificationMode, TeamFilter } from "@/lib/presentation/classification-view";
+import type { EmploymentTab } from "@/lib/presentation/retention";
 import type { SocialStyleKey } from "@/lib/scoring/types";
 
 export interface ClassificationViewState {
@@ -16,6 +18,8 @@ export interface ClassificationViewState {
   readonly mode: ClassificationMode;
   /** 折りたたみのボタンを押した象限だけの状態（true = 畳んでいる）。押していない象限は画面の幅で決まる（§2.10） */
   readonly folds: Readonly<Partial<Record<SocialStyleKey, boolean>>>;
+  /** 在籍・退職のタブ（既定は分析。11-3 §2.13・§2.18） */
+  readonly tab: EmploymentTab;
 }
 
 /** 既定の値（§2.18） */
@@ -23,6 +27,7 @@ export const DEFAULT_CLASSIFICATION_VIEW_STATE: ClassificationViewState = Object
   team: "",
   mode: "all",
   folds: Object.freeze({}),
+  tab: "an",
 });
 
 let current: ClassificationViewState = DEFAULT_CLASSIFICATION_VIEW_STATE;
@@ -72,4 +77,9 @@ export function setMode(mode: ClassificationMode): void {
 /** 象限の折りたたみを変える（折りたたみのボタン。folded = 畳む） */
 export function setFold(quadrant: SocialStyleKey, folded: boolean): void {
   write({ folds: Object.freeze({ ...current.folds, [quadrant]: folded }) });
+}
+
+/** 在籍・退職のタブを変える（在籍・退職のタブのボタン） */
+export function setTab(tab: EmploymentTab): void {
+  write({ tab });
 }

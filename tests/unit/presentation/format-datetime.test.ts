@@ -1,10 +1,11 @@
 // M7-list-15 回答一覧と利用履歴の日時の整形（11-2 §2.8・§2.9・§2.18・§3.11・§5.1。lib/presentation/format-datetime.ts）。
-// M7-zaiseki-21 組織内分類の受験日（11-3 §2.12・§3.7・§5.1。在籍・退職の formatCalendarDateSlashPadded は PR-7.7b）。
+// M7-zaiseki-21 組織内分類の受験日と、在籍・退職の入社日・退職日（11-3 §2.12・§2.14・§3.7・§5.1）。
 // formatDateTime（06 §10.3）は tests/unit/presentation/admin-navigation.test.ts
 import { describe, expect, it } from "vitest";
 
 import {
   formatCalendarDate,
+  formatCalendarDateSlashPadded,
   formatDateSlashPadded,
   formatHm,
   formatUsageLogDateTime,
@@ -78,8 +79,21 @@ describe("M7-zaiseki-21 formatDateSlashPadded（組織内分類の受験日。As
   });
 });
 
+describe("M7-zaiseki-21 formatCalendarDateSlashPadded（在籍・退職の入社日・退職日。時間帯の変換なし）", () => {
+  it("YYYY-MM-DD の月日を 0 で埋めたまま Y/M/D にする", () => {
+    expect(formatCalendarDateSlashPadded("2025-04-01")).toBe("2025/04/01");
+    expect(formatCalendarDateSlashPadded("2026-11-05")).toBe("2026/11/05");
+    expect(formatCalendarDateSlashPadded("2026-10-31")).toBe("2026/10/31");
+  });
+
+  it("形の違う値はそのまま返す（formatCalendarDate と同じ）", () => {
+    expect(formatCalendarDateSlashPadded("2025-4-1")).toBe("2025-4-1");
+    expect(formatCalendarDateSlashPadded("")).toBe("");
+  });
+});
+
 describe("Asia/Tokyo の整形は実行環境の時間帯（TZ）に左右されない", () => {
-  it("formatYmd・formatHm・formatUsageLogDateTime・formatDateSlashPadded", () => {
+  it("formatYmd・formatHm・formatUsageLogDateTime・formatDateSlashPadded と、暦日の formatCalendarDateSlashPadded", () => {
     const original = process.env.TZ;
     try {
       for (const tz of ["UTC", "Asia/Tokyo", "America/Los_Angeles", "Pacific/Kiritimati"]) {
@@ -88,6 +102,9 @@ describe("Asia/Tokyo の整形は実行環境の時間帯（TZ）に左右され
         expect(formatHm("2026-09-06T15:00:00Z"), tz).toBe("00:00");
         expect(formatUsageLogDateTime("2026-09-07T00:05:00.000Z"), tz).toBe("2026/9/07 09:05");
         expect(formatDateSlashPadded("2026-09-06T15:00:00.000Z"), tz).toBe("2026/09/07");
+        // 暦日は時間帯で日付が動かない
+        expect(formatCalendarDateSlashPadded("2026-01-01"), tz).toBe("2026/01/01");
+        expect(formatCalendarDateSlashPadded("2025-12-31"), tz).toBe("2025/12/31");
       }
     } finally {
       if (original === undefined) delete process.env.TZ;

@@ -181,7 +181,7 @@ beforeAll(async () => {
     await canLinkAsPrevious({ organizationId: org.organizationId, resultId: submitted.resultId }),
   ).toBe(true);
   for (const viewer of [ownerViewer, adminViewer]) {
-    await listResults({ viewer }); // Q3 / Q4（回答一覧・組織内分類。11-3 §3.1）
+    await listResults({ viewer }); // Q3 / Q4（回答一覧・組織内分類・在籍・退職。11-3 §3.1）
     await listUsageLogs({ viewer }); // Q5（改）/ Q6（改）（11-2 §3.4。M7-list-33）
   }
   await listAdminUsers(org.organizationId); // Q8

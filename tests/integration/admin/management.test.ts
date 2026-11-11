@@ -3,6 +3,7 @@ import type { Timestamp } from "firebase-admin/firestore";
 import { describe, expect, it } from "vitest";
 
 import { GET as getClassificationRoute } from "@/app/api/v1/admin/classification/route";
+import { GET as getEmploymentRoute } from "@/app/api/v1/admin/employment/route";
 import { PATCH as patchMeRoute } from "@/app/api/v1/admin/me/route";
 import {
   DELETE as deleteRespondentRoute,
@@ -105,6 +106,13 @@ describe("I-31 管理者 API の監査ログ", () => {
       }),
     );
     await call(
+      callRoute(getEmploymentRoute, {
+        method: "GET",
+        url: "/api/v1/admin/employment",
+        cookieHeader: owner.cookieHeader,
+      }),
+    );
+    await call(
       callRoute(patchMeRoute, {
         method: "PATCH",
         url: "/api/v1/admin/me",
@@ -128,6 +136,7 @@ describe("I-31 管理者 API の監査ログ", () => {
       "result.update_staff_role",
       "usage_log.view",
       "classification.view",
+      "employment.view",
       "account.update",
       "respondent.delete",
     ];
