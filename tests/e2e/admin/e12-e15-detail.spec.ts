@@ -933,9 +933,16 @@ test("M7-result-30 留まる位置（1440×900）: 育て方の中までスク�
   await scrollBy(slack / 2 - 10);
   expect(Math.abs((await leftTop()) - stuckTop)).toBeLessThanOrEqual(0.5);
 
-  // その先は右のカードと一緒に流れる（下端がそろったまま、留まる位置より上へ）
+  // その先は右のカードと一緒に流れる（下端がそろったまま、留まる位置より上へ）。領域の位置は整数に丸められるので、上の
+  // 半分ずつの移動のあとの「留まりが外れるまでの残り」は 10px ちょうどにならない（書体で右のカードの高さが変わり、残りに
+  // 端数が出る）。そこで、最後に動かす前の残りと実際に動いた量を測り、外れてから動いた分（約 40px）だけ上にあることを確かめる
+  const remaining = (await rectOf(ln.right)).bottom - (await rectOf(ln.left)).bottom;
+  const scrollTopOf = () => rd.scroll.evaluate((el) => el.scrollTop);
+  const before = await scrollTopOf();
   await scrollBy(50);
-  expect(Math.abs((await leftTop()) - (stuckTop - 40))).toBeLessThanOrEqual(0.5);
+  const overshoot = (await scrollTopOf()) - before - remaining;
+  expect(overshoot).toBeGreaterThan(30);
+  expect(Math.abs((await leftTop()) - (stuckTop - overshoot))).toBeLessThanOrEqual(0.5);
   expect(
     Math.abs((await rectOf(ln.left)).bottom - (await rectOf(ln.right)).bottom),
   ).toBeLessThanOrEqual(0.5);
