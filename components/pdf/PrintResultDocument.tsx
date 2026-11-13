@@ -1,14 +1,14 @@
-// PDF の本文（07 §9.4、§9.5、11-4 §2.18、11-5 §2.5.3〜§2.5.5）。上半分は結果詳細と同じ部品を印刷の形（ResultDetailBody の
-// variant="print"）で描く: 見出しの塊は「類似分析」「ダウンロード」のボタンを描かずに詰め、比較組織は動かない箱、目次は固定しない形、
-// AI 解説の領域（全画面の PDF で生成済みのときだけ。07 D07-15）は目次と新しいレイアウトの間。非表示の PDF は visibility で評価の箱・
-// 合致度のカード・注意したいリスクのカード・リスクのセクションと目次の「リスク」を描かない。画面の状態は既定（すべて開く・点数の高い順。
-// 画面の状態を PDF に写すのは 11-5 の PR-7.12）、比較の状態は今の initialComparison（比較ありか未選択）。
-// 旧のセクション 5・6 は PR-7.8b まで今のまま後ろに続け、そのレーダー 2 個の描画を待って印を付ける（07 §9.6。作り直しは PR-7.12）
+// PDF の本文（07 §9.4、§9.5、11-4 §2.18、11-5 §2.5.3〜§2.5.5）。結果詳細と同じ部品を印刷の形（ResultDetailBody の variant="print"）で
+// 描く: 見出しの塊は「類似分析」「ダウンロード」のボタンを描かずに詰め、比較組織は動かない箱、目次は固定しない形、AI 解説の領域（全画面の
+// PDF で生成済みのときだけ。07 D07-15）は目次と新しいレイアウトの間、新しいレイアウトは概要〜接し方の 7 セクション（育て方の左のカードは
+// 留めない）。非表示の PDF は visibility で評価の箱・合致度のカード・注意したいリスクのカード・リスクのセクションと目次の「リスク」を
+// 描かない。画面の状態は既定（すべて開く・点数の高い順・第二候補を出さない・接し方のタブはドライビング。画面の状態を PDF に写すのは
+// 11-5 の PR-7.12）、比較の状態は今の initialComparison（比較ありか未選択）。グラフはすべて SVG で描くので、描画完了を待つグラフは無い
+// （expectedCharts は 0。印 data-print-ready はハイドレーションの後の次のフレームで付く。07 §9.6。作り直しは PR-7.12）
 import { PrintReadyProvider } from "./PrintReadyMarker";
 import { AiAnalysisBody } from "@/components/admin/result/AiAnalysisBody";
 import { ComparisonProvider } from "@/components/admin/result/ComparisonProvider";
 import { ResultDetailBody } from "@/components/admin/result/ResultDetailBody";
-import { PRINT_RADAR_COUNT, ResultSections } from "@/components/admin/result/ResultSections";
 import { buildPageMarginCss } from "@/lib/pdf/templates";
 import { ADMIN_TEXTS } from "@/lib/presentation/admin-texts";
 import { formatDateTime } from "@/lib/presentation/format-datetime";
@@ -33,7 +33,7 @@ export function PrintResultDocument(props: {
   return (
     <ComparisonProvider resultId={detail.resultId} initialComparison={comparison}>
       <style dangerouslySetInnerHTML={{ __html: pageMarginCss }} />
-      <PrintReadyProvider expectedCharts={PRINT_RADAR_COUNT}>
+      <PrintReadyProvider expectedCharts={0}>
         <div className="result-detail" data-print-mode={mode}>
           <ResultDetailBody
             view={view}
@@ -50,7 +50,6 @@ export function PrintResultDocument(props: {
               ) : undefined
             }
           />
-          <ResultSections detail={detail} variant="print" />
         </div>
       </PrintReadyProvider>
     </ComparisonProvider>

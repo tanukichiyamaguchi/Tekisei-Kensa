@@ -1,10 +1,11 @@
 // 結果詳細の M7-result-33 目次、M7-result-34 狭い幅（K-22）、M7-result-35 アクセシビリティと焦点の見た目（K-49・K-50）
-// （11-4 §5.3。§2.2・§2.3.2・§2.5・§2.15・§2.17。PR-7.8a の分）。axe は color-contrast も検査し、対象から外すのは押せない状態の表示と
-// 文字のロゴ「適性検査」だけ（expectAccessibleAdmin）。結果詳細の枠 #rd は画面に固定され、11-4 の切り替え（1180・1023・860・760・700・
-// 560px）は画面の幅の @media なので、管理画面の最小幅 1280px（.admin-root。文書の幅だけに効く）を外す PR-7.13a の前でも、画面の幅を
-// 変えれば枠の中は PR-7.13a のあとと同じ幅で並ぶ。そこで枠の中の形（390×844・1000×800・320×640）・焦点の枠・axe は今確かめる。
-// 390×844 で文書と .rd-scroll が横に動かないことだけは、文書が .admin-root の最小幅 1280px（PR-7.13a）、.rd-scroll が新しい
-// レイアウトの後ろに残る旧のセクション 5・6 の ApexCharts の固定幅（PR-7.8b）で横に動くので fixme にする（11 総論 5.1、11-4 §4.4）
+// （11-4 §5.3。§2.2・§2.3.2・§2.5・§2.13・§2.14・§2.15・§2.17。PR-7.8a・PR-7.8b の分）。axe は color-contrast も検査し、対象から外すのは
+// 押せない状態の表示と文字のロゴ「適性検査」だけ（expectAccessibleAdmin）。結果詳細の枠 #rd は画面に固定され、11-4 の切り替え（1180・
+// 1023・860・760・700・560px）は画面の幅の @media なので、管理画面の最小幅 1280px（.admin-root。文書の幅だけに効く）を外す PR-7.13a の
+// 前でも、画面の幅を変えれば枠の中は PR-7.13a のあとと同じ幅で並ぶ。そこで枠の中の形（390×844・1000×800・700×900・320×640）・焦点の
+// 枠・axe は今確かめる。390×844 で .rd-scroll が横に動かないことも今確かめる（PR-7.8b で旧のセクション 5・6 の ApexCharts の固定幅が
+// 無くなった）。文書が横に動かないことだけは、.admin-root の最小幅 1280px（PR-7.13a で外す）で横に動くので fixme にする（11 総論 5.1、
+// 11-4 §4.4）
 import type { Locator, Page } from "@playwright/test";
 
 import {
@@ -19,8 +20,10 @@ import {
   moreTraitsButton,
   openResultDetail,
   rdFold,
+  rdLearn,
   rdPopup,
   rdSection,
+  rdStyle,
   rectOf,
   resultDetail,
   seedName,
@@ -32,9 +35,9 @@ import {
   type AdminOrg,
 } from "../support/admin-ui";
 
-/** PR-7.13a と PR-7.8b の両方が入ってから外す fixme の理由（11 総論 5.1、11-4 §4.4） */
+/** PR-7.13a が入ってから外す fixme の理由（11 総論 5.1、11-4 §4.4） */
 const NARROW_FIXME =
-  "390px では、管理画面の最小幅 1280px を外す PR-7.13a まで文書が、旧のセクション 5・6 の ApexCharts（固定幅 440・484px）を消す PR-7.8b まで .rd-scroll が横に動く（11 総論 5.1、11-4 §4.4）";
+  "390px では、管理画面の最小幅 1280px を外す PR-7.13a まで文書が横に動く（11 総論 5.1、11-4 §4.4）";
 
 /** 目次のリンクと「↑ 先頭へ」、新しいレイアウトの中のボタンの焦点の枠（参照元の rs-nav・rs-v2 の指定。#1F2933 の 2px を 2px 外側） */
 const RS_OUTLINE = {
@@ -66,7 +69,7 @@ async function openConductor(page: Page, org: AdminOrg, query = ""): Promise<str
 
 /** たたんでいるセクションをすべて開く（画面の幅 700px 以下は概要以外がたたまれて始まる。11-4 §2.16） */
 async function openAllSections(page: Page): Promise<void> {
-  for (const id of ["rs-ov", "rs-tr", "rs-rk", "rs-fit", "rs-pf"]) {
+  for (const id of ["rs-ov", "rs-tr", "rs-rk", "rs-fit", "rs-pf", "rs-ln", "rs-ss"]) {
     const fold = rdFold(page, id);
     if ((await fold.getAttribute("aria-expanded")) === "false") {
       await rdSection(page, id).locator(".sec-h h2").click();
@@ -118,8 +121,8 @@ async function expectLandedBelowToc(page: Page, id: string): Promise<void> {
 }
 
 /**
- * M7-result-35 の axe（11-4 §5.3）: 比較未選択・比較あり・2 つのポップアップ・目次の固定の状態で、axe の重大・深刻な違反が無い。
- * 画面の大きさは page の大きさ。セクションはすべて開いて調べる
+ * M7-result-35 の axe（11-4 §5.3）: 比較未選択・比較あり・2 つのポップアップ・第二候補を出して接し方のタブを変えた状態・目次の固定の
+ * 状態で、axe の重大・深刻な違反が無い。画面の大きさは page の大きさ。セクションはすべて開いて調べる
  */
 async function expectAccessibleDetail(page: Page, size: string): Promise<void> {
   const rd = resultDetail(page);
@@ -141,11 +144,78 @@ async function expectAccessibleDetail(page: Page, size: string): Promise<void> {
     await expect(rdPopup(page)).toHaveCount(0);
   }
 
+  // 育て方の第二候補を出し、接し方のタブをエミアブルにした状態（§2.13.4・§2.14.4）
+  await rdLearn(page).secondButton.click();
+  await expect(rdLearn(page).second).toBeVisible();
+  await rdStyle(page).tab("エミアブル").click();
+  await expect(rdStyle(page).tab("エミアブル")).toHaveAttribute("aria-pressed", "true");
+  await expectAccessibleAdmin(page, `第二候補を出しタブをエミアブルにした状態（${size}）`);
+
   await stickToc(page);
   await expectAccessibleAdmin(page, `目次の固定の状態（${size}）`);
 }
 
-test("M7-result-33 目次（1440×900）: スクロールすると固定の状態（氏名の欄と「↑ 先頭へ」、「目次」なし）で、上端はスクロールする領域の上端（縁 + 4px）に留まり、上の 4px を白い影で覆う。今見ているセクションに aria-current、リンクで行き先の先頭が目次の下 16px、「↑ 先頭へ」で先頭に戻る", async ({
+/** 焦点の枠（部品の外側 4px）の矩形 */
+const ringOf = (box: Rect): Rect => ({
+  left: box.left - 4,
+  top: box.top - 4,
+  right: box.right + 4,
+  bottom: box.bottom + 4,
+});
+
+/** 2 つの矩形が重なる（接するだけは重ならない） */
+const overlaps = (a: Rect, b: Rect): boolean =>
+  a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+/** カードの中の要素（SVG の中の図形と文字を除く）の左右が、カードの外形の内側にある（±0.5px）。外に出た要素の class か要素名を返す */
+const outsideOfCard = (card: Locator): Promise<string[]> =>
+  card.evaluate((el) => {
+    const box = el.getBoundingClientRect();
+    return Array.from(el.querySelectorAll("*"))
+      .filter((child) => (child.parentElement?.closest("svg") ?? null) === null)
+      .filter((child) => {
+        const r = child.getBoundingClientRect();
+        return r.width > 0 && (r.left < box.left - 0.5 || r.right > box.right + 0.5);
+      })
+      .map((child) => child.getAttribute("class") ?? child.tagName.toLowerCase());
+  });
+
+/** 育て方・接し方のすべてのカード（左右のカード・関わり方のコツの 4 枚・タイプ別の接し方）で、中の要素がカードの外形の内側にある */
+async function expectInsideLearnStyleCards(page: Page, size: string): Promise<void> {
+  const cards = page.locator("#rs-ln .card, #rs-ss .card");
+  await expect(cards).toHaveCount(9);
+  for (const [i, card] of (await cards.all()).entries()) {
+    expect(await outsideOfCard(card), `育て方・接し方のカード ${i + 1}（${size}）`).toEqual([]);
+  }
+}
+
+/**
+ * 焦点のある部品の焦点の枠（外側 4px）が、固定の状態の目次の下端より下で、.rd-scroll の縁の内側にある（領域を動かす処理は描いた後の
+ * 次のフレームなので、そうなるまで待つ。11-4 §2.2・§2.5・§2.13）
+ */
+async function expectRingVisibleBelowToc(
+  page: Page,
+  target: Locator,
+  label: string,
+): Promise<void> {
+  const rd = resultDetail(page);
+  await expect(target).toBeFocused();
+  await expect
+    .poll(
+      async () => {
+        const ring = ringOf(await rectOf(target));
+        const scroll = await rectOf(rd.scroll);
+        const toc = await rectOf(rd.toc);
+        return ring.top >= toc.bottom - 0.5 && ring.bottom <= scroll.bottom + 0.5;
+      },
+      { message: label },
+    )
+    .toBe(true);
+  await expect(page.locator("#rsn")).toHaveClass("stuck");
+  await expectRingInsideScroll(page, target, label);
+}
+
+test("M7-result-33 目次（1440×900）: スクロールすると固定の状態（氏名の欄と「↑ 先頭へ」、「目次」なし）で、上端はスクロールする領域の上端（縁 + 4px）に留まり、上の 4px を白い影で覆う。今見ているセクションに aria-current、リンク（育て方・接し方を含む 8 つ）で行き先の先頭が目次の下 16px、「↑ 先頭へ」で先頭に戻る", async ({
   page,
   adminOrg,
 }) => {
@@ -182,9 +252,13 @@ test("M7-result-33 目次（1440×900）: スクロールすると固定の状�
   await expect(rd.scroll).toHaveCSS("scroll-padding-top", "4px");
 
   // リンクで移る: 行き先の先頭が目次の下 16px に来て、そのリンクだけに aria-current（URL のハッシュは変えない）
+  await expect(rd.tocLinks).toHaveCount(8);
   for (const [label, id] of [
     ["リスク", "rs-rk"],
     ["組織との相性", "rs-fit"],
+    ["育て方", "rs-ln"],
+    ["接し方", "rs-ss"],
+    ["人物像", "rs-pf"],
     ["16の特性", "rs-tr"],
     ["AI解説", "ai"],
   ] as const) {
@@ -221,7 +295,7 @@ test("M7-result-33 860×900: 固定の状態でも氏名の欄を出さず、「
   await expect(rd.tocLink("人物像")).toHaveAttribute("aria-current", "true");
 });
 
-test("M7-result-34 390×844（枠の中は画面の幅で並ぶ）: 概要・特性の詳細・相性・人物像が 1 列、リスクの札が隠れ棒が下の行、相性の線が下の行、タイプのカードは縦、見出しの塊はプルダウンとボタンが同じ行、新しいレイアウトは横にはみ出さない", async ({
+test("M7-result-34 390×844（枠の中は画面の幅で並ぶ）: 概要・特性の詳細・相性・人物像・育て方・接し方・12 項目・関わり方のコツが 1 列、育て方の左のカードは留めない、リスクの札が隠れ棒が下の行、相性の線が下の行、タイプのカードは縦、見出しの塊はプルダウンとボタンが同じ行、新しいレイアウトは横にはみ出さない", async ({
   page,
   adminOrg,
 }) => {
@@ -238,10 +312,16 @@ test("M7-result-34 390×844（枠の中は画面の幅で並ぶ）: 概要・特
     "#rs2 .detail",
     "#rs2 .fit",
     "#rs2 .prof",
+    "#rs2 .learn",
+    "#rs2 .dl2",
+    "#rs2 .ss",
+    "#rs2 .how",
   ]) {
     expect(await columns(page.locator(selector)), selector).toBe(1);
   }
   await expect(page.locator("#rs-hero .who")).toHaveCSS("flex-direction", "column");
+  // 育て方の左のカードは留めない（760px 以下。§2.13・§2.17）
+  await expect(rdLearn(page).left).toHaveCSS("position", "static");
   // 16の特性の行と目盛の行の列（760px 以下。110px・残り・40px・56px）
   await expect(page.locator("#rs-trc .tr").first()).toHaveCSS(
     "grid-template-columns",
@@ -276,12 +356,14 @@ test("M7-result-34 390×844（枠の中は画面の幅で並ぶ）: 概要・特
   expect(Math.abs(scope.top - download.top)).toBeLessThanOrEqual(0.5);
   expectInside(download, await rectOf(rd.head), "ダウンロード");
 
-  // 新しいレイアウト（#rs2）は横にはみ出さない（文書と .rd-scroll の横の動きは下の fixme）
+  // 新しいレイアウト（#rs2）は横にはみ出さない。育て方・接し方の中の要素もカードの外形の内側（.rd-scroll は下の別のテスト、文書の
+  // 横の動きは下の fixme）
   const layout = await rd.layout.evaluate((el) => ({
     scroll: el.scrollWidth,
     client: el.clientWidth,
   }));
   expect(layout.scroll).toBeLessThanOrEqual(layout.client);
+  await expectInsideLearnStyleCards(page, "390×844");
 
   // ポップアップ: 幅は画面の幅 − 32px（358px）で画面の中央。表（最小幅 480px）は入れ物の中で横に動き、そのときだけ入れ物が
   // 焦点を受ける（tabindex 0・role region・見出しと同じ読み上げ名。11 総論 8.5）
@@ -308,7 +390,7 @@ test("M7-result-34 390×844（枠の中は画面の幅で並ぶ）: 概要・特
   expect(Math.round(wide.right - wide.left)).toBe(800);
 });
 
-test("M7-result-34 1000×800: 特性の詳細が 2 列、概要の上段が 1 列、下段が 2 列で 3 枚目が全幅、組織との相性と人物像が 1 列、リスクの行の列が 1fr・160px・48px・64px", async ({
+test("M7-result-34 1000×800: 特性の詳細が 2 列、概要の上段が 1 列、下段が 2 列で 3 枚目が全幅、組織との相性と人物像が 1 列、リスクの行の列が 1fr・160px・48px・64px。育て方の左は 240px・接し方の左は 250px、12 項目と関わり方のコツは 2 列、左のカードは留まる。4 区分の表は 280px まででマスは折り返さず、はみ出してもカードの外形の内側", async ({
   page,
   adminOrg,
 }) => {
@@ -327,15 +409,68 @@ test("M7-result-34 1000×800: 特性の詳細が 2 列、概要の上段が 1 �
     "grid-template-columns",
     /^\S+ 160px 48px 64px$/,
   );
+
+  // 育て方・接し方（1023px 以下。§2.13・§2.14・§2.17）: 左の列は 240px・250px、12 項目と関わり方のコツは 2 列、左のカードは留まる
+  await expect(page.locator("#rs2 .learn")).toHaveCSS("grid-template-columns", /^240px \S+$/);
+  await expect(page.locator("#rs2 .ss")).toHaveCSS("grid-template-columns", /^250px \S+$/);
+  expect(await columns(page.locator("#rs2 .dl2"))).toBe(2);
+  expect(await columns(page.locator("#rs2 .how"))).toBe(2);
+  await expect(rdLearn(page).left).toHaveCSS("position", "sticky");
+  // 4 区分の表と注記は最大の幅 280px、マスは余白 10px・文字 11px・折り返さない。マスが中身の幅をはみ出しても（文字の幅による。
+  // 参照元の値のまま）カードの外形の内側に収まる
+  const style = rdStyle(page);
+  await expect(page.locator("#rs2 .quad")).toHaveCSS("max-width", "280px");
+  await expect(page.locator("#rs2 .qax")).toHaveCSS("max-width", "280px");
+  for (const cell of await style.quadCells.all()) {
+    await expect(cell).toHaveCSS("padding", "10px");
+    await expect(cell).toHaveCSS("font-size", "11px");
+    await expect(cell).toHaveCSS("white-space", "nowrap");
+  }
+  await expectInsideLearnStyleCards(page, "1000×800");
+
   // 枠の中は横にはみ出さない（1000px は文書の幅 1280px より狭いが、#rd は画面に固定）
-  const scroll = await resultDetail(page).scroll.evaluate((el) => ({
-    scroll: el.scrollWidth,
-    client: el.clientWidth,
-  }));
-  expect(scroll.scroll).toBeLessThanOrEqual(scroll.client);
+  for (const [label, locator] of [
+    [".rd-scroll", resultDetail(page).scroll],
+    ["#rs2", resultDetail(page).layout],
+  ] as const) {
+    const scroll = await locator.evaluate((el) => ({
+      scroll: el.scrollWidth,
+      client: el.clientWidth,
+    }));
+    expect(scroll.scroll, label).toBeLessThanOrEqual(scroll.client);
+  }
 });
 
-test("M7-result-34 320×640（枠の最小幅）: 見出しの塊でプルダウンは幅 180px のまま、「ダウンロード」はプルダウンの下の行で右に寄り（行の間 8px・高さ 44px・文字は 1 行）、どちらも見出しの塊の中に入る", async ({
+test("M7-result-34 700×900（760px 以下）: 育て方・12 項目・接し方・関わり方のコツが 1 列で、育て方の左のカードは留めずに 2 列の先頭と一緒に流れる", async ({
+  page,
+  adminOrg,
+}) => {
+  await page.setViewportSize({ width: 700, height: 900 });
+  await openConductor(page, adminOrg);
+  // 700px 以下は概要以外がたたまれて始まる（§2.16）ので開く
+  await openAllSections(page);
+  for (const selector of ["#rs2 .learn", "#rs2 .dl2", "#rs2 .ss", "#rs2 .how"]) {
+    expect(await columns(page.locator(selector)), selector).toBe(1);
+  }
+  const ln = rdLearn(page);
+  await expect(ln.left).toHaveCSS("position", "static");
+  // 2 列の先頭を、1440px なら留まる位置（領域の上端 + 72px）より 40px 上に出しても、左のカードは先頭と一緒に流れる
+  const rd = resultDetail(page);
+  const stuckTop = (await rectOf(rd.scroll)).top + 4 + 72;
+  await rd.scroll.evaluate(
+    (el, dy) => {
+      el.scrollTop += dy;
+    },
+    (await rectOf(ln.root)).top - (stuckTop - 40),
+  );
+  const root = await rectOf(ln.root);
+  const left = await rectOf(ln.left);
+  expect(Math.abs(left.top - root.top)).toBeLessThanOrEqual(0.5);
+  expect(left.top).toBeLessThan(stuckTop - 30);
+  await expectInsideLearnStyleCards(page, "700×900");
+});
+
+test("M7-result-34 320×640（枠の最小幅）: 見出しの塊でプルダウンは幅 180px のまま、「ダウンロード」はプルダウンの下の行で右に寄り（行の間 8px・高さ 44px・文字は 1 行）、どちらも見出しの塊の中に入る。育て方・接し方は 1 列で、中の要素はカードの外形の内側", async ({
   page,
   adminOrg,
 }) => {
@@ -364,9 +499,20 @@ test("M7-result-34 320×640（枠の最小幅）: 見出しの塊でプルダウ
   expectInside(scope, head, "比較組織のプルダウン");
   expect(scope.right + 10).toBeLessThanOrEqual(head.right + 0.5);
   expectInside(download, head, "ダウンロード");
+
+  // 育て方・接し方（§2.17）: 1 列で、中の要素はカードの外形の内側（4 区分の表のマスは折り返さず、文字の幅によってはカードの中身の
+  // 幅をはみ出すが、カードの内側の余白の中に収まる。参照元の値のまま。11-4 §2.17）。#rs2 と .rd-scroll の横の動きは上半分の
+  // 16の特性の行などによる（11-4 §2.17 の 320×640 のはみ出し）ので、ここでは確かめない
+  await openAllSections(page);
+  await rdLearn(page).secondButton.click();
+  await expect(rdLearn(page).second).toBeVisible();
+  for (const selector of ["#rs2 .learn", "#rs2 .ss", "#rs2 .how"]) {
+    expect(await columns(page.locator(selector)), selector).toBe(1);
+  }
+  await expectInsideLearnStyleCards(page, "320×640");
 });
 
-test("M7-result-35 1440×900: 比較未選択・比較あり・2 つのポップアップ・目次の固定の状態で axe の重大・深刻な違反が無い", async ({
+test("M7-result-35 1440×900: 比較未選択・比較あり・2 つのポップアップ・第二候補とタブ・目次の固定の状態で axe の重大・深刻な違反が無い", async ({
   page,
   adminOrg,
 }) => {
@@ -374,7 +520,7 @@ test("M7-result-35 1440×900: 比較未選択・比較あり・2 つのポップ
   await expectAccessibleDetail(page, "1440×900");
 });
 
-test("M7-result-35 390×844: 比較未選択・比較あり・2 つのポップアップ・目次の固定の状態で axe の重大・深刻な違反が無い", async ({
+test("M7-result-35 390×844: 比較未選択・比較あり・2 つのポップアップ・第二候補とタブ・目次の固定の状態で axe の重大・深刻な違反が無い", async ({
   page,
   adminOrg,
 }) => {
@@ -383,7 +529,7 @@ test("M7-result-35 390×844: 比較未選択・比較あり・2 つのポップ�
   await expectAccessibleDetail(page, "390×844");
 });
 
-test("M7-result-35 名前と状態: プルダウン「比較組織」、目次の nav、並び替え・項目の説明の aria-pressed、たたむの aria-expanded。キーボードだけで並び替え・説明・ポップアップ・たたむを操作できる", async ({
+test("M7-result-35 名前と状態: プルダウン「比較組織」、目次の nav（リンク 8 つ）、並び替え・項目の説明・タブの aria-pressed、たたむの aria-expanded。キーボードだけで並び替え・説明・ポップアップ・たたむ・第二候補・タブを操作できる", async ({
   page,
   adminOrg,
 }) => {
@@ -391,7 +537,7 @@ test("M7-result-35 名前と状態: プルダウン「比較組織」、目次�
   const rd = resultDetail(page);
   await expect(page.getByRole("combobox", { name: "比較組織" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "このページの目次" })).toBeVisible();
-  await expect(rd.toc.locator("a")).toHaveCount(6);
+  await expect(rd.toc.locator("a")).toHaveCount(8);
 
   // 並び替え: Enter と Space
   const byItem = traitSortButtons(page).filter({ hasText: "項目順" });
@@ -437,6 +583,34 @@ test("M7-result-35 名前と状態: プルダウン「比較組織」、目次�
   await expect(fold).toHaveAttribute("aria-expanded", "true");
   await expect(rdSection(page, "rs-rk")).toHaveClass("sec");
 
+  // 第二候補のボタン: Enter で出し、Space で閉じる。焦点はボタンに残り、状態はボタンの文で伝える（§2.13.4）
+  const ln = rdLearn(page);
+  await focusByKeyboard(ln.secondButton);
+  await page.keyboard.press("Enter");
+  await expect(ln.second).toBeVisible();
+  await expect(ln.secondButton).toHaveText("第二候補を閉じる");
+  await expect(ln.secondButton).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(ln.second).toHaveCount(0);
+  await expect(ln.secondButton).toHaveText("第二候補を見る\u3000＞");
+  await expect(ln.secondButton).toBeFocused();
+
+  // 接し方のタブ: 選んでいるタブに aria-pressed="true"。Tab で隣のタブへ移り、Enter と Space で押せる（§2.14.4）
+  const ss = rdStyle(page);
+  await expect(ss.tab("ドライビング")).toHaveAttribute("aria-pressed", "true");
+  await focusByKeyboard(ss.tab("ドライビング"));
+  await page.keyboard.press("Tab");
+  await expect(ss.tab("エクスプレッシブ")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(ss.tab("エクスプレッシブ")).toHaveAttribute("aria-pressed", "true");
+  await expect(ss.tab("ドライビング")).toHaveAttribute("aria-pressed", "false");
+  await page.keyboard.press("Tab");
+  await expect(ss.tab("エミアブル")).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(ss.tab("エミアブル")).toHaveAttribute("aria-pressed", "true");
+  await expect(ss.tab("エクスプレッシブ")).toHaveAttribute("aria-pressed", "false");
+  await expect(ss.tabs.and(page.locator('[aria-pressed="true"]'))).toHaveCount(1);
+
   // 「↑ 先頭へ」: Enter で先頭に戻ると「↑ 先頭へ」は隠れるので、焦点は見出し（h1。輪郭を出さない）に移り、次の Tab は比較組織の
   // プルダウン（焦点が失われない。§2.5）
   await stickToc(page);
@@ -450,7 +624,7 @@ test("M7-result-35 名前と状態: プルダウン「比較組織」、目次�
   await expect(rd.scope).toBeFocused();
 });
 
-test("M7-result-35 焦点の見た目: 「回答一覧に戻る」「ダウンロード」とポップアップの閉じるボタン・表の入れ物は共通の焦点の枠、目次と新しいレイアウトの中のボタンは #1F2933", async ({
+test("M7-result-35 焦点の見た目: 「回答一覧に戻る」「ダウンロード」とポップアップの閉じるボタン・表の入れ物は共通の焦点の枠、目次と新しいレイアウトの中のボタン（第二候補のボタンと接し方のタブを含む）は #1F2933", async ({
   page,
   adminOrg,
 }) => {
@@ -474,6 +648,10 @@ test("M7-result-35 焦点の見た目: 「回答一覧に戻る」「ダウン�
   await focusByKeyboard(rdFold(page, "rs-ov"));
   await expectActiveOutline(page, RS_OUTLINE);
   await focusByKeyboard(traitHelpButton(page, "協力性"));
+  await expectActiveOutline(page, RS_OUTLINE);
+  await focusByKeyboard(rdLearn(page).secondButton);
+  await expectActiveOutline(page, RS_OUTLINE);
+  await focusByKeyboard(rdStyle(page).tab("エミアブル"));
   await expectActiveOutline(page, RS_OUTLINE);
   await stickToc(page);
   await focusByKeyboard(rd.toTop, true);
@@ -527,6 +705,125 @@ test("M7-result-35 焦点の枠の形: 「ダウンロード」と固定の状�
     await focusByKeyboard(rd.toTop, true);
     await expectActiveOutline(page, RS_OUTLINE);
     await expectRingInsideScroll(page, rd.toTop, `↑ 先頭へ（${size}）`);
+  }
+});
+
+test("M7-result-35 留まる左のカードとタブの焦点の枠: 育て方の左のカードが留まる所までスクロールしてから、キーボードで第二候補のボタンに焦点を移すと、焦点の枠の外側 4px が .rd-scroll の縁の内側にあり、留まった目次の下端より下にある（1440×900・1000×800）。接し方のタブの焦点の枠は隣のタブに重ならず、カードの中に収まる（1440×900・390×844）", async ({
+  page,
+  adminOrg,
+}) => {
+  const resultId = await openConductor(page, adminOrg);
+  const rd = resultDetail(page);
+  const ln = rdLearn(page);
+  for (const [width, height] of [
+    [1440, 900],
+    [1000, 800],
+  ] as const) {
+    const size = `${width}×${height}`;
+    await page.setViewportSize({ width, height });
+    await openResultDetail(page, resultId);
+    // 2 列の先頭を、留まる位置（領域の上端 + 72px）より 40px 上に出す（左のカードが留まる）
+    const stuckTop = (await rectOf(rd.scroll)).top + 4 + 72;
+    await rd.scroll.evaluate(
+      (el, dy) => {
+        el.scrollTop += dy;
+      },
+      (await rectOf(ln.root)).top - (stuckTop - 40),
+    );
+    await expect(page.locator("#rsn")).toHaveClass("stuck");
+    expect(Math.abs((await rectOf(ln.left)).top - stuckTop), size).toBeLessThanOrEqual(0.5);
+
+    // 次の部品（接し方の「たたむ」）に画面を動かさずに焦点を置き、Shift+Tab で第二候補のボタンに戻る。ブラウザは部品を見える位置まで
+    // 動かす（カードが領域より高い 1000×800 では、留まりが外れるまで動く）
+    await rdFold(page, "rs-ss").evaluate((el) => {
+      if (el instanceof HTMLElement) el.focus({ preventScroll: true });
+    });
+    await page.keyboard.press("Shift+Tab");
+    await expect(ln.secondButton).toBeFocused();
+    await expectActiveOutline(page, RS_OUTLINE, size);
+    await expectRingVisibleBelowToc(page, ln.secondButton, `第二候補のボタン（${size}）`);
+    expectInside(
+      ringOf(await rectOf(ln.secondButton)),
+      await rectOf(ln.left),
+      `第二候補のボタンの焦点の枠は左のカードの中（${size}）`,
+    );
+  }
+
+  // 接し方のタブ（間 6px・折り返しあり。§2.14.4）: どのタブの焦点の枠（外側 4px）も、隣のタブに重ならず、カードの中に収まる
+  for (const [width, height] of [
+    [1440, 900],
+    [390, 844],
+  ] as const) {
+    const size = `${width}×${height}`;
+    await page.setViewportSize({ width, height });
+    await openResultDetail(page, resultId);
+    await openAllSections(page);
+    const tabs = rdStyle(page).tabs;
+    await expect(tabs).toHaveCount(4);
+    for (let i = 0; i < 4; i += 1) {
+      const label = `タブ ${i + 1}（${size}）`;
+      // 最後のタブは Shift+Tab と Tab で当てる（Tab の先に部品が無い）
+      await focusByKeyboard(tabs.nth(i), i === 3);
+      await expectActiveOutline(page, RS_OUTLINE, label);
+      const ring = ringOf(await rectOf(tabs.nth(i)));
+      for (let j = 0; j < 4; j += 1) {
+        if (j !== i) expect(overlaps(ring, await rectOf(tabs.nth(j))), label).toBe(false);
+      }
+      expectInside(ring, await rectOf(rdStyle(page).mine), label);
+      await expectRingInsideScroll(page, tabs.nth(i), label);
+    }
+  }
+});
+
+test("M7-result-35 第二候補を押したあとの焦点の枠: キーボードで第二候補のボタンを押して出したとき・閉じたときも、焦点はボタンに残り、右のカードの高さが変わって留まる左のカードが動いても、焦点の枠の外側 4px が .rd-scroll の縁の内側で、留まった目次の下端より下にある（1000×800・1024×768・1440×900）", async ({
+  page,
+  adminOrg,
+}) => {
+  const resultId = await openConductor(page, adminOrg);
+  const rd = resultDetail(page);
+  const ln = rdLearn(page);
+  for (const [width, height] of [
+    [1000, 800],
+    [1024, 768],
+    [1440, 900],
+  ] as const) {
+    const size = `${width}×${height}`;
+    await page.setViewportSize({ width, height });
+    await openResultDetail(page, resultId);
+    // 育て方の見出しの行を領域の上端から 300px に出し、「たたむ」から Tab で第二候補のボタンへ移る（左のカードが見える高さより高い
+    // 1000×800・1024×768 では、留まりが外れる所まで動く。§2.13）
+    const fold = rdFold(page, "rs-ln");
+    await rd.scroll.evaluate(
+      (el, dy) => {
+        el.scrollTop += dy;
+      },
+      (await rectOf(fold)).top - ((await rectOf(rd.scroll)).top + 300),
+    );
+    await focusByKeyboard(fold);
+    await page.keyboard.press("Tab");
+    await expectRingVisibleBelowToc(page, ln.secondButton, `Tab で移した（${size}）`);
+
+    // Enter で出す: 右のカードが伸びて左のカードがまた留まり、ボタンが下の縁の外に出るなら、留まりが外れる所（第二候補の終わり）まで動く
+    await page.keyboard.press("Enter");
+    await expect(ln.second).toBeVisible();
+    await expect(ln.secondButton).toHaveText("第二候補を閉じる");
+    await expectRingVisibleBelowToc(page, ln.secondButton, `Enter で出したあと（${size}）`);
+
+    // 次の部品（接し方の「たたむ」）へ Tab で移り（領域が第二候補の終わりの先へ動き、左のカードは留まりが外れる）、Shift+Tab で戻って
+    // Enter で閉じる: 右のカードが縮んで左のカードが上の縁の外へ動いても、目次の下 4px まで戻る
+    await page.keyboard.press("Tab");
+    await expect(rdFold(page, "rs-ss")).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expectRingVisibleBelowToc(page, ln.secondButton, `Shift+Tab で戻った（${size}）`);
+    await page.keyboard.press("Enter");
+    await expect(ln.second).toHaveCount(0);
+    await expect(ln.secondButton).toHaveText("第二候補を見る　＞");
+    await expectRingVisibleBelowToc(page, ln.secondButton, `Enter で閉じたあと（${size}）`);
+
+    // Space でもう一度出しても同じ
+    await page.keyboard.press("Space");
+    await expect(ln.second).toBeVisible();
+    await expectRingVisibleBelowToc(page, ln.secondButton, `Space で出したあと（${size}）`);
   }
 });
 
@@ -661,28 +958,41 @@ test("M7-result-35 焦点の枠の形: 目次のリンク（固定でない・�
   await openResultDetail(page, resultId, "?scope=organization");
   const overflow = await links.evaluate((el) => el.scrollWidth > el.clientWidth);
   expect(overflow).toBe(true);
-  await expectInnerLinkRing(rd.tocLink("人物像"), "目次の右端のリンク（390、固定でない）");
+  await expectInnerLinkRing(rd.tocLink("接し方"), "目次の右端のリンク（390、固定でない）");
   await expectInnerLinkRing(rd.tocLink("AI解説"), "目次の左端のリンク（390、固定でない）");
   await stickToc(page);
-  await expectInnerLinkRing(rd.tocLink("人物像"), "目次の右端のリンク（390、固定の状態）");
+  await expectInnerLinkRing(rd.tocLink("接し方"), "目次の右端のリンク（390、固定の状態）");
   await expectInnerLinkRing(rd.tocLink("AI解説"), "目次の左端のリンク（390、固定の状態）");
 });
 
-// ページ全体の狭い幅。PR-7.13a と PR-7.8b の両方が入ってから fixme を外す（11-4 §5.3 の M7-result-34 のページ全体の分、§2.17）
-test.describe("ページ全体の狭い幅（390×844）", () => {
-  test.fixme(true, NARROW_FIXME);
-
-  test("M7-result-34 390×844: 文書とスクロールする領域が横に動かない", async ({
-    page,
-    adminOrg,
-  }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
-    await openConductor(page, adminOrg, "?scope=organization");
-    await expectNoHorizontalScroll(page, "文書（390×844）");
+// 390×844 のスクロールする領域と文書の横の動き（11-4 §5.3 の M7-result-34 のページ全体の分、§2.17・§4.4）。.rd-scroll は、横に
+// 動かしていた旧のセクション 5・6 の ApexCharts の固定幅が PR-7.8b で無くなったので今確かめ、文書は PR-7.13a が入ってから fixme を外す
+test("M7-result-34 390×844: スクロールする領域 .rd-scroll が横に動かない（すべて開き、第二候補を出した状態）", async ({
+  page,
+  adminOrg,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openConductor(page, adminOrg, "?scope=organization");
+  await openAllSections(page);
+  const expectNoScrollX = async (label: string) => {
     const scroll = await resultDetail(page).scroll.evaluate((el) => ({
       scroll: el.scrollWidth,
       client: el.clientWidth,
     }));
-    expect(scroll.scroll).toBeLessThanOrEqual(scroll.client);
+    expect(scroll.scroll, label).toBeLessThanOrEqual(scroll.client);
+  };
+  await expectNoScrollX(".rd-scroll（390×844）");
+  await rdLearn(page).secondButton.click();
+  await expect(rdLearn(page).second).toBeVisible();
+  await expectNoScrollX(".rd-scroll（390×844・第二候補を出した状態）");
+});
+
+test.describe("ページ全体の狭い幅（390×844）", () => {
+  test.fixme(true, NARROW_FIXME);
+
+  test("M7-result-34 390×844: 文書が横に動かない", async ({ page, adminOrg }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openConductor(page, adminOrg, "?scope=organization");
+    await expectNoHorizontalScroll(page, "文書（390×844）");
   });
 });

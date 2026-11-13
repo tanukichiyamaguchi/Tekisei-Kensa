@@ -258,13 +258,13 @@ describe("X-07 resolveTraitDetails が付録C §2 の表と一致（転記漏れ
     ]);
   }
 
+  // 5 カテゴリを常に返す（本人のタイプに当たる文が 0 件のカテゴリは空の配列。結果詳細の特性の詳細は 5 枚を出す。11-4 §2.9・§3.5）
   it.each(APTITUDE_TYPE_KEYS)("%s", (type) => {
-    const want = [...expected.entries()]
-      .map(([label, rows]) => ({
-        label,
-        sentences: rows.filter((r) => r.types.includes(type)).map((r) => r.text),
-      }))
-      .filter((g) => g.sentences.length > 0);
+    const want = [...expected.entries()].map(([label, rows]) => ({
+      label,
+      sentences: rows.filter((r) => r.types.includes(type)).map((r) => r.text),
+    }));
+    expect(want).toHaveLength(5);
     expect(
       resolveTraitDetails(type).map((g) => ({ label: g.label, sentences: g.sentences })),
     ).toEqual(want);

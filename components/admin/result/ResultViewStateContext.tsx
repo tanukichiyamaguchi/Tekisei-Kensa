@@ -4,7 +4,9 @@
 // （PR-7.12 のダウンロードのポップアップが読んで PDF の要求に付ける）、useResultViewActions() は操作を返す。
 // 画面の形（variant="screen"）は、たたみ方と並びを result-ui-memory.ts のモジュールの変数から始め、変えるたびにそこにも書く
 // （別の人の結果に移っても保ち、ページを読み込み直すと戻る。§2.8.6・§2.16）。項目の説明・第二候補・接し方のタブは人ごとに初めから
-// （ResultDetailBody ごと key で作り直す。§2.1）。サーバで描く最初の HTML（すべて開く・点数の高い順）と、ページを読み込んだ直後の
+// （モジュールの変数に書かず、ResultDetailBody ごと key で作り直す。§2.1）。第二候補とタブは比較組織を変えても保つ（§2.13.4・§2.14.4。
+// 項目の説明は、比較の状態が変わると ResultLayout が閉じる。§2.8.4）。
+// サーバで描く最初の HTML（すべて開く・点数の高い順・第二候補を閉じる・タブはドライビング）と、ページを読み込んだ直後の
 // 初めの状態は同じで、ハイドレーションの食い違いは起きない（画面の幅 700px 以下のたたみ方は描いた直後に ResultLayout が決める）。
 // 印刷の形（variant="print"）は initialViewState（省くと既定）で始め、モジュールの変数を読まず書かない。保存はしない（11-4 §3.1）
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
@@ -17,7 +19,7 @@ import {
   type ResultSectionId,
   type ResultViewState,
 } from "@/lib/presentation/result-view-state";
-import type { TraitKey } from "@/lib/scoring/types";
+import type { SocialStyleKey, TraitKey } from "@/lib/scoring/types";
 
 /** 部品の描き方: 結果詳細の画面か、PDF の印刷用ページ（11-4 §2.18。11-5） */
 export type ResultDetailVariant = "screen" | "print";
@@ -33,6 +35,10 @@ export interface ResultViewActions {
   readonly setTraitSort: (order: TraitSortOrder) => void;
   /** 開いている項目の説明（null で閉じる。§2.8.4） */
   readonly setTraitHelp: (key: TraitKey | null) => void;
+  /** 育て方の第二候補を出すか（第二候補のボタン。§2.13.4） */
+  readonly setSecondOpen: (open: boolean) => void;
+  /** 接し方のタブ（見ている人のスタイル。§2.14.4） */
+  readonly setViewerStyle: (style: SocialStyleKey) => void;
 }
 
 interface ResultViewStateValue {
@@ -49,6 +55,8 @@ const ResultViewStateContext = createContext<ResultViewStateValue>({
     setFoldedAll: noop,
     setTraitSort: noop,
     setTraitHelp: noop,
+    setSecondOpen: noop,
+    setViewerStyle: noop,
   },
 });
 
@@ -127,6 +135,10 @@ export function ResultViewStateProvider(props: {
           setState((current) => Object.freeze({ ...current, traitSort: order }));
         },
         setTraitHelp: (key) => setState((current) => Object.freeze({ ...current, traitHelp: key })),
+        setSecondOpen: (open) =>
+          setState((current) => Object.freeze({ ...current, secondOpen: open })),
+        setViewerStyle: (style) =>
+          setState((current) => Object.freeze({ ...current, viewerStyle: style })),
       },
     };
   }, [state, screen]);

@@ -1,8 +1,8 @@
 "use client";
-// 新しいレイアウトの根 #rs2（11-4 §2.1・§2.2・§2.7〜§2.12・§2.16）。比較の状態（useComparison）と画面の状態（ResultViewStateContext）を、
-// 概要・16の特性・リスク・組織との相性・人物像の 5 つのセクションに props で配る（育て方・接し方は PR-7.8b。それまでは旧のセクション 5・6 が
-// #rs2 の後ろに残る）。#rs2 に比較の状態 data-comparison（none・loading・ready・empty・error）を付ける（E2E と印刷用ページの待ち合わせ用。
-// 見た目には使わない）。非表示の PDF（visibility.showRisks が偽）はリスクのセクションを描かない（§2.18）。
+// 新しいレイアウトの根 #rs2（11-4 §2.1・§2.2・§2.7〜§2.14・§2.16）。比較の状態（useComparison）と画面の状態（ResultViewStateContext）を、
+// 概要・16の特性・リスク・組織との相性・人物像・育て方・接し方の 7 つのセクションに props で配る。#rs2 に比較の状態 data-comparison
+// （none・loading・ready・empty・error）を付ける（E2E と印刷用ページの待ち合わせ用。見た目には使わない）。非表示の PDF
+// （visibility.showRisks が偽）はリスクのセクションを描かない（§2.18）。
 // 画面の形だけ: 2 つのポップアップを #rs2 の外（後ろ）に描き（§2.2）、描いた直後にたたみ方がまだ決まっていなければ、画面の幅 700px 以下で
 // 概要以外をたたんだ状態から始める（§2.16。以後は result-ui-memory.ts で保つ）。比較の状態（種類と比較組織）が前と変わったら、
 // 項目の説明を閉じる（最初の描画では閉じない。§2.8.4）。人が替わるときは ResultDetailBody ごと key={resultId} で作り直す（§2.1）
@@ -17,9 +17,11 @@ import {
   type ResultDetailVariant,
 } from "./ResultViewStateContext";
 import { FitSection } from "./sections/FitSection";
+import { LearnSection } from "./sections/LearnSection";
 import { OverviewSection } from "./sections/OverviewSection";
 import { ProfileSection } from "./sections/ProfileSection";
 import { RiskSection } from "./sections/RiskSection";
+import { StyleSection } from "./sections/StyleSection";
 import { TraitsSection } from "./sections/TraitsSection";
 import { TraitHighlightPopups, type TraitHighlightSide } from "./TraitHighlightPopups";
 import type { PdfSectionVisibility } from "@/lib/pdf/visibility";
@@ -30,13 +32,11 @@ import { RESULT_SECTION_IDS, type ResultSectionId } from "@/lib/presentation/res
 /** 初めのたたみ方を決める画面の幅（§2.16。700px 以下は概要以外をたたむ） */
 const NARROW_FOLD_QUERY = "(max-width: 700px)";
 
-/** PR-7.8a で描くセクション（育て方 rs-ln・接し方 rs-ss は PR-7.8b）。非表示の PDF はリスクを描かない */
+/** 描くセクション（RESULT_SECTION_IDS の順の 7 つ。非表示の PDF はリスクを描かない） */
 export function renderedSectionIds(
   visibility: Pick<PdfSectionVisibility, "showRisks">,
 ): readonly ResultSectionId[] {
-  return (["rs-ov", "rs-tr", "rs-rk", "rs-fit", "rs-pf"] as const).filter(
-    (id) => id !== "rs-rk" || visibility.showRisks,
-  );
+  return RESULT_SECTION_IDS.filter((id) => id !== "rs-rk" || visibility.showRisks);
 }
 
 /** 比較の状態のかぎ（種類と比較組織。変わったら項目の説明を閉じる） */
@@ -134,6 +134,26 @@ export function ResultLayout(props: {
               return section(id, <FitSection view={view} comparison={comparison} />);
             case "rs-pf":
               return section(id, <ProfileSection view={view} />);
+            case "rs-ln":
+              return section(
+                id,
+                <LearnSection
+                  view={view}
+                  viewState={viewState}
+                  actions={actions}
+                  variant={variant}
+                />,
+              );
+            case "rs-ss":
+              return section(
+                id,
+                <StyleSection
+                  view={view}
+                  viewState={viewState}
+                  actions={actions}
+                  variant={variant}
+                />,
+              );
             default:
               return null;
           }

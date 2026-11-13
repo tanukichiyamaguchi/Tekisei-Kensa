@@ -21,30 +21,6 @@ body {
   --admin-content-max-width: 1200px;
   --admin-gutter: 32px;
 
-  /* グラフ系列（付録E §1、§2 の取得値） */
-  --chart-subject: #00a2ff;
-  --chart-comparison: #14f584;
-
-  /* 5 段階の値域色（付録C §7。橙のみ取得値、他は設計判断 D06-03） */
-  --band-very-low: #8ecae6;
-  --band-low: #2e9e5b;
-  --band-middle: #d4a600;
-  --band-high: #ff8000;
-  --band-very-high: #d32f2f;
-
-  /* 信頼係数専用（高いほど緑系。§5.2、D06-04） */
-  --reliability-very-high: #1b7f4b;
-  --reliability-high: #7cb342;
-
-  /* ソーシャルスタイル（付録E §6 の取得値） */
-  --style-driving: rgb(149, 112, 161);
-  --style-expressive: rgb(229, 179, 83);
-  --style-analytical: rgb(65, 166, 123);
-  --style-amiable: rgb(65, 148, 175);
-
-  /* ゲージ */
-  --gauge-track: #e5e7eb;
-
   min-height: 100vh;
   min-width: 1280px; /* 1280px 未満は横スクロール（06 D06-02） */
   background: var(--admin-bg);
@@ -390,11 +366,6 @@ body {
   font-size: 12px;
 }
 
-/* ---- グラフ部品（06 §6） */
-.radar-chart {
-  display: inline-block;
-}
-
 /* ---- E-01（利用不可） */
 .admin-unavailable {
   display: flex;
@@ -405,7 +376,9 @@ body {
   text-align: center;
 }
 
-/* ---- 結果詳細（06 §3.5） */
+/* ---- 結果詳細の AI 解説の領域（今の AiAnalysisSection と印刷の AI 解説の塊。.result-section と中の .panel・.ai-analysis*・.spinner。
+   PR-7.9 で作り直す）とダウンロードのポップアップ（.download-options*）、ほかの画面と共通の小さな指定（.muted・.small・.pre-line・
+   Illustration の .illustration・.visually-hidden）。結果詳細の本文は components/admin/result/result-detail.css（11-4 別表D） */
 .muted {
   color: var(--admin-text-muted);
 }
@@ -433,36 +406,6 @@ body {
   font-size: 14px;
   margin: 12px 0 4px;
 }
-.result-grid {
-  display: grid;
-  gap: 16px;
-}
-.result-grid > .panel {
-  margin-bottom: 0;
-}
-.result-grid--7-5 {
-  grid-template-columns: 7fr 5fr;
-}
-.result-grid--5-7 {
-  grid-template-columns: 5fr 7fr;
-}
-.result-grid + .panel {
-  margin-top: 16px;
-}
-.panel__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.panel__header h3 {
-  margin: 0;
-}
-.type-card__name {
-  margin: 8px 0 0;
-  font-size: 18px;
-  font-weight: 700;
-}
 .illustration {
   display: block;
   object-fit: contain;
@@ -475,25 +418,6 @@ body {
   border-radius: var(--admin-radius);
   background: var(--admin-primary-soft);
   text-align: center;
-}
-.style-card {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  margin-bottom: 12px;
-}
-.guide-list {
-  margin: 12px 0 0;
-}
-.guide-list__item {
-  padding: 8px 0;
-  border-bottom: 1px solid var(--admin-border);
-}
-.guide-list__item dt {
-  font-weight: 700;
-}
-.guide-list__item dd {
-  margin: 4px 0 0;
 }
 .admin-root .visually-hidden {
   position: absolute;
@@ -554,11 +478,6 @@ body {
 .ai-analysis__verdict .badge {
   font-size: 13px;
   padding: 2px 10px;
-}
-/* 軸ラベルがグラフ領域の外にはみ出しても切れないようにする（資質レーダーの「専門追求型」など） */
-.radar-chart .apexcharts-canvas,
-.radar-chart .apexcharts-svg {
-  overflow: visible;
 }
 
 /* ---- 組織内分類・在籍・退職（11-3 §2.22）。クラス名の接頭辞は ob-。参照元の ob-map の CSS を写し、セレクタを改めた（#obm → .ob-root、

@@ -102,7 +102,7 @@ Firebase プロジェクトは `tekisei-kensa-697c4` の 1 つだけで運用し
 - `lib/services/` — API 共通処理（`handle()`、エラー、監査ログ、レート制限）と Route Handler の業務処理。基本設計 04
 - `app/` — Next.js（App Router）。受検者画面 `app/(respondent)/exam/**`、受検者 API `app/api/v1/respondent/**`、認証 `/auth/*`、管理画面 `app/(admin)/admin/**`、管理者 API `app/api/v1/admin/**`
 - `components/respondent/` — 受検者画面の部品（基本設計 05 §3）
-- `components/admin/`・`components/charts/`・`components/ui/` — 管理画面の部品、グラフ（ApexCharts のレーダーと自前 SVG のゲージ等）、汎用部品（基本設計 06）
+- `components/admin/`・`components/charts/`・`components/ui/` — 管理画面の部品、グラフ（自作の SVG のレーダー。11-4）、汎用部品（基本設計 06）
 - `public/fonts/` — PDF 用の日本語フォント Noto Sans JP（SIL Open Font License。`OFL.txt` 同梱）
 - `public/images/` — 適性タイプ・資質・ソーシャルスタイル・立ち位置のイラスト（SVG。10 K-05 により実装者が作成。同名のファイルで差し替え可能）
 - `firebase/` — Firebase の設定（`firebase.json`、ルール（全拒否）、インデックス）

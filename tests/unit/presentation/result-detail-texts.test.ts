@@ -1,27 +1,35 @@
 // M7-result-16（RESULT_DETAIL_TEXTS の分。11-4 §5.1）と、結果詳細の表示用の定数（11-4 §3.4: RISK_RESULT_LABELS・RESULT_SECTIONS・
-// TRAIT_ICONS・DETAIL_CATEGORY_ICONS とアイコンの名前）。文言は 11-4 §2（仕様）にそのままの文字で書かれていること（差し込みのある
-// 文言は §2.20 の形に見本の値を入れたものと同じになること）、K-19 で置き換える語が無いこと、参照元の文字（〜・—・＞・全角空白）の
-// ままであることを確かめる。定数の期待値は 11-4 §2.2・§2.9・§2.10・§2.19・別表E を読んで作る（組織内分類の M7-zaiseki-04 と同じ
-// 書き方）。文言マスタ（別表A〜C）の確かめは tests/unit/masters/texts.test.ts。接し方の見出しの確かめは PR-7.8b
+// TRAIT_ICONS・DETAIL_CATEGORY_ICONS とアイコンの名前、育て方の LEARN_ITEM_GROUPS、接し方の STYLE_QUADRANTS）。文言は 11-4 §2（仕様）
+// にそのままの文字で書かれていること（差し込みのある文言は §2.20 などの形に見本の値を入れたものと同じになること）、K-19 で置き換える
+// 語が無く、接し方の見出しが「あなた（責任者・上司）のタイプ別の接し方」であること、参照元の文字（〜・—・＞・×・全角空白）のまま
+// であることを確かめる。定数の期待値は 11-4 §2.2・§2.9・§2.10・§2.13.3・§2.14.1・§2.19・別表E を読んで作る（組織内分類の
+// M7-zaiseki-04 と同じ書き方）。文言マスタ（別表A〜C）の確かめは tests/unit/masters/texts.test.ts
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
 import { RISK_DEFINITIONS } from "@/lib/masters/indicators/risks";
+import { SOCIAL_STYLE_DEFINITIONS } from "@/lib/masters/indicators/social-styles";
 import { TRAIT_DEFINITIONS } from "@/lib/masters/indicators/traits";
-import { TRAIT_DETAIL_CATEGORY_KEYS } from "@/lib/masters/texts";
+import {
+  DEVELOPMENT_GUIDE_ITEM_KEYS,
+  DEVELOPMENT_GUIDE_ITEMS,
+  TRAIT_DETAIL_CATEGORY_KEYS,
+} from "@/lib/masters/texts";
 import { ADMIN_TEXTS } from "@/lib/presentation/admin-texts";
 import {
   DETAIL_CATEGORY_ICONS,
+  LEARN_ITEM_GROUPS,
   RESULT_DETAIL_TEXTS as T,
   RESULT_ICON_NAMES,
   RESULT_SECTIONS,
   RISK_RESULT_LABELS,
+  STYLE_QUADRANTS,
   TRAIT_ICONS,
 } from "@/lib/presentation/result-detail-texts";
 import { RESULT_SECTION_IDS } from "@/lib/presentation/result-view-state";
-import { RISK_KEYS, TRAIT_KEYS } from "@/lib/scoring/types";
+import { RISK_KEYS, SOCIAL_STYLE_KEYS, TRAIT_KEYS } from "@/lib/scoring/types";
 
 const SPEC = readFileSync(
   fileURLToPath(
@@ -142,6 +150,31 @@ const TEMPLATES: ReadonlyArray<
     "{軸}: {左の言葉} から {右の言葉} のうち {位置}",
     { 軸: "適応する環境", 左の言葉: "個人優先型", 右の言葉: "組織優先型", 位置: 62 },
   ],
+  ["learn.senseX", T.learn.senseX("視覚"), "× 優位感覚「{短い名前}」", { 短い名前: "視覚" }],
+  [
+    "learn.senseTag",
+    T.learn.senseTag("視覚（Visual）"),
+    "優位感覚：{全文}",
+    { 全文: "視覚（Visual）" },
+  ],
+  [
+    "learn.imageCaption",
+    T.learn.imageCaption("視覚"),
+    "優位感覚「{短い名前}」のイメージ画像",
+    { 短い名前: "視覚" },
+  ],
+  [
+    "learn.secondSense",
+    T.learn.secondSense("言語感覚（Auditory Digital）"),
+    "\u3000優位感覚：{全文}", // 全角空白から
+    { 全文: "言語感覚（Auditory Digital）" },
+  ],
+  [
+    "style.catchCopy",
+    T.style.catchCopy("周りの力になりたい。頼られると嬉しい"),
+    "「{キャッチ}」",
+    { キャッチ: "周りの力になりたい。頼られると嬉しい" },
+  ],
 ];
 
 /** 見本の値で呼んだ文言も含めた、結果詳細の文言のすべて */
@@ -151,6 +184,8 @@ const ALL_TEXTS = [
   T.title("テストテスト 01"),
   ...stringLeaves(RISK_RESULT_LABELS),
   ...RESULT_SECTIONS.flatMap((s) => [s.title, s.description, s.descriptionReady]),
+  ...LEARN_ITEM_GROUPS.flatMap((g) => [g.title, ...g.items.map((item) => item.label)]),
+  ...STYLE_QUADRANTS.flatMap((q) => [q.name, q.kind]),
 ];
 
 describe("M7-result-16 RESULT_DETAIL_TEXTS（11-4 §2.20）", () => {
@@ -183,6 +218,32 @@ describe("M7-result-16 RESULT_DETAIL_TEXTS（11-4 §2.20）", () => {
     }
   });
 
+  it("接し方の見出しは「あなた（責任者・上司）のタイプ別の接し方」（参照元: あなた（院長・上司）のタイプ別の接し方。K-19）", () => {
+    expect(T.style.mine).toBe("あなた（責任者・上司）のタイプ別の接し方");
+    expect(SECTION_2).toContain("見出し「あなた（責任者・上司）のタイプ別の接し方」");
+    expect(between(SPEC, "### 0.5 ", "### 0.6 ")).toContain(
+      "| 接し方の下のカードの見出し | あなた（責任者・上司）のタイプ別の接し方 | あなた（院長・上司）のタイプ別の接し方 |",
+    );
+  });
+
+  it("育て方と接し方の差し込みの例が 11-4 §2.13・§2.14 の例と同じ（第一候補の名前の下の行・札・絵の札・第二候補の優位感覚・キャッチ）", () => {
+    const learn = between(SPEC, "### 2.13 ", "### 2.14 ");
+    expect(learn).toContain(`例 ${T.learn.senseX("視覚")}）`);
+    expect(learn).toContain(`例 ${T.learn.senseTag("視覚（Visual）")}）`);
+    expect(learn).toContain(`札「${T.learn.imageCaption("{短い名前}")}」`);
+    expect(learn).toContain(`「${T.learn.secondSense("{第二候補の優位感覚の全文}")}」`);
+    expect(between(SPEC, "#### 2.14.2 ", "#### 2.14.3 ")).toContain(
+      `キャッチは「${T.style.catchCopy("{キャッチ}")}」の形`,
+    );
+    // 見出しの行の小さい行の区切り（§2.14.2 の例「自己主張：弱／感情表出：強{区切り}協調派{区切り}マザー・テレサ」）
+    expect(["自己主張：弱／感情表出：強", "協調派", "マザー・テレサ"].join(T.style.separator)).toBe(
+      "自己主張：弱／感情表出：強\u3000・\u3000協調派\u3000・\u3000マザー・テレサ",
+    );
+    expect(SECTION_2).toContain(
+      ["自己主張：弱／感情表出：強", "協調派", "マザー・テレサ"].join(T.style.separator),
+    );
+  });
+
   it("2 つ目の凡例と吹き出しは「サロン平均」（参照元: 医院平均。K-19）", () => {
     expect(T.traits.legendAverage("組織全体")).toBe("サロン平均（組織全体）");
     expect(T.traits.legendAverageNone).toBe("サロン平均（右上で比較組織を選ぶと表示されます）");
@@ -190,7 +251,7 @@ describe("M7-result-16 RESULT_DETAIL_TEXTS（11-4 §2.20）", () => {
     expect(T.traits.legendAverageNone).toBe(`サロン平均（${T.noComparison.none}）`);
   });
 
-  it("参照元の文字のまま: 〜 は波ダッシュ（U+301C）、— は全角ダーシ（U+2014）、＞ と空白は全角", () => {
+  it("参照元の文字のまま: 〜 は波ダッシュ（U+301C）、— は全角ダーシ（U+2014）、＞ と空白は全角、× は U+00D7、矢印は U+2190・U+2192", () => {
     expect(T.risk.note).toBe(
       "色分けの目安：20％未満 低い／20\u301C40％ やや低い／40\u301C60％ 注意／60％以上 高い",
     );
@@ -204,6 +265,16 @@ describe("M7-result-16 RESULT_DETAIL_TEXTS（11-4 §2.20）", () => {
     expect(T.overview.big("反省力", "7")).toBe("反省力\u30007");
     expect(T.fold.mark).toBe("\u25B4");
     expect(T.traits.tipMark).toBe("\u25CF");
+    // 育て方・接し方: 「第二候補を見る」の後ろは全角空白と全角の「＞」、「×」は U+00D7、矢印は U+2190・U+2192、区切りは全角空白・中黒・全角空白
+    expect(T.learn.showSecond).toBe("第二候補を見る\u3000\uFF1E");
+    expect(T.learn.senseX("視覚")).toBe("\u00D7 優位感覚「視覚」");
+    expect(T.learn.secondSense("視覚（Visual）")).toBe("\u3000優位感覚：視覚（Visual）");
+    expect(T.style.ngMark).toBe("\u00D7");
+    expect([T.style.assertLow, T.style.assertHigh]).toEqual([
+      "\u2190 主張が控えめ",
+      "主張が強い \u2192",
+    ]);
+    expect(T.style.separator).toBe("\u3000\u30FB\u3000");
   });
 
   it("信頼係数のカードの一文は §2.7.4 の表のとおり", () => {
@@ -304,11 +375,78 @@ describe("（ID なし）結果詳細の表示用の定数（11-4 §3.4）", () 
     }
   });
 
+  it("LEARN_ITEM_GROUPS は §2.13.3 の表（区切り・項目の順・マスタのキー・アイコン）と一致する", () => {
+    // 区切りの列は、区切りの最初の行にだけ書かれている（ほかの行は空のセル）
+    const rows = [
+      ...between(SPEC, "#### 2.13.3 ", "#### 2.13.4 ").matchAll(
+        /^\|(.*?)\| (.+?) \| `(\w+)` \| (\w+) \|$/gm,
+      ),
+    ];
+    expect(rows).toHaveLength(12);
+    const expected: Array<{
+      title: string;
+      items: Array<{ key: string; label: string; icon: string }>;
+    }> = [];
+    for (const [, group, label, key, icon] of rows) {
+      if (group!.trim() !== "") expected.push({ title: group!.trim(), items: [] });
+      expected.at(-1)!.items.push({ key: key!, label: label!, icon: icon! });
+    }
+    expect(expected.map((g) => [g.title, g.items.length])).toEqual([
+      ["教え方・話し方", 4],
+      ["人となり", 8],
+    ]);
+    expect(LEARN_ITEM_GROUPS).toEqual(expected);
+  });
+
+  it("LEARN_ITEM_GROUPS の名前は育成方法のマスタの項目名と同じ。優位感覚・本タイプへのアプローチを足すと 14 項目すべて。アイコンは 25 の名前の中", () => {
+    const masterLabels = new Map(DEVELOPMENT_GUIDE_ITEMS.map((item) => [item.key, item.label]));
+    const items = LEARN_ITEM_GROUPS.flatMap((group) => group.items);
+    expect(items).toHaveLength(12);
+    for (const item of items) {
+      expect(item.label, item.key).toBe(masterLabels.get(item.key));
+      expect(RESULT_ICON_NAMES, item.key).toContain(item.icon);
+    }
+    expect([...items.map((item) => item.key), "dominant_sense", "approach"].sort()).toEqual(
+      [...DEVELOPMENT_GUIDE_ITEM_KEYS].sort(),
+    );
+    // 区切りの見出しは §2.20 の育て方の文言
+    expect(between(SECTION_2_20, "| 育て方 |", "\n")).toContain(
+      LEARN_ITEM_GROUPS.map((group) => group.title).join("／"),
+    );
+  });
+
+  it("STYLE_QUADRANTS は §2.14.1 の表（左上・右上・左下・右下の名前・〇〇派・揃え）と一致し、名前はソーシャルスタイルのカタカナ名", () => {
+    const rows = [
+      ...between(SPEC, "#### 2.14.1 ", "#### 2.14.2 ").matchAll(
+        /^\| (左上|右上|左下|右下) \| (\S+) \| (\S+) \| (左|右) \|$/gm,
+      ),
+    ].map((m) => [m[1], m[2], m[3], m[4]]);
+    expect(rows.map(([position]) => position)).toEqual(["左上", "右上", "左下", "右下"]);
+    const keyByKatakana = new Map(SOCIAL_STYLE_DEFINITIONS.map((s) => [s.labelKatakana, s.key]));
+    expect(STYLE_QUADRANTS).toEqual(
+      rows.map(([, name, kind, align]) => ({
+        key: keyByKatakana.get(name!),
+        name,
+        kind,
+        align: align === "左" ? "left" : "right",
+      })),
+    );
+    expect(STYLE_QUADRANTS.map((q) => q.key).sort()).toEqual([...SOCIAL_STYLE_KEYS].sort());
+  });
+
   it("定数は書き換えられない", () => {
     expect(Object.isFrozen(RISK_RESULT_LABELS)).toBe(true);
     expect(Object.isFrozen(RESULT_SECTIONS)).toBe(true);
     expect(RESULT_SECTIONS.every((s) => Object.isFrozen(s))).toBe(true);
     expect(Object.isFrozen(TRAIT_ICONS)).toBe(true);
     expect(Object.isFrozen(DETAIL_CATEGORY_ICONS)).toBe(true);
+    expect(Object.isFrozen(LEARN_ITEM_GROUPS)).toBe(true);
+    for (const group of LEARN_ITEM_GROUPS) {
+      expect(Object.isFrozen(group)).toBe(true);
+      expect(Object.isFrozen(group.items)).toBe(true);
+      expect(group.items.every((item) => Object.isFrozen(item))).toBe(true);
+    }
+    expect(Object.isFrozen(STYLE_QUADRANTS)).toBe(true);
+    expect(STYLE_QUADRANTS.every((q) => Object.isFrozen(q))).toBe(true);
   });
 });

@@ -388,6 +388,38 @@ export const moreTraitsButton = (page: Page, side: "high" | "low"): Locator =>
 /** 開いている「ほかの特性が高い／低い場合」のポップアップ（dialog.rd-pop。閉じたポップアップの要素も DOM に残る） */
 export const rdPopup = (page: Page): Locator => page.locator("dialog.rd-pop[open]");
 
+/** 育て方の 2 列 #rs-learn と第二候補 #rs-ln2（11-4 §2.13。要素の id は §2.1、クラスは別表D の 12） */
+export const rdLearn = (page: Page) => ({
+  root: page.locator("#rs-learn"),
+  /** 左のカード（育成タイプ・優位感覚・絵・小さいレーダー・資質の割合。1440px ではスクロールする領域の上端から 72px に留まる） */
+  left: page.locator("#rs-learn > .card").first(),
+  /** 右のカード（関わり方の囲みと 12 項目。第二候補はこの最後に足す） */
+  right: page.locator("#rs-learn > .card").nth(1),
+  /** 第二候補のボタン（出していないときは「第二候補を見る」、出しているときは「第二候補を閉じる」） */
+  secondButton: page.locator("#rs-learn .more"),
+  /** 第二候補（出しているときだけある） */
+  second: page.locator("#rs-ln2"),
+  /** 資質の割合の行（値の大きい順） */
+  shareRows: page.locator("#rs-learn .lt > div"),
+});
+
+/** 接し方の 2 列 #rs-ss1・関わり方のコツ #rs-how・タイプ別の接し方 #rs-mine（11-4 §2.14。別表D の 13） */
+export const rdStyle = (page: Page) => ({
+  root: page.locator("#rs-ss1"),
+  left: page.locator("#rs-ss1 > .card").first(),
+  right: page.locator("#rs-ss1 > .card").nth(1),
+  /** 4 区分の表のマス（左上・右上・左下・右下） */
+  quadCells: page.locator("#rs-ss1 .quad > div"),
+  how: page.locator("#rs-how"),
+  /** 関わり方のコツのカード（見分け方・褒め方・効果的な対応・声かけ例） */
+  howCards: page.locator("#rs-how .how > .card"),
+  mine: page.locator("#rs-mine"),
+  /** タイプ別の接し方のタブ（見ている人のスタイル。ドライビング・エクスプレッシブ・エミアブル・アナリティカル） */
+  tabs: page.locator("#rs-mine .tabs button"),
+  tab: (label: string) =>
+    page.locator("#rs-mine .tabs").getByRole("button", { name: label, exact: true }),
+});
+
 /** .ob-root の輪郭（参照元の ob-map の焦点の指定。#1F2933 の 2px を 2px 外側） */
 export const OB_ROOT_OUTLINE = {
   focusVisible: true,

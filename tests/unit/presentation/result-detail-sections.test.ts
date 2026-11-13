@@ -1,9 +1,10 @@
-// M7-result-05（描画の分）・18・19（PR-7.8a の分）。結果詳細の部品（11-4 §2.4・§2.7〜§2.12・§2.15・§2.18）を renderToStaticMarkup で
-// 静的な HTML に描いて確かめる（DOM のライブラリは足さない）。比較の状態は部品の props で 5 つ（未選択・読み込み中・比較あり・0 人・
-// 失敗）を渡し、本文・見出しの塊・目次・レイアウトは ComparisonProvider の initialComparison（比較ありか未選択）と印刷の形で包む
-// （比較組織のプルダウンは next/navigation を読むので、印刷の形では描かない）。見本の DTO は合成の回答（scoreAnswers）にコンダクター
-// タイプを当てたもので、氏名などは架空。比較の応答は値を決めて置く（平均との差のバッジの K-44 などを確かめるため）。
-// 育て方・接し方（M7-result-19 の 7.8b の分）は PR-7.8b が足す
+// M7-result-05（描画の分）・18・19。結果詳細の部品（11-4 §2.4・§2.7〜§2.15・§2.18）を renderToStaticMarkup で静的な HTML に描いて
+// 確かめる（DOM のライブラリは足さない）。比較の状態は部品の props で 5 つ（未選択・読み込み中・比較あり・0 人・失敗）を渡し、本文・
+// 見出しの塊・目次・レイアウトは ComparisonProvider の initialComparison（比較ありか未選択）と印刷の形で包む（比較組織のプルダウンは
+// next/navigation を読むので、印刷の形では描かない）。見本の DTO は合成の回答（scoreAnswers）にコンダクタータイプを当てたもので、
+// 氏名などは架空。比較の応答は値を決めて置く（平均との差のバッジの K-44 などを確かめるため）。育て方・接し方は、E2E（M7-result-30・31）の
+// 見本と同じ資質とソーシャルスタイルの値（第一候補 柔軟型・第二候補 直感型・エミアブル）を当てた見本で描き、画面の状態（第二候補・タブ）は
+// 部品の props で渡す
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -14,18 +15,29 @@ import {
 } from "@/components/admin/result/ComparisonProvider";
 import { ResultDetailBody } from "@/components/admin/result/ResultDetailBody";
 import { ResultHead } from "@/components/admin/result/ResultHead";
+import { renderedSectionIds } from "@/components/admin/result/ResultLayout";
 import { ResultMetaLine } from "@/components/admin/result/ResultMetaLine";
 import { FitSection } from "@/components/admin/result/sections/FitSection";
+import { LearnSection } from "@/components/admin/result/sections/LearnSection";
 import { OverviewSection } from "@/components/admin/result/sections/OverviewSection";
 import { ProfileSection } from "@/components/admin/result/sections/ProfileSection";
 import { RiskSection } from "@/components/admin/result/sections/RiskSection";
+import { StyleSection } from "@/components/admin/result/sections/StyleSection";
 import { TraitsSection } from "@/components/admin/result/sections/TraitsSection";
 import { TraitHighlightPopups } from "@/components/admin/result/TraitHighlightPopups";
-import { POSITION_DEFINITIONS } from "@/lib/masters/texts";
+import {
+  DEVELOPMENT_GUIDES,
+  POSITION_DEFINITIONS,
+  STYLE_INTERACTIONS,
+  STYLE_TEXTS,
+} from "@/lib/masters/texts";
 import { FULL_VISIBILITY, type PdfSectionVisibility } from "@/lib/pdf/visibility";
 import { RISK_LEVEL_STYLES } from "@/lib/presentation/colors";
+import { splitHowTo } from "@/lib/presentation/result-detail-rules";
+import { LEARN_ITEM_GROUPS } from "@/lib/presentation/result-detail-texts";
 import {
   buildResultDetailView,
+  learnGroupsOf,
   type ResultDetailView,
 } from "@/lib/presentation/result-detail-view";
 import { DEFAULT_RESULT_VIEW_STATE } from "@/lib/presentation/result-view-state";
@@ -35,6 +47,7 @@ import {
   TRAIT_KEYS,
   type CompatibilityScores,
   type ScoreResult,
+  type SocialStyleKey,
   type TraitKey,
   type TraitScores,
 } from "@/lib/scoring/types";
@@ -68,6 +81,26 @@ function dtoOf(scores: ScoreResult = CONDUCTOR): ResultDetailDto {
 }
 
 const VIEW = buildResultDetailView(dtoOf());
+
+/**
+ * 育て方・接し方の見本: CONDUCTOR に、E2E のコンダクタータイプの見本（M7-result-30・31）と同じ資質とソーシャルスタイルの値を当てたもの。
+ * 資質は 柔軟型 45・直感型 37.5・専門追求型 2.5・目標達成型 0 で第一候補 柔軟型・第二候補 直感型、スタイルは エミアブル 8.5・
+ * エクスプレッシブ 6・ドライビング 4.75・アナリティカル 0.75 でエミアブル
+ */
+const LEARN_STYLE: ScoreResult = {
+  ...CONDUCTOR,
+  aptitudes: {
+    sensory_open: 37.5,
+    environment_receptive: 45,
+    self_actualizing: 0,
+    inquiry_logical: 2.5,
+  },
+  aptitudeFirst: "environment_receptive",
+  aptitudeSecond: "sensory_open",
+  socialStyles: { driving: 4.75, expressive: 6, analytical: 0.75, amiable: 8.5 },
+  socialStyle: "amiable",
+};
+const LS_VIEW = buildResultDetailView(dtoOf(LEARN_STYLE));
 
 /** 16の特性の平均（本人 − 平均 = +6.5・−1.6・0.04・−0.04・+1.5・−1.5・1.49、ほかは 0） */
 const TRAIT_AVERAGES: TraitScores = Object.freeze({
@@ -133,6 +166,8 @@ const ACTIONS = {
   setFoldedAll: noop,
   setTraitSort: noop,
   setTraitHelp: noop,
+  setSecondOpen: noop,
+  setViewerStyle: noop,
 };
 
 // ---- HTML を読む補助
@@ -418,6 +453,8 @@ describe("M7-result-18 印刷の形の見出しの塊と目次（11-4 §2.18、1
       "リスク",
       "組織との相性",
       "人物像",
+      "育て方",
+      "接し方",
     ]);
     expect(links.map((a) => /href="([^"]*)"/.exec(a)?.[1])).toEqual([
       "#ai",
@@ -426,6 +463,8 @@ describe("M7-result-18 印刷の形の見出しの塊と目次（11-4 §2.18、1
       "#rs-rk",
       "#rs-fit",
       "#rs-pf",
+      "#rs-ln",
+      "#rs-ss",
     ]);
     expect(openTag(links[0]!)).toContain('class="on"');
     expect(openTag(links[0]!)).toContain('aria-current="true"');
@@ -436,13 +475,20 @@ describe("M7-result-18 印刷の形の見出しの塊と目次（11-4 §2.18、1
 
     const restricted = printBody(READY_DTO, { visibility: RESTRICTED });
     const restrictedLinks = elementsOf(elementOf(restricted, 'id="rsn"'), "<a ");
-    expect(restrictedLinks.map(textOf)).toEqual(["概要", "16の特性", "組織との相性", "人物像"]);
+    expect(restrictedLinks.map(textOf)).toEqual([
+      "概要",
+      "16の特性",
+      "組織との相性",
+      "人物像",
+      "育て方",
+      "接し方",
+    ]);
     expect(openTag(restrictedLinks[0]!)).toContain('aria-current="true"');
     expect(restricted).not.toContain('id="rs-rk"');
     expect(restricted).not.toContain('id="ai"');
   });
 
-  it("新しいレイアウト: #rs2 の data-comparison と、5 つのセクションの見出しと説明（16の特性は比較ありで説明が替わる）。ポップアップは印刷の形では描かない", () => {
+  it("新しいレイアウト: #rs2 の data-comparison と、7 つのセクションの見出しと説明（16の特性は比較ありで説明が替わる）。非表示の PDF はリスクを除く 6 つ。ポップアップは印刷の形では描かない", () => {
     const ready = printBody(READY_DTO);
     expect(openTag(elementOf(ready, 'id="rs2"'))).toBe('<div id="rs2" data-comparison="ready">');
     const sections = elementsOf(elementOf(ready, 'id="rs2"'), 'class="sec"');
@@ -452,6 +498,8 @@ describe("M7-result-18 印刷の形の見出しの塊と目次（11-4 §2.18、1
       "rs-rk",
       "rs-fit",
       "rs-pf",
+      "rs-ln",
+      "rs-ss",
     ]);
     expect(sections.map((s) => textOf(elementOf(s, "<h2")))).toEqual([
       "概要",
@@ -459,7 +507,29 @@ describe("M7-result-18 印刷の形の見出しの塊と目次（11-4 §2.18、1
       "リスク",
       "組織との相性",
       "人物像",
+      "育て方",
+      "接し方",
     ]);
+    expect(sections.slice(5).map((s) => textOf(elementOf(s, "<p>")))).toEqual([
+      "伸びやすい学び方と、関わり方",
+      "ソーシャルスタイルから見た、伝わりやすい関わり方",
+    ]);
+    const restricted = elementsOf(
+      elementOf(printBody(READY_DTO, { visibility: RESTRICTED }), 'id="rs2"'),
+      'class="sec"',
+    );
+    expect(restricted.map((s) => /id="([^"]*)"/.exec(s)?.[1])).toEqual([
+      "rs-ov",
+      "rs-tr",
+      "rs-fit",
+      "rs-pf",
+      "rs-ln",
+      "rs-ss",
+    ]);
+    // 同じ内容を 2 回出さない（旧のセクションの見出しと ApexCharts の要素が無い）
+    for (const text of ["育成方法", "タイプ別の対処法", "第一候補", "radar-chart", "apexcharts"]) {
+      expect(ready, text).not.toContain(text);
+    }
     expect(textOf(elementOf(sections[1]!, "<p>"))).toBe("0〜30点。線は比較組織の平均");
     const none = printBody(null);
     expect(openTag(elementOf(none, 'id="rs2"'))).toBe('<div id="rs2" data-comparison="none">');
@@ -475,6 +545,28 @@ describe("M7-result-18 印刷の形の見出しの塊と目次（11-4 §2.18、1
     expect(fold).toContain(
       '<span class="t-c">たたむ</span><span class="t-o">ひらく</span><i>▴</i>',
     );
+  });
+});
+
+describe("M7-result-18 描くセクション（renderedSectionIds。§2.1・§2.18）", () => {
+  it("7 つ（RESULT_SECTION_IDS の順）。非表示の PDF（showRisks が偽）はリスクを除く 6 つ", () => {
+    expect(renderedSectionIds({ showRisks: true })).toEqual([
+      "rs-ov",
+      "rs-tr",
+      "rs-rk",
+      "rs-fit",
+      "rs-pf",
+      "rs-ln",
+      "rs-ss",
+    ]);
+    expect(renderedSectionIds({ showRisks: false })).toEqual([
+      "rs-ov",
+      "rs-tr",
+      "rs-fit",
+      "rs-pf",
+      "rs-ln",
+      "rs-ss",
+    ]);
   });
 });
 
@@ -875,6 +967,450 @@ describe("M7-result-05 信頼係数の 2 か所の判定（描画。11-4 §2.4�
     expect(head.indexOf('class="rd-titlerow"')).toBeLessThan(head.indexOf('id="rsm"'));
     expect(textOf(elementOf(head, 'id="rsm"'))).toBe(
       "受験日2026/4/5職業責任者タイプコンダクター信頼係数79%結果は参考程度に",
+    );
+  });
+});
+
+// ---- 育て方・接し方（M7-result-19 の PR-7.8b の分。11-4 §2.13・§2.14・§2.18）
+
+const learn = (
+  options: {
+    readonly view?: ResultDetailView;
+    readonly secondOpen?: boolean;
+    readonly variant?: "screen" | "print";
+  } = {},
+) =>
+  render(
+    createElement(LearnSection, {
+      view: options.view ?? LS_VIEW,
+      viewState: { ...DEFAULT_RESULT_VIEW_STATE, secondOpen: options.secondOpen ?? false },
+      actions: ACTIONS,
+      variant: options.variant ?? "screen",
+    }),
+  );
+
+const styleOf = (
+  options: {
+    readonly view?: ResultDetailView;
+    readonly viewerStyle?: SocialStyleKey;
+    readonly variant?: "screen" | "print";
+  } = {},
+) =>
+  render(
+    createElement(StyleSection, {
+      view: options.view ?? LS_VIEW,
+      viewState: { ...DEFAULT_RESULT_VIEW_STATE, viewerStyle: options.viewerStyle ?? "driving" },
+      actions: ACTIONS,
+      variant: options.variant ?? "screen",
+    }),
+  );
+
+/** 育て方の見本の資質の値を差し替えた画面の値 */
+const learnViewWith = (aptitudes: ScoreResult["aptitudes"], first: ScoreResult["aptitudeFirst"]) =>
+  buildResultDetailView(dtoOf({ ...LEARN_STYLE, aptitudes, aptitudeFirst: first }));
+
+/** 4 区分の表のマス（.quad の子の div） */
+const quadCellsOf = (html: string): string[] => {
+  const quad = elementOf(html, 'class="quad"');
+  return elementsOf(quad.slice(openTag(quad).length), "<div");
+};
+
+/** 割合の行（.lt の子の div） */
+const shareRowsOf = (html: string): string[] =>
+  [...elementOf(html, 'class="lt"').matchAll(/<div(?: class="m")?>/g)].map((m) =>
+    elementOf(elementOf(html, 'class="lt"'), m[0], m.index),
+  );
+
+describe("M7-result-19 育て方（11-4 §2.13）", () => {
+  it("左のカード: 「育成タイプ」、第一候補の表示名と「× 優位感覚「視覚」」、札「優位感覚：視覚（Visual）」、絵（alt 空）と「優位感覚「視覚」のイメージ画像」", () => {
+    const html = learn();
+    const left = elementsOf(elementOf(html, 'id="rs-learn"'), 'class="card"')[0]!;
+    expect(textOf(elementOf(left, 'class="lbl"'))).toBe("育成タイプ");
+    const type = elementOf(left, 'class="type"');
+    expect(type).toBe('<div class="type">柔軟型<span class="xs">× 優位感覚「視覚」</span></div>');
+    expect(elementOf(left, 'class="sense"')).toBe(
+      '<span class="sense">優位感覚：視覚（Visual）</span>',
+    );
+    const pic = elementOf(left, 'class="lpic"');
+    expect(pic).toContain('src="/images/aptitudes/environment_receptive.svg" alt=""');
+    expect(pic).toContain('aria-hidden="true"');
+    expect(pic).toContain('width="120" height="120"');
+    expect(textOf(elementOf(pic, 'class="lpic-cap"'))).toBe("優位感覚「視覚」のイメージ画像");
+    // 絵の後ろに札（同じ入れ物の中に並べる。§2.13.1）
+    expect(pic.indexOf("<img")).toBeLessThan(pic.indexOf('class="lpic-cap"'));
+    // 上から ラベル → 名前 → 札 → 絵 → 小さいレーダー → 割合 → ボタン
+    const order = [
+      'class="lbl"',
+      'class="type"',
+      'class="sense"',
+      'class="lpic"',
+      'class="rs-mini"',
+      'class="lt"',
+      'class="more"',
+    ].map((marker) => left.indexOf(marker));
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+
+  it("小さいレーダー: 軸は直感型・柔軟型・目標達成型・専門追求型の順で、第一候補（柔軟型）の名前だけ太字。role img と「レーダーチャート」", () => {
+    const mini = elementOf(learn(), 'class="rs-mini"');
+    expect(mini).toContain('role="img" aria-label="レーダーチャート"');
+    const labels = [...mini.matchAll(/<text[^>]*font-weight="(\d+)"[^>]*>([^<]*)<\/text>/g)].map(
+      (m) => `${m[2]}:${m[1]}`,
+    );
+    expect(labels).toEqual(["直感型:400", "柔軟型:700", "目標達成型:400", "専門追求型:400"]);
+  });
+
+  it("資質の割合: 値の大きい順（柔軟型 53%・直感型 44%・専門追求型 3%・目標達成型 0%）で、第一候補の行は .m と名前 .main、棒の幅は値 ÷ 最大値", () => {
+    const rows = shareRowsOf(learn());
+    expect(rows.map((row) => textOf(row))).toEqual([
+      "柔軟型53%",
+      "直感型44%",
+      "専門追求型3%",
+      "目標達成型0%",
+    ]);
+    expect(rows[0]).toBe(
+      '<div class="m"><span class="main">柔軟型</span><span class="bar"><i style="width:100%"></i></span><b>53%</b></div>',
+    );
+    expect(openTag(rows[1]!)).toBe("<div>");
+    expect(rows[1]).toContain("<span>直感型</span>");
+    expect(rows[1]).toContain(`<i style="width:${(37.5 / 45) * 100}%"></i>`);
+    expect(rows[2]).toContain(`<i style="width:${(2.5 / 45) * 100}%"></i>`);
+    expect(rows[3]).toContain('<i style="width:0%"></i>');
+  });
+
+  it("資質の割合: 同じ値は軸の順（直感型・目標達成型・専門追求型）。4 つの値の合計が 0 なら「%」なしで、棒の幅は 0%", () => {
+    const tie = shareRowsOf(
+      learn({
+        view: learnViewWith(
+          {
+            sensory_open: 10,
+            environment_receptive: 20,
+            self_actualizing: 10,
+            inquiry_logical: 10,
+          },
+          "environment_receptive",
+        ),
+      }),
+    );
+    expect(tie.map((row) => textOf(row))).toEqual([
+      "柔軟型40%",
+      "直感型20%",
+      "目標達成型20%",
+      "専門追求型20%",
+    ]);
+    const zero = shareRowsOf(
+      learn({
+        view: learnViewWith(
+          { sensory_open: 0, environment_receptive: 0, self_actualizing: 0, inquiry_logical: 0 },
+          "sensory_open",
+        ),
+      }),
+    );
+    expect(zero.map((row) => textOf(row))).toEqual([
+      "直感型0",
+      "柔軟型0",
+      "目標達成型0",
+      "専門追求型0",
+    ]);
+    for (const row of zero) expect(row).toContain('<i style="width:0%"></i>');
+    expect(openTag(zero[0]!)).toBe('<div class="m">');
+  });
+
+  it("右のカード: 「このタイプへの関わり方」の囲みと approach、2 つの区切り（h3.grp）と 12 項目（h4 と丸いアイコン .cic、文）が §2.13.3 の順", () => {
+    const right = elementsOf(elementOf(learn(), 'id="rs-learn"'), 'class="card"')[1]!;
+    const call = elementOf(right, 'class="call"');
+    expect(textOf(elementOf(call, 'class="lbl"'))).toBe("このタイプへの関わり方");
+    expect(textOf(elementOf(call, "<p>"))).toBe(
+      DEVELOPMENT_GUIDES.environment_receptive.items.approach,
+    );
+    const dl2 = elementOf(right, 'class="dl2"');
+    expect(elementsOf(dl2, "<h3").map((h) => h)).toEqual([
+      '<h3 class="grp">教え方・話し方</h3>',
+      '<h3 class="grp">人となり</h3>',
+    ]);
+    const items = LEARN_ITEM_GROUPS.flatMap((group) => group.items);
+    const headings = elementsOf(dl2, "<h4");
+    expect(headings.map(textOf)).toEqual(items.map((item) => item.label));
+    for (const h of headings) {
+      expect(h.startsWith('<h4><span class="cic"><svg')).toBe(true);
+      expect(textOf(elementOf(h, 'class="cic"'))).toBe("");
+    }
+    expect(elementsOf(dl2, "<p>").map(textOf)).toEqual(
+      items.map((item) => DEVELOPMENT_GUIDES.environment_receptive.items[item.key]),
+    );
+    // 区切りの見出しは、その区切りの項目の前（教え方・話し方の 4 項目、人となりの 8 項目）
+    expect(dl2.indexOf("人となり")).toBeGreaterThan(dl2.indexOf("他タイプとの相性"));
+    expect(dl2.indexOf("人となり")).toBeLessThan(dl2.indexOf(">特徴<"));
+  });
+
+  it("文の無い項目と、項目が 1 つも無い区切りは出さない（合成の値）", () => {
+    const items = {
+      ...DEVELOPMENT_GUIDES.environment_receptive.items,
+      learning_style: "",
+      listening: " ",
+      speaking: "",
+      compatibility: "\n",
+      emotion: "",
+    };
+    const view: ResultDetailView = {
+      ...LS_VIEW,
+      learn: { ...LS_VIEW.learn, first: { ...LS_VIEW.learn.first, groups: learnGroupsOf(items) } },
+    };
+    const dl2 = elementOf(learn({ view }), 'class="dl2"');
+    expect(elementsOf(dl2, "<h3").map(textOf)).toEqual(["人となり"]);
+    expect(elementsOf(dl2, "<h4").map(textOf)).toEqual([
+      "特徴",
+      "思考",
+      "性格",
+      "行動",
+      "対人関係",
+      "最優先対象",
+      "周りからの印象",
+    ]);
+  });
+
+  it("第二候補のボタン: 既定は「第二候補を見る　＞」（button.more・type button・状態の属性なし）で #rs-ln2 が無い。secondOpen で「第二候補を閉じる」と、右のカードの最後に #rs-ln2", () => {
+    const closed = learn();
+    const button = elementOf(closed, 'class="more"');
+    expect(button).toBe('<button type="button" class="more">第二候補を見る　＞</button>');
+    expect(closed).not.toContain('id="rs-ln2"');
+    expect(closed).not.toContain("第二候補を閉じる");
+    const open = learn({ secondOpen: true });
+    expect(textOf(elementOf(open, 'class="more"'))).toBe("第二候補を閉じる");
+    const right = elementsOf(elementOf(open, 'id="rs-learn"'), 'class="card"')[1]!;
+    const second = elementOf(right, 'id="rs-ln2"');
+    // 右のカードの最後
+    expect(right.endsWith(`${second}</div>`)).toBe(true);
+    expect(openTag(second)).toBe('<div id="rs-ln2" class="sub2">');
+    const head = elementOf(second, 'class="h"');
+    expect(head).toContain('src="/images/aptitudes/sensory_open.svg" alt=""');
+    expect(head).toContain('width="48" height="48"');
+    expect(head).toContain(
+      "<div><span>第二候補</span><br/><b>直感型</b><span>　優位感覚：言語感覚（Auditory Digital）</span></div>",
+    );
+    expect(textOf(elementOf(elementOf(second, 'class="call"'), "<p>"))).toBe(
+      DEVELOPMENT_GUIDES.sensory_open.items.approach,
+    );
+    const dl2 = elementOf(second, 'class="dl2"');
+    expect(elementsOf(dl2, "<h3").map(textOf)).toEqual(["教え方・話し方", "人となり"]);
+    expect(elementsOf(dl2, "<h4")).toHaveLength(12);
+    // 第二候補の「話し方」は直感型のマスタの文（K-32 ⑨）
+    const speaking = elementsOf(dl2, "<div>").find((item) => textOf(item).startsWith("話し方"))!;
+    expect(textOf(elementOf(speaking, "<p>"))).toBe(DEVELOPMENT_GUIDES.sensory_open.items.speaking);
+    expect(textOf(elementOf(speaking, "<p>"))).not.toContain(
+      "自分の意見や考えを率直に述べるスタイル",
+    );
+    // 第二候補に割合とレーダーは出さない
+    expect(second).not.toContain('class="lt"');
+    expect(second).not.toContain('class="rs-mini"');
+    expect(second).not.toContain('role="img"');
+    expect(second).not.toContain("%");
+  });
+
+  it("印刷の形: #rs-learn に data-print（左のカードを留めない）。ボタンは同じ位置・見た目で描く。画面の形には data-print が無い", () => {
+    const print = learn({ variant: "print" });
+    expect(openTag(elementOf(print, 'id="rs-learn"'))).toBe(
+      '<div id="rs-learn" class="learn" data-print="">',
+    );
+    expect(elementOf(print, 'class="more"')).toBe(
+      '<button type="button" class="more">第二候補を見る　＞</button>',
+    );
+    expect(openTag(elementOf(learn(), 'id="rs-learn"'))).toBe('<div id="rs-learn" class="learn">');
+  });
+});
+
+describe("M7-result-19 接し方（11-4 §2.14）", () => {
+  it("4 区分の表: アナリティカル・ドライビング（.rt）・エミアブル（本人。.on）・エクスプレッシブ（.rt）の順に、名前・〇〇派・小数第 1 位の点数", () => {
+    const cells = quadCellsOf(styleOf());
+    expect(cells.map(openTag)).toEqual([
+      "<div>",
+      '<div class="rt">',
+      '<div class="on">',
+      '<div class="rt">',
+    ]);
+    expect(cells[0]).toBe(
+      "<div><span>アナリティカル<br/><small>思考派</small></span><b>0.8</b></div>",
+    );
+    expect(cells.map((cell) => textOf(cell))).toEqual([
+      "アナリティカル思考派0.8",
+      "ドライビング行動派4.8",
+      "エミアブル協調派8.5",
+      "エクスプレッシブ感覚派6",
+    ]);
+    // 負の値もそのまま（小数第 1 位）
+    const negative = buildResultDetailView(
+      dtoOf({ ...LEARN_STYLE, socialStyles: { ...LEARN_STYLE.socialStyles, analytical: -1.5 } }),
+    );
+    expect(textOf(quadCellsOf(styleOf({ view: negative }))[0]!)).toBe("アナリティカル思考派-1.5");
+    // 本人がドライビングなら右上が .rt.on
+    const driving = buildResultDetailView(dtoOf({ ...LEARN_STYLE, socialStyle: "driving" }));
+    expect(quadCellsOf(styleOf({ view: driving })).map(openTag)).toEqual([
+      "<div>",
+      '<div class="rt on">',
+      "<div>",
+      '<div class="rt">',
+    ]);
+  });
+
+  it("表の下の注記 2 行と、小さいレーダー（軸はドライビング・エクスプレッシブ・エミアブル・アナリティカル、本人のスタイルだけ太字、負の値は中心）", () => {
+    const html = styleOf();
+    expect(elementOf(html, 'class="qax"')).toBe(
+      '<div class="qax"><span>← 主張が控えめ</span><span>主張が強い →</span></div>',
+    );
+    expect(textOf(elementOf(html, 'class="qax2"'))).toBe(
+      "上段：感情を表に出さない／下段：感情を表に出す",
+    );
+    const mini = elementOf(html, 'class="rs-mini"');
+    expect(mini).toContain('role="img" aria-label="レーダーチャート"');
+    const labels = [...mini.matchAll(/<text[^>]*font-weight="(\d+)"[^>]*>([^<]*)<\/text>/g)].map(
+      (m) => `${m[2]}:${m[1]}`,
+    );
+    expect(labels).toEqual([
+      "ドライビング:400",
+      "エクスプレッシブ:400",
+      "エミアブル:700",
+      "アナリティカル:400",
+    ]);
+    const negative = buildResultDetailView(
+      dtoOf({ ...LEARN_STYLE, socialStyles: { ...LEARN_STYLE.socialStyles, analytical: -1.5 } }),
+    );
+    const points = /<polygon points="([^"]*)" fill="rgba/.exec(styleOf({ view: negative }))?.[1];
+    expect(points?.split(" ")[3]).toBe("170.0,125.0");
+  });
+
+  it("見出しの行: 絵（alt 空）・スタイル名・小さい行（自己主張の行・〇〇派・偉人名を「　・　」でつなぐ。空の部分は飛ばす）、キャッチと段落", () => {
+    const html = styleOf();
+    const shead = elementOf(html, 'class="shead"');
+    expect(shead).toContain('src="/images/styles/amiable.svg" alt=""');
+    expect(shead).toContain('width="120" height="120"');
+    expect(textOf(elementOf(shead, 'class="t"'))).toBe("エミアブルタイプ");
+    expect(textOf(elementOf(shead, 'class="s"'))).toBe(
+      "自己主張：弱／感情表出：強　・　協調派　・　マザー・テレサ",
+    );
+    expect(elementOf(html, 'class="catch"')).toBe(
+      '<p class="catch">「周りの力になりたい。頼られると嬉しい」</p>',
+    );
+    expect(elementsOf(html, 'class="desc"').map(textOf)).toEqual(LS_VIEW.style.body.paragraphs);
+    expect(LS_VIEW.style.body.paragraphs).toHaveLength(2);
+    // 空の部分を飛ばす（合成の値）。キャッチが無ければ p.catch を出さない
+    const view: ResultDetailView = {
+      ...LS_VIEW,
+      style: { ...LS_VIEW.style, body: { ...LS_VIEW.style.body, assertion: "", catchCopy: "" } },
+    };
+    const partial = styleOf({ view });
+    expect(textOf(elementOf(partial, 'class="s"'))).toBe("協調派　・　マザー・テレサ");
+    expect(partial).not.toContain('class="catch"');
+  });
+
+  it("関わり方のコツ: h3「関わり方のコツ」と 4 枚（見分け方・褒め方・効果的な対応・声かけ例）。帯（×・○）・箇条書き・吹き出し・段落の振り分け", () => {
+    const how = elementOf(styleOf(), 'id="rs-how"');
+    expect(
+      how.startsWith('<div id="rs-how"><h3 class="howt">関わり方のコツ</h3><div class="how">'),
+    ).toBe(true);
+    const cards = elementsOf(how, 'class="card"');
+    expect(cards.map((card) => textOf(elementOf(card, "<h4")))).toEqual([
+      "見分け方",
+      "褒め方",
+      "効果的な対応",
+      "声かけ例",
+    ]);
+    const texts = STYLE_TEXTS.amiable;
+    // 見分け方: 箇条書き 3 と段落 1
+    expect(elementsOf(cards[0]!, "<li").map(textOf)).toEqual(
+      splitHowTo(texts.identify, false).bullets,
+    );
+    expect(elementsOf(cards[0]!, "<li")).toHaveLength(3);
+    expect(elementsOf(cards[0]!, "<p>")).toHaveLength(1);
+    expect(cards[0]).not.toContain('class="ngok"');
+    // 褒め方: 灰色の帯（札「×」）→ 緑の帯（札「○」）→ 段落
+    const ngok = elementOf(cards[1]!, 'class="ngok"');
+    expect(ngok).toBe(
+      '<div class="ngok"><div class="ng"><b>×</b><span>「スゴいですね」「〇〇さんって優しいね」</span></div><div class="ok"><b>○</b><span>「ありがとうございます」「助かりました」「あなたがいてくれて心強いです」</span></div></div>',
+    );
+    expect(elementsOf(cards[1]!, "<p>")).toHaveLength(1);
+    // 声かけ例: 吹き出し 2（「・」を除く）と段落 1。箇条書きは無い
+    const say = elementOf(cards[3]!, 'class="say"');
+    expect(elementsOf(say, "<div>").map(textOf)).toEqual(splitHowTo(texts.phrases, true).says);
+    expect(elementsOf(say, "<div>")).toHaveLength(2);
+    expect(cards[3]).not.toContain("<ul>");
+    // 前回の「本タイプの対処法」の見出しと文、「タイプ別の対処法」は出さない
+    const html = styleOf();
+    expect(html).not.toContain(texts.interactionHeading);
+    expect(html).not.toContain("タイプ別の対処法");
+  });
+
+  it("関わり方のコツの中身は、元の行の順でなく 帯（×）→ 帯（○）→ 箇条書き → 段落 の順（合成の値）", () => {
+    const view: ResultDetailView = {
+      ...LS_VIEW,
+      style: {
+        ...LS_VIEW.style,
+        howTo: [{ title: "見分け方", parts: splitHowTo("段落\n・箇条\n◎良い\n✕悪い", false) }],
+      },
+    };
+    const card = elementOf(elementOf(styleOf({ view }), 'id="rs-how"'), 'class="card"');
+    expect(card).toBe(
+      '<div class="card"><h4>見分け方</h4><div class="ngok"><div class="ng"><b>×</b><span>悪い</span></div><div class="ok"><b>◎</b><span>良い</span></div></div><ul><li>箇条</li></ul><p>段落</p></div>',
+    );
+  });
+
+  it("タイプ別の接し方: h3「あなた（責任者・上司）のタイプ別の接し方」（関わり方のコツと同じ段。§2.21 の 1.2 版）、タブ 4 つ（ドライビング・エクスプレッシブ・エミアブル・アナリティカル。aria-pressed）と選んだタブの文。既定はドライビング", () => {
+    const mine = elementOf(styleOf(), 'id="rs-mine"');
+    expect(openTag(mine)).toBe('<div id="rs-mine" class="card mine">');
+    expect(textOf(elementOf(mine, "<h3"))).toBe("あなた（責任者・上司）のタイプ別の接し方");
+    expect(mine).not.toContain("<h4");
+    const tabs = elementsOf(elementOf(mine, 'class="tabs"'), "<button");
+    expect(tabs.map(textOf)).toEqual([
+      "ドライビング",
+      "エクスプレッシブ",
+      "エミアブル",
+      "アナリティカル",
+    ]);
+    expect(tabs.map((tab) => /aria-pressed="(\w+)"/.exec(tab)?.[1])).toEqual([
+      "true",
+      "false",
+      "false",
+      "false",
+    ]);
+    expect(openTag(tabs[0]!)).toBe('<button type="button" class="on" aria-pressed="true">');
+    expect(textOf(elementOf(mine, "<p>"))).toBe(STYLE_INTERACTIONS.driving.amiable);
+    // エミアブルのタブ
+    const amiable = elementOf(styleOf({ viewerStyle: "amiable" }), 'id="rs-mine"');
+    const amiableTabs = elementsOf(elementOf(amiable, 'class="tabs"'), "<button");
+    expect(amiableTabs.map((tab) => /aria-pressed="(\w+)"/.exec(tab)?.[1])).toEqual([
+      "false",
+      "false",
+      "true",
+      "false",
+    ]);
+    expect(textOf(elementOf(amiable, "<p>"))).toBe(STYLE_INTERACTIONS.amiable.amiable);
+    expect(count(amiable, "<p>")).toBe(1);
+  });
+
+  it("印刷の形: 同じ並びで、タブは同じ見た目（選んでいるタブは画面の状態のとおり）", () => {
+    const print = styleOf({ variant: "print" });
+    expect(print).toContain('id="rs-ss1"');
+    expect(print).toContain('id="rs-how"');
+    const tabs = elementsOf(elementOf(print, 'class="tabs"'), "<button");
+    expect(tabs).toHaveLength(4);
+    expect(openTag(tabs[0]!)).toBe('<button type="button" class="on" aria-pressed="true">');
+    expect(print).toBe(styleOf());
+  });
+});
+
+describe("M7-result-18 印刷の形の育て方・接し方（§2.18。画面の状態は既定）", () => {
+  it("第二候補は出さず（「第二候補を見る　＞」）、接し方のタブはドライビング。左のカードは data-print で留めない", () => {
+    const html = printBody(READY_DTO);
+    expect(openTag(elementOf(html, 'id="rs-learn"'))).toBe(
+      '<div id="rs-learn" class="learn" data-print="">',
+    );
+    expect(html).not.toContain('id="rs-ln2"');
+    expect(textOf(elementOf(html, 'class="more"'))).toBe("ほかの特性が高い場合を見る　＞");
+    expect(textOf(elementsOf(elementOf(html, 'id="rs-learn"'), 'class="more"')[0]!)).toBe(
+      "第二候補を見る　＞",
+    );
+    const mine = elementOf(html, 'id="rs-mine"');
+    expect(openTag(elementsOf(elementOf(mine, 'class="tabs"'), "<button")[0]!)).toBe(
+      '<button type="button" class="on" aria-pressed="true">',
     );
   });
 });

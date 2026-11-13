@@ -145,7 +145,7 @@ function quadrant(
 }
 
 /**
- * 4 分類の位置と色（§2.4 の 2 つの表）。主色は SOCIAL_STYLE_DEFINITIONS[].color・--style-*（app/(admin)/admin.css）と同じ値
+ * 4 分類の位置と色（§2.4 の 2 つの表）。主色は SOCIAL_STYLE_DEFINITIONS[].color と同じ値
  * （zaiseki-29）。濃い色・背景・中間と K-49 の 6 つの色は新しい色
  */
 export const QUADRANTS: Readonly<Record<SocialStyleKey, QuadrantDefinition>> = Object.freeze({

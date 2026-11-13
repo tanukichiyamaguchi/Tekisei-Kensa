@@ -1,8 +1,10 @@
 // E-20 AI 解説（stub）（08 §3.4.3、06 §3.5.9、要件定義書 §6.2 A-09、付録D §1）
 // E-21 PDF ダウンロード（06 §3.5.11、07 §9、要件定義書 §6.2 A-10）
 // PR-7.8a（11-4 §5.5）: 結果詳細の見出しの「AI解説を表示」は無くなり（11-6 の ai-04・ai-05）、AI 解説は目次と新しいレイアウトの間の
-// 領域（#ai）の中のボタンで生成する。PDF の上半分は結果詳細と同じ部品の印刷の形（11-4 §2.18）で、文字の期待を新しいレイアウトの文に
-// 改めた（ダウンロードのポップアップの文と PDF の作りの改めは 11-5 の PR-7.12）
+// 領域（#ai）の中のボタンで生成する。PDF は結果詳細と同じ部品の印刷の形（11-4 §2.18）で、文字の期待を新しいレイアウトの文に改めた。
+// PR-7.8b: 旧のセクション 5・6（育成方法・ソーシャルスタイル）の代わりに育て方・接し方が入り、描画完了を待つグラフは 0 個になった
+// （07 §9.6。印は描画のあとに付く）。画面の状態は既定（第二候補は出さない・タブはドライビング）で描く（ダウンロードのポップアップの文と
+// PDF の作り、画面の状態を写すことは 11-5 の PR-7.12）
 import { readFile } from "node:fs/promises";
 
 import type { Page } from "@playwright/test";
@@ -91,6 +93,20 @@ const RISK_LABELS = [
 /** 比較なしの文言（11-4 §2.6） */
 const NO_COMPARISON = "右上で比較組織を選ぶと表示されます";
 
+/** PDF のテキストと同じ形（NFKC・空白なし）にした文 */
+const asPdfText = (text: string): string => text.normalize("NFKC").replace(/\s+/g, "");
+
+/** 育て方・接し方の見出しとラベル（11-4 §2.13・§2.14。全画面・非表示のどちらの PDF にも載る） */
+const LEARN_STYLE_LABELS = [
+  "育成タイプ",
+  "このタイプへの関わり方",
+  "関わり方のコツ",
+  "あなた（責任者・上司）のタイプ別の接し方",
+].map(asPdfText);
+
+/** 旧のセクション 5・6 の見出し（PR-7.8b で無くなった） */
+const OLD_SECTION_HEADINGS = ["育成方法", "タイプ別の対処法"];
+
 /**
  * PDF のテキスト。Chromium が埋め込む Noto Sans JP の ToUnicode は一部の漢字を康熙部首（例: 立 → ⽴）に写すため
  * NFKC で正規化し、中黒（・ → ‧ U+2027）を戻し、行の折り返しに左右されないよう空白をすべて除く
@@ -124,7 +140,7 @@ async function downloadVia(
   return { filename: download.suggestedFilename(), bytes: await readFile(path) };
 }
 
-test("E-21 PDF: 2 モード、ファイル名、restricted の非表示、比較組織の引き継ぎ", async ({
+test("E-21 PDF: 2 モード、ファイル名、restricted の非表示、比較組織の引き継ぎ。育て方・接し方が載り、旧の見出しが無い（描画完了を待つグラフは 0 個）", async ({
   page,
   adminOrg,
 }) => {
@@ -166,6 +182,9 @@ test("E-21 PDF: 2 モード、ファイル名、restricted の非表示、比較
   expect(fullText).toContain("AI解説");
   expect(fullText).toContain("この人物の要約");
   expect(fullText).toContain("診断スコア(16特性・ソーシャルスタイル・リスク指標)");
+  // 育て方・接し方（11-4 §2.18。PR-7.8b）が載り、旧のセクション 5・6 の見出しは無い
+  for (const label of LEARN_STYLE_LABELS) expect(fullText).toContain(label);
+  for (const heading of OLD_SECTION_HEADINGS) expect(fullText).not.toContain(heading);
 
   const restricted = await downloadVia(page, "restricted");
   expect(restricted.filename).toBe(`result-${resultId.slice(0, 8)}-restricted.pdf`);
@@ -183,6 +202,9 @@ test("E-21 PDF: 2 モード、ファイル名、restricted の非表示、比較
   // 組織内のポジションは印字する（K-15、06 D06-26）。フッターに非表示の注記
   expect(restrictedText).toContain("組織内のポジション");
   expect(restrictedText).toContain("評価・合致度・リスク非表示");
+  // 育て方・接し方は非表示の PDF でも消さない（11-4 §2.18）
+  for (const label of LEARN_STYLE_LABELS) expect(restrictedText).toContain(label);
+  for (const heading of OLD_SECTION_HEADINGS) expect(restrictedText).not.toContain(heading);
 
   // 比較組織を外すと、比較項目は固定文言のまま印字する（06 D06-16）
   await page.getByLabel("比較組織").selectOption("");

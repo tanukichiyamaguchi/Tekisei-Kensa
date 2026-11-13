@@ -1,11 +1,15 @@
-// 結果詳細の新しいレイアウト（11-4 §5.3。PR-7.8a）: M7-result-21 構成（E-12 の置き換え）、M7-result-22 比較の流れ（E-13 の置き換え）、
-// M7-result-23 0 人と失敗、M7-result-24 色（E-14 の置き換え）、M7-result-25 2 つのタブの独立（E-15）、M7-result-26 並び替えと保持、
-// M7-result-27 項目の説明、M7-result-28 吹き出し、M7-result-29 2 つのポップアップ、M7-result-32 折りたたみ。
+// 結果詳細の新しいレイアウト（11-4 §5.3。PR-7.8a・PR-7.8b）: M7-result-21 構成（E-12 の置き換え）、M7-result-22 比較の流れ（E-13 の
+// 置き換え）、M7-result-23 0 人と失敗、M7-result-24 色（E-14 の置き換え）、M7-result-25 2 つのタブの独立（E-15）、M7-result-26 並び替えと
+// 保持、M7-result-27 項目の説明、M7-result-28 吹き出し、M7-result-29 2 つのポップアップ、M7-result-30 育て方と第二候補、M7-result-31 接し方と
+// タブ、M7-result-32 折りたたみ。
 // 待ち合わせは #rs2 の data-comparison と 11-4 §2.1 の要素の id で行い、旧の要素（.result-section の見出しの並び・.grade-cell・
-// population-label・.grade-letter・ドーナツゲージ・ApexCharts の凡例・.notice-inline など）は使わない。旧のセクション 5・6（育成方法・
-// ソーシャルスタイル）は PR-7.8b まで新しいレイアウトの後ろに残る。コンダクタータイプの見本は submit-type（固定シードの乱数回答。
-// テストテスト 50。職業コード 6「受付」）で、16 の特性の値は採点で決まる（協力性・リーダーシップ 19 〜 優劣性 9.5、信頼係数 75.745）
-import type { Page } from "@playwright/test";
+// population-label・.grade-letter・ドーナツゲージ・ApexCharts の凡例・.notice-inline など）は使わない。コンダクタータイプの見本は
+// submit-type（固定シードの乱数回答。テストテスト 50。職業コード 6「受付」）で、値は採点で決まる（16 の特性は協力性・リーダーシップ 19 〜
+// 優劣性 9.5、信頼係数 75.745。資質は柔軟型 45・直感型 37.5・専門追求型 2.5・目標達成型 0 で第一候補 柔軟型・第二候補 直感型、
+// ソーシャルスタイルはエミアブル 8.5・エクスプレッシブ 6・ドライビング 4.75・アナリティカル 0.75 でエミアブル）。
+// 育て方・接し方の期待の文は、文言マスタの生成物（lib/masters/data/texts の JSON。付録C §4・§5）から読む（lib/masters/texts は JSON を
+// import 属性なしで読み込むため、Playwright の ES モジュールの読み込みでは使えない）
+import type { Locator, Page } from "@playwright/test";
 
 import { emulatorTask } from "../support/admin";
 import {
@@ -18,8 +22,10 @@ import {
   noComparisonPlaces,
   openResultDetail,
   rdFold,
+  rdLearn,
   rdPopup,
   rdSection,
+  rdStyle,
   rectOf,
   resultDetail,
   rowOf,
@@ -32,6 +38,10 @@ import {
   traitRowNames,
   traitSortButtons,
 } from "../support/admin-ui";
+import developmentGuides from "@/lib/masters/data/texts/development-guides.json" with { type: "json" };
+import styleInteractions from "@/lib/masters/data/texts/style-interactions.json" with { type: "json" };
+import styleTexts from "@/lib/masters/data/texts/style-texts.json" with { type: "json" };
+import type { AptitudeKey, SocialStyleKey } from "@/lib/scoring/types";
 
 /** 比較なしの文言（11-4 §2.6） */
 const NO_COMPARISON = "右上で比較組織を選ぶと表示されます";
@@ -102,6 +112,83 @@ const CONDUCTOR_DETAILS = [
 const subjectPolygon = (page: Page) => page.locator('#rs-trc svg polygon[stroke="#2563eb"]');
 const averagePolygon = (page: Page) => page.locator('#rs-trc svg polygon[stroke="#16a34a"]');
 
+/** 育て方の 12 項目の小見出し（11-4 §2.13.3 の表の順） */
+const LEARN_ITEMS = [
+  "学習スタイル",
+  "聞き方",
+  "話し方",
+  "他タイプとの相性",
+  "特徴",
+  "思考",
+  "性格",
+  "感情",
+  "行動",
+  "対人関係",
+  "最優先対象",
+  "周りからの印象",
+];
+
+/** 接し方のタブ（見ている人のスタイル。11-4 §2.14.4 の順）とスタイルのかぎ */
+const STYLE_TABS = [
+  ["ドライビング", "driving"],
+  ["エクスプレッシブ", "expressive"],
+  ["エミアブル", "amiable"],
+  ["アナリティカル", "analytical"],
+] as const satisfies ReadonlyArray<readonly [string, SocialStyleKey]>;
+
+/** 育成方法のマスタの項目の文（付録C §4） */
+function guideText(aptitude: AptitudeKey, item: string): string {
+  const text = developmentGuides.items
+    .find((guide) => guide.aptitudeKey === aptitude)
+    ?.items.find((entry) => entry.key === item)?.text;
+  if (text === undefined) throw new Error(`育成方法のマスタに ${aptitude} の ${item} がありません`);
+  return text;
+}
+
+/** ソーシャルスタイル別文言のマスタの文（付録C §5） */
+function styleText(
+  style: SocialStyleKey,
+  field: "typeName" | "body" | "identify" | "praise" | "response" | "phrases",
+): string {
+  const text = styleTexts.items.find((item) => item.socialStyleKey === style)?.[field];
+  if (text === undefined)
+    throw new Error(`ソーシャルスタイル別文言のマスタに ${style} の ${field} がありません`);
+  return text;
+}
+
+/** タイプ別の接し方のマスタの文（付録C §5 末尾の表。見ている人 viewer × 本人 target） */
+function interactionText(viewer: SocialStyleKey, target: SocialStyleKey): string {
+  const text = styleInteractions.items.find(
+    (item) => item.viewer === viewer && item.target === target,
+  )?.text;
+  if (text === undefined)
+    throw new Error(`タイプ別の接し方のマスタに ${viewer} × ${target} がありません`);
+  return text;
+}
+
+/** 文を行に分け、前後の空白を除いて空の行を捨てる（11-4 §2.14.2・§2.14.3） */
+const linesOf = (text: string): string[] =>
+  text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+
+/** 項目の小見出しが label の項目の文（区切りの見出しを除く .dl2 の直下の項目） */
+const guideItemText = (dl2: Locator, label: string): Locator =>
+  dl2
+    .locator(":scope > div")
+    .filter({ has: dl2.page().locator("h4", { hasText: new RegExp(`^${label}$`) }) })
+    .locator("p");
+
+/** 接し方のタブのうち label だけが押されている */
+async function expectPressedTab(page: Page, label: string): Promise<void> {
+  const tabs = rdStyle(page).tabs;
+  await expect(tabs).toHaveText(STYLE_TABS.map(([name]) => name));
+  for (const [i, [name]] of STYLE_TABS.entries()) {
+    await expect(tabs.nth(i)).toHaveAttribute("aria-pressed", name === label ? "true" : "false");
+  }
+}
+
 /** 並び替えのボタンのうち label だけが押されている（label が null ならどれも押されていない） */
 async function expectPressedSort(page: Page, label: string | null): Promise<void> {
   const buttons = traitSortButtons(page);
@@ -136,7 +223,7 @@ async function moveToAnotherPerson(page: Page, name: string, resultId: string): 
   await expectComparison(page, "none");
 }
 
-test("M7-result-21 構成: サイドメニューと共通ヘッダーの無い枠、見出し「{氏名}様の診断結果」・受験情報の 1 行・目次・5 つのセクション・特性の詳細（コンダクタータイプ例）。見出しに「AI解説を表示」が無く、旧の見出しは育成方法・ソーシャルスタイルだけ", async ({
+test("M7-result-21 構成: サイドメニューと共通ヘッダーの無い枠、見出し「{氏名}様の診断結果」・受験情報の 1 行・目次（8 つ）・7 つのセクション・特性の詳細（コンダクタータイプ例）。見出しに「AI解説を表示」が無く、旧の見出し（育成方法・ソーシャルスタイルを含む）と ApexCharts の要素が無い", async ({
   page,
   adminOrg,
 }) => {
@@ -167,14 +254,15 @@ test("M7-result-21 構成: サイドメニューと共通ヘッダーの無い�
   await expect(meta.locator("b.mid")).toHaveText("76%");
   await expect(meta.locator("b.mid")).toHaveCSS("color", "rgb(180, 83, 9)");
 
-  // 本文の並び: 見出しの塊・目次・AI 解説の領域・新しいレイアウト（§2.1）
+  // 本文の並び: 見出しの塊・目次・AI 解説の領域・新しいレイアウト（§2.1）と、その後ろの 2 つのポップアップ（dialog。§2.2）だけ
+  // （旧のセクション 5・6 は無くなった）
   const order = await page
     .locator("#rd .rd-body > *")
-    .evaluateAll((els) => els.slice(0, 4).map((el) => el.id));
-  expect(order).toEqual(["rd-head", "rsn-wrap", "ai", "rs2"]);
+    .evaluateAll((els) => els.map((el) => el.id || el.tagName.toLowerCase()));
+  expect(order).toEqual(["rd-head", "rsn-wrap", "ai", "rs2", "dialog", "dialog"]);
   await expect(page.locator("#ai").getByTestId("ai-analysis-section")).toBeVisible();
 
-  // 目次（§2.5。PR-7.8a は AI解説と 5 つのセクション）
+  // 目次（§2.5。AI解説と 7 つのセクション）
   await expect(rd.toc).toBeVisible();
   await expect(rd.tocLinks).toHaveText([
     "AI解説",
@@ -183,6 +271,8 @@ test("M7-result-21 構成: サイドメニューと共通ヘッダーの無い�
     "リスク",
     "組織との相性",
     "人物像",
+    "育て方",
+    "接し方",
   ]);
 
   // セクションの見出しと説明（§2.2。比較なし）
@@ -192,6 +282,8 @@ test("M7-result-21 構成: サイドメニューと共通ヘッダーの無い�
     "リスク",
     "組織との相性",
     "人物像",
+    "育て方",
+    "接し方",
   ]);
   await expect(rd.layout.locator(".sec-h p")).toHaveText([
     "どんな人で、組織の中でどこに位置するか",
@@ -199,6 +291,8 @@ test("M7-result-21 構成: サイドメニューと共通ヘッダーの無い�
     "起こりやすさ。高い順に表示",
     "5つの軸で、比較組織と比べてどちら寄りか",
     "性格と、向いている仕事",
+    "伸びやすい学び方と、関わり方",
+    "ソーシャルスタイルから見た、伝わりやすい関わり方",
   ]);
 
   // 概要のタイプのカード（§2.7.1）
@@ -236,13 +330,11 @@ test("M7-result-21 構成: サイドメニューと共通ヘッダーの無い�
   }
 
   // 見出しに「AI解説を表示」が無い（11-6 の ai-04・ai-05）。旧の見出し（サマリー・個人特性・組織との相性・比較対象内での
-  // 立ち位置・リスク）が無く、.result-section の見出しは AI 解説の領域と旧のセクション 5・6 だけ（PR-7.8b まで）
+  // 立ち位置・リスク・育成方法・ソーシャルスタイル）が無く、.result-section の見出しは AI 解説の領域だけ。グラフは自作の SVG で、
+  // ApexCharts の要素は無い（K-23）
   await expect(rd.head.getByRole("button", { name: "AI解説を表示" })).toHaveCount(0);
-  await expect(page.locator(".result-section > h2")).toHaveText([
-    "AI 解説",
-    "育成方法",
-    "ソーシャルスタイル",
-  ]);
+  await expect(page.locator(".result-section > h2")).toHaveText(["AI 解説"]);
+  await expect(page.locator(".apexcharts-canvas")).toHaveCount(0);
 
   // 「回答一覧に戻る」で /admin へ（§2.3.1）
   await page.getByRole("link", { name: "回答一覧に戻る" }).click();
@@ -698,6 +790,318 @@ test("M7-result-29 ポップアップ: 概要の 2 つのボタンで「大き�
   await expect(moreLow).toBeFocused();
 });
 
+test("M7-result-30 育て方: 左のカード（育成タイプ・柔軟型・優位感覚「視覚」の札・絵・小さいレーダー・資質の割合 53%・44%・3%・0%）と右のカード（関わり方と 12 項目）。「第二候補を見る」で右のカードの最後に第二候補（直感型。「話し方」は直感型のマスタの文: K-32 ⑨）、もう一度押すと消える。比較組織を変えても保ち、別の人の結果に移ると閉じている", async ({
+  page,
+  adminOrg,
+}) => {
+  const { resultId } = submitType(adminOrg.organizationId, "conductor");
+  await loginViaUi(page, adminOrg.ownerEmail);
+  await openResultDetail(page, resultId);
+  const ln = rdLearn(page);
+
+  // 左のカード（§2.13.1）: 資質の第一候補 柔軟型と、その優位感覚 視覚（Visual）
+  await expect(ln.left.locator(".lbl")).toHaveText("育成タイプ");
+  await expect(ln.left.locator(".type")).toHaveText("柔軟型× 優位感覚「視覚」");
+  await expect(ln.left.locator(".type .xs")).toHaveText("× 優位感覚「視覚」");
+  await expect(ln.left.locator(".sense")).toHaveText("優位感覚：視覚（Visual）");
+  const picture = ln.left.locator(".lpic img");
+  await expect(picture).toHaveAttribute("src", "/images/aptitudes/environment_receptive.svg");
+  await expect(picture).toHaveAttribute("alt", "");
+  await expect(ln.left.locator(".lpic-cap")).toHaveText("優位感覚「視覚」のイメージ画像");
+
+  // 小さいレーダー（§2.13.2）: 軸は直感型（上）から時計回り、第一候補の名前を太字
+  const radar = ln.left.getByRole("img", { name: "レーダーチャート" });
+  await expect(radar.locator("text")).toHaveText(["直感型", "柔軟型", "目標達成型", "専門追求型"]);
+  await expect(radar.locator('text[font-weight="700"]')).toHaveText(["柔軟型"]);
+
+  // 資質の割合: 値の大きい順の行に、各値の小数第 1 位の表示の比を四捨五入した「%」（45・37.5・2.5・0 → 53%・44%・3%・0%）。
+  // 第一候補の行は .m で、名前は太字、棒は #3F8DA5（ほかは #B8C7D1）
+  await expect(ln.shareRows.locator(":scope > span:first-child")).toHaveText([
+    "柔軟型",
+    "直感型",
+    "専門追求型",
+    "目標達成型",
+  ]);
+  await expect(ln.shareRows.locator("b")).toHaveText(["53%", "44%", "3%", "0%"]);
+  await expect(ln.shareRows).toHaveClass(["m", "", "", ""]);
+  await expect(ln.shareRows.first().locator(".main")).toHaveText("柔軟型");
+  await expect(ln.shareRows.first().locator(".bar i")).toHaveCSS(
+    "background-color",
+    "rgb(63, 141, 165)",
+  );
+  await expect(ln.shareRows.nth(1).locator(".bar i")).toHaveCSS(
+    "background-color",
+    "rgb(184, 199, 209)",
+  );
+
+  // 右のカード（§2.13.3）: 関わり方の囲み（第一候補のアプローチ）と、2 つの区切りの 12 項目（第一候補の文）
+  const firstGuide = ln.right.locator(":scope > .dl2");
+  await expect(ln.right.locator(":scope > .call .lbl")).toHaveText("このタイプへの関わり方");
+  await expect(ln.right.locator(":scope > .call p")).toHaveText(
+    guideText("environment_receptive", "approach"),
+  );
+  await expect(firstGuide.locator("h3.grp")).toHaveText(["教え方・話し方", "人となり"]);
+  await expect(firstGuide.locator("h4")).toHaveText(LEARN_ITEMS);
+  await expect(guideItemText(firstGuide, "話し方")).toHaveText(
+    guideText("environment_receptive", "speaking"),
+  );
+
+  // 第二候補（§2.13.4）: 押すと右のカードの最後に足し、ボタンの文が変わる
+  await expect(ln.secondButton).toHaveText("第二候補を見る\u3000＞");
+  await expect(ln.second).toHaveCount(0);
+  await ln.secondButton.click();
+  await expect(ln.secondButton).toHaveText("第二候補を閉じる");
+  await expect(ln.second).toBeVisible();
+  expect(await ln.right.evaluate((el) => el.lastElementChild?.id)).toBe("rs-ln2");
+  await expect(ln.second.locator(".h img")).toHaveAttribute(
+    "src",
+    "/images/aptitudes/sensory_open.svg",
+  );
+  await expect(ln.second.locator(".h img")).toHaveAttribute("alt", "");
+  await expect(ln.second.locator(".h b")).toHaveText("直感型");
+  await expect(ln.second.locator(".h span")).toHaveText([
+    "第二候補",
+    "\u3000優位感覚：言語感覚（Auditory Digital）",
+  ]);
+  await expect(ln.second.locator(".call p")).toHaveText(guideText("sensory_open", "approach"));
+  const secondGuide = ln.second.locator(".dl2");
+  await expect(secondGuide.locator("h3.grp")).toHaveText(["教え方・話し方", "人となり"]);
+  await expect(secondGuide.locator("h4")).toHaveText(LEARN_ITEMS);
+  // 第二候補の「話し方」は直感型のマスタの文で、参照元が第二候補の直感型に出す目標達成型の「話し方」ではない（K-32 ⑨）
+  await expect(guideItemText(secondGuide, "話し方")).toHaveText(
+    guideText("sensory_open", "speaking"),
+  );
+  await expect(ln.second).not.toContainText(guideText("self_actualizing", "speaking"));
+  // 第一候補の表示はそのまま。第二候補に割合とレーダーは出さない
+  await expect(guideItemText(firstGuide, "話し方")).toHaveText(
+    guideText("environment_receptive", "speaking"),
+  );
+  await expect(ln.second.locator(".lt")).toHaveCount(0);
+  await expect(ln.second.getByRole("img")).toHaveCount(0);
+
+  // 比較組織を変えても保つ
+  await resultDetail(page).scope.selectOption("organization");
+  await expectComparison(page, "ready");
+  await expect(ln.second).toBeVisible();
+  await expect(ln.secondButton).toHaveText("第二候補を閉じる");
+
+  // もう一度押すと消える
+  await ln.secondButton.click();
+  await expect(ln.second).toHaveCount(0);
+  await expect(ln.secondButton).toHaveText("第二候補を見る\u3000＞");
+
+  // 開いたまま別の人の結果に移ると、閉じた状態から始まる
+  await ln.secondButton.click();
+  await expect(ln.second).toBeVisible();
+  await moveToAnotherPerson(page, seedName(1), seedExam(adminOrg, 1).resultId);
+  await expect(ln.second).toHaveCount(0);
+  await expect(ln.secondButton).toHaveText("第二候補を見る\u3000＞");
+});
+
+test("M7-result-30 留まる位置（1440×900）: 育て方の中までスクロールすると、左のカードはスクロールする領域の上端（.rd-scroll の縁 + 内側の余白 4px）から 72px に留まり、右のカードが終わるまで変わらない。その先は右のカードと一緒に流れる", async ({
+  page,
+  adminOrg,
+}) => {
+  const { resultId } = submitType(adminOrg.organizationId, "conductor");
+  await loginViaUi(page, adminOrg.ownerEmail);
+  await openResultDetail(page, resultId);
+  const rd = resultDetail(page);
+  const ln = rdLearn(page);
+  await expect(ln.left).toHaveCSS("position", "sticky");
+  await expect(ln.left).toHaveCSS("top", "72px");
+
+  /** 領域を dy だけ動かす */
+  const scrollBy = (dy: number) =>
+    rd.scroll.evaluate((el, delta) => {
+      el.scrollTop += delta;
+    }, dy);
+  const leftTop = async () => (await rectOf(ln.left)).top;
+  const stuckTop = (await rectOf(rd.scroll)).top + 4 + 72;
+
+  // 2 列の先頭が留まる位置より 40px 上に出るまで動かすと、左のカードは留まる位置にある
+  await scrollBy((await rectOf(ln.root)).top - (stuckTop - 40));
+  await expect(page.locator("#rsn")).toHaveClass("stuck");
+  expect(Math.abs((await leftTop()) - stuckTop)).toBeLessThanOrEqual(0.5);
+  // 目次（留まっている）の下端より下
+  expect((await rectOf(rd.toc)).bottom).toBeLessThan(stuckTop);
+
+  // 右のカードの下端に左のカードの下端がそろうまで（その差だけ）動かしても、留まる位置のまま
+  const slack = (await rectOf(ln.right)).bottom - (await rectOf(ln.left)).bottom;
+  expect(slack).toBeGreaterThan(100);
+  await scrollBy(slack / 2);
+  expect(Math.abs((await leftTop()) - stuckTop)).toBeLessThanOrEqual(0.5);
+  await scrollBy(slack / 2 - 10);
+  expect(Math.abs((await leftTop()) - stuckTop)).toBeLessThanOrEqual(0.5);
+
+  // その先は右のカードと一緒に流れる（下端がそろったまま、留まる位置より上へ）。領域の位置は整数に丸められるので、上の
+  // 半分ずつの移動のあとの「留まりが外れるまでの残り」は 10px ちょうどにならない（書体で右のカードの高さが変わり、残りに
+  // 端数が出る）。そこで、最後に動かす前の残りと実際に動いた量を測り、外れてから動いた分（約 40px）だけ上にあることを確かめる
+  const remaining = (await rectOf(ln.right)).bottom - (await rectOf(ln.left)).bottom;
+  const scrollTopOf = () => rd.scroll.evaluate((el) => el.scrollTop);
+  const before = await scrollTopOf();
+  await scrollBy(50);
+  const overshoot = (await scrollTopOf()) - before - remaining;
+  expect(overshoot).toBeGreaterThan(30);
+  expect(Math.abs((await leftTop()) - (stuckTop - overshoot))).toBeLessThanOrEqual(0.5);
+  expect(
+    Math.abs((await rectOf(ln.left)).bottom - (await rectOf(ln.right)).bottom),
+  ).toBeLessThanOrEqual(0.5);
+});
+
+test("M7-result-31 接し方: 4 区分の表（本人のエミアブルのマスが濃い地。点数は小数第 1 位）・注記 2 行・小さいレーダー、見出しの行とキャッチ・段落、関わり方のコツ 4 枚（帯 ×・○ と吹き出し）、「あなた（責任者・上司）のタイプ別の接し方」", async ({
+  page,
+  adminOrg,
+}) => {
+  const { resultId } = submitType(adminOrg.organizationId, "conductor");
+  await loginViaUi(page, adminOrg.ownerEmail);
+  await openResultDetail(page, resultId);
+  const ss = rdStyle(page);
+
+  // 4 区分の表（§2.14.1）: 左上から アナリティカル・ドライビング・エミアブル・エクスプレッシブ。右の列は右揃え。
+  // 点数は小数第 1 位の表示（0.75 → 0.8、4.75 → 4.8）。本人のスタイル（エミアブル）のマスは地 #14202B・白字（小さい文字は #C9D2DB）
+  await expect(ss.left.locator(".lbl")).toHaveText("ソーシャルスタイル");
+  await expect(ss.quadCells.locator("span")).toHaveText([
+    "アナリティカル思考派",
+    "ドライビング行動派",
+    "エミアブル協調派",
+    "エクスプレッシブ感覚派",
+  ]);
+  await expect(ss.quadCells.locator("small")).toHaveText(["思考派", "行動派", "協調派", "感覚派"]);
+  await expect(ss.quadCells.locator("b")).toHaveText(["0.8", "4.8", "8.5", "6"]);
+  await expect(ss.quadCells).toHaveClass(["", "rt", "on", "rt"]);
+  await expect(ss.quadCells.nth(1)).toHaveCSS("text-align", "right");
+  await expect(ss.quadCells.nth(0)).toHaveCSS("background-color", "rgb(238, 242, 246)");
+  const own = ss.quadCells.nth(2);
+  await expect(own).toHaveCSS("background-color", "rgb(20, 32, 43)");
+  await expect(own).toHaveCSS("color", "rgb(255, 255, 255)");
+  await expect(own.locator("small")).toHaveCSS("color", "rgb(201, 210, 219)");
+
+  // 表の下の注記 2 行（文字 #6A7888。K-49）
+  await expect(ss.left.locator(".qax span")).toHaveText(["← 主張が控えめ", "主張が強い →"]);
+  await expect(ss.left.locator(".qax2")).toHaveText(
+    "上段：感情を表に出さない／下段：感情を表に出す",
+  );
+  await expect(ss.left.locator(".qax")).toHaveCSS("color", "rgb(106, 120, 136)");
+  await expect(ss.left.locator(".qax2")).toHaveCSS("color", "rgb(106, 120, 136)");
+
+  // 小さいレーダー（§2.13.2）: 軸はドライビング（上）から時計回り、本人のスタイルの名前を太字
+  const radar = ss.left.getByRole("img", { name: "レーダーチャート" });
+  await expect(radar.locator("text")).toHaveText([
+    "ドライビング",
+    "エクスプレッシブ",
+    "エミアブル",
+    "アナリティカル",
+  ]);
+  await expect(radar.locator('text[font-weight="700"]')).toHaveText(["エミアブル"]);
+
+  // 右のカード（§2.14.2）: 絵・スタイル名・小さい行（自己主張の行・〇〇派・偉人名を全角空白・中黒・全角空白でつなぐ）、
+  // キャッチと段落（本文の上の 3 行は、括弧の自己主張の行・「…」タイプ・（〇〇派）。別表A）
+  const shead = ss.right.locator(".shead");
+  await expect(shead.locator("img")).toHaveAttribute("src", "/images/styles/amiable.svg");
+  await expect(shead.locator("img")).toHaveAttribute("alt", "");
+  await expect(shead.locator(".t")).toHaveText(styleText("amiable", "typeName"));
+  expect(await shead.locator(".s").textContent()).toBe(
+    "自己主張：弱／感情表出：強\u3000・\u3000協調派\u3000・\u3000マザー・テレサ",
+  );
+  const bodyLines = linesOf(styleText("amiable", "body"));
+  expect(bodyLines.slice(0, 3)).toEqual([
+    "（自己主張：弱／感情表出：強）",
+    "「周りの力になりたい。頼られると嬉しい」タイプ",
+    "（協調派）",
+  ]);
+  await expect(ss.right.locator(".catch")).toHaveText("「周りの力になりたい。頼られると嬉しい」");
+  await expect(ss.right.locator(".desc")).toHaveText(bodyLines.slice(3));
+
+  // 関わり方のコツ（§2.14.3）: 4 枚の題の順。中身の数はマスタの文の行の先頭の記号で決まる（×・✕ は灰色の帯、○・◯・◎ は緑の帯、
+  // 声かけ例の「・」は吹き出し、ほかの「・」は箇条書き、それ以外は段落）。出す順は 帯 → 箇条書きか吹き出し → 段落
+  await expect(ss.how.locator("h3.howt")).toHaveText("関わり方のコツ");
+  await expect(ss.howCards.locator("h4")).toHaveText([
+    "見分け方",
+    "褒め方",
+    "効果的な対応",
+    "声かけ例",
+  ]);
+  for (const [i, field] of (["identify", "praise", "response", "phrases"] as const).entries()) {
+    const lines = linesOf(styleText("amiable", field));
+    const card = ss.howCards.nth(i);
+    const dots = lines.filter((line) => line.startsWith("・")).length;
+    await expect(card.locator(".ngok .ng"), field).toHaveCount(
+      lines.filter((line) => /^[×✕]/.test(line)).length,
+    );
+    await expect(card.locator(".ngok .ok"), field).toHaveCount(
+      lines.filter((line) => /^[○◯◎]/.test(line)).length,
+    );
+    await expect(card.locator("li"), field).toHaveCount(field === "phrases" ? 0 : dots);
+    await expect(card.locator(".say > div"), field).toHaveCount(field === "phrases" ? dots : 0);
+    await expect(card.locator(":scope > p"), field).toHaveCount(
+      lines.filter((line) => !/^[×✕○◯◎・]/.test(line)).length,
+    );
+  }
+  // エミアブルの褒め方は 帯（×）1 つ・帯（○）1 つ・段落、見分け方は箇条書き 3 つ・段落、声かけ例は吹き出し 2 つ・段落
+  const childClasses = (card: Locator) =>
+    card.evaluate((el) =>
+      Array.from(el.children).map((child) => `${child.tagName.toLowerCase()}.${child.className}`),
+    );
+  expect(await childClasses(ss.howCards.nth(1))).toEqual(["h4.", "div.ngok", "p."]);
+  expect(await childClasses(ss.howCards.nth(0))).toEqual(["h4.", "ul.", "p."]);
+  expect(await childClasses(ss.howCards.nth(3))).toEqual(["h4.", "div.say", "p."]);
+  const praise = ss.howCards.nth(1);
+  await expect(praise.locator(".ng b")).toHaveText("×");
+  await expect(praise.locator(".ng b")).toHaveCSS("color", "rgb(93, 104, 117)");
+  await expect(praise.locator(".ng span")).toHaveText("「スゴいですね」「〇〇さんって優しいね」");
+  await expect(praise.locator(".ok b")).toHaveText("○");
+  await expect(praise.locator(".ok span")).toHaveText(
+    "「ありがとうございます」「助かりました」「あなたがいてくれて心強いです」",
+  );
+
+  // タイプ別の接し方（§2.14.4。K-19）
+  await expect(ss.mine.locator("h3")).toHaveText("あなた（責任者・上司）のタイプ別の接し方");
+  await expect(ss.mine).not.toContainText("院長");
+});
+
+test("M7-result-31 タブ: 既定はドライビングで、文は本人のスタイル（エミアブル）の列の文。押すと文と aria-pressed が変わり、比較組織を変えても保ち、別の人の結果に移るとドライビングに戻る", async ({
+  page,
+  adminOrg,
+}) => {
+  const { resultId } = submitType(adminOrg.organizationId, "conductor");
+  await loginViaUi(page, adminOrg.ownerEmail);
+  await openResultDetail(page, resultId);
+  const ss = rdStyle(page);
+  const text = ss.mine.locator("p");
+
+  // 既定はドライビング（§2.14.4）
+  await expectPressedTab(page, "ドライビング");
+  await expect(ss.tab("ドライビング")).toHaveClass("on");
+  await expect(ss.tab("ドライビング")).toHaveCSS("background-color", "rgb(20, 32, 43)");
+  await expect(text).toHaveText(interactionText("driving", "amiable"));
+
+  // 押すと選んだスタイル × 本人のスタイルの文
+  await ss.tab("エミアブル").click();
+  await expectPressedTab(page, "エミアブル");
+  await expect(ss.tab("エミアブル")).toHaveClass("on");
+  await expect(text).toHaveText(interactionText("amiable", "amiable"));
+  await ss.tab("アナリティカル").click();
+  await expectPressedTab(page, "アナリティカル");
+  await expect(text).toHaveText(interactionText("analytical", "amiable"));
+
+  // 比較組織を変えても保つ
+  await resultDetail(page).scope.selectOption("organization");
+  await expectComparison(page, "ready");
+  await expectPressedTab(page, "アナリティカル");
+  await expect(text).toHaveText(interactionText("analytical", "amiable"));
+
+  // 別の人の結果に移るとドライビングに戻る（文はその人のスタイルの列。スタイルは小さいレーダーの太字の軸の名前で引く）
+  await moveToAnotherPerson(page, seedName(1), seedExam(adminOrg, 1).resultId);
+  await expectPressedTab(page, "ドライビング");
+  const strong = await ss.left
+    .getByRole("img", { name: "レーダーチャート" })
+    .locator('text[font-weight="700"]')
+    .textContent();
+  const target = STYLE_TABS.find(([name]) => name === strong)?.[1];
+  expect(target).toBeDefined();
+  await expect(text).toHaveText(interactionText("driving", target ?? "driving"));
+});
+
 test("M7-result-32 折りたたみ: 見出しの行で開閉し、ボタンの文・aria-expanded・中身が変わる。たたんだセクションへ目次で移ると開いてから移る。たたみ方は別の人に移っても保ち、再読み込みで戻る。700×900 で開くと概要以外がたたまれている", async ({
   page,
   adminOrg,
@@ -755,12 +1159,12 @@ test("M7-result-32 折りたたみ: 見出しの行で開閉し、ボタンの�
   await expectComparison(page, "none");
   await expect(page.locator("#rs2 section.sec.fold")).toHaveCount(0);
 
-  // 画面の幅 700px 以下で開くと、概要以外の 4 つ（PR-7.8a の分）をたたんだ状態で始まる（§2.16）
+  // 画面の幅 700px 以下で開くと、概要以外の 6 つ（育て方・接し方を含む）をたたんだ状態で始まる（§2.16）
   await page.setViewportSize({ width: 700, height: 900 });
   await page.reload();
   await expectComparison(page, "none");
   await expect(rdSection(page, "rs-ov")).toHaveClass("sec");
-  for (const id of ["rs-tr", "rs-rk", "rs-fit", "rs-pf"]) {
+  for (const id of ["rs-tr", "rs-rk", "rs-fit", "rs-pf", "rs-ln", "rs-ss"]) {
     await expect(rdSection(page, id)).toHaveClass("sec fold");
   }
   await expect(page.locator("#rs-hero")).toBeVisible();

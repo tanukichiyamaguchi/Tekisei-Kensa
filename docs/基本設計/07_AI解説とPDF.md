@@ -3,8 +3,8 @@
 | 項目 | 内容 |
 |---|---|
 | 文書名 | 適性検査システム 基本設計 07 AI 解説・PDF 出力設計 |
-| 版 | 1.6 |
-| 作成日 | 2026-09-17（1.1 版: 2026-09-21、1.2 版: 2026-09-21 最終点検、1.3 版: 2026-09-21 K-06（Supabase → Firebase）に伴う部分改版、1.4 版: 2026-09-21 Firebase 化後の分冊間整合（02・04 の 2.1 版に合わせた）、1.5 版: 2026-09-24 本番デプロイで判明した事項の反映、1.6 版: 2026-11-11 M7 の PR-7.8a（結果詳細の枠と上半分）で変わった描画完了の待ちの個数の注記（§9.6）。§13） |
+| 版 | 1.7 |
+| 作成日 | 2026-09-17（1.1 版: 2026-09-21、1.2 版: 2026-09-21 最終点検、1.3 版: 2026-09-21 K-06（Supabase → Firebase）に伴う部分改版、1.4 版: 2026-09-21 Firebase 化後の分冊間整合（02・04 の 2.1 版に合わせた）、1.5 版: 2026-09-24 本番デプロイで判明した事項の反映、1.6 版: 2026-11-11 M7 の PR-7.8a（結果詳細の枠と上半分）で変わった描画完了の待ちの個数の注記（§9.6）、1.7 版: 2026-11-11 M7 の PR-7.8b（結果詳細の下半分と片付け）で変わった印刷用ページの注記（§0.2・§9.4〜§9.6・§12）。§13） |
 | 対象 | `lib/ai/`、`lib/pdf/`、印刷用ページ、`lib/services/ai-analysis.ts` / `pdf-export.ts` の 07 担当部分を実装する担当者。04（API）、06（管理者画面）、08（テスト）の担当者 |
 
 ## 0. 本書の位置づけ
@@ -47,7 +47,7 @@
 
 | # | 決定事項 | 本書での対応 |
 |---|---|---|
-| 1 | Next.js（App Router、TypeScript）+ Firebase（Cloud Firestore、Firebase Authentication、Cloud Storage for Firebase）+ Vercel。グラフは ApexCharts（10 K-06） | AI 解説の保存先は Firestore の `aiAnalyses`（§7.1。Admin SDK 経由。00 §2.5）。PDF は Vercel の Node.js Function 上の Headless Chromium で、画面と同じ `react-apexcharts` の SVG をそのまま印刷する（§9）。本フェーズでは PDF を保存せず、保存する場合の保存先は Cloud Storage for Firebase（§9.11、D07-21） |
+| 1 | Next.js（App Router、TypeScript）+ Firebase（Cloud Firestore、Firebase Authentication、Cloud Storage for Firebase）+ Vercel。グラフは ApexCharts（10 K-06） | AI 解説の保存先は Firestore の `aiAnalyses`（§7.1。Admin SDK 経由。00 §2.5）。PDF は Vercel の Node.js Function 上の Headless Chromium で、画面と同じ `react-apexcharts` の SVG をそのまま印刷する（§9）。本フェーズでは PDF を保存せず、保存する場合の保存先は Cloud Storage for Firebase（§9.11、D07-21）。1.7 版（M7 の PR-7.8b）: 印刷用ページは 11-4 の部品の印刷の形で描き、画面の状態は既定（育て方の第二候補は出さない、接し方のタイプ別の接し方はドライビングのタブの文 1 つ）で、ApexCharts は使わない。本項の改版は PR-7.12（11-5。10 K-26） |
 | 2 | 既存不具合 10 件を修正 | 信頼係数の色は PDF でも緑系逆順（06 の色関数を印刷用ページで再利用。§9.5）。内部名は「感性開放型」に統一し、付録D プロンプトの転記部分だけ例外（§2.2） |
 | 3 | 出題は Q1〜Q144 のみ | AI 入力は `ScoreResult`（採点済みの指標）だけを使い、回答そのものは送らない（§2.3） |
 | 4 | 既存データは移行しない | AI 解説・PDF は新システムで生成された結果だけを対象にする。旧版ロジックの扱いは対象外 |
@@ -935,7 +935,7 @@ sequenceDiagram
 | レイアウト | `app/(admin)/admin/results/[resultId]/print/layout.tsx` を置き、管理者画面のサイドメニュー・ヘッダー（`AdminShell`）を描画しない最小のラッパーにする。00 §3.3 のルートレイアウト（`app/layout.tsx`）の内側では `html` / `body` を再定義できないため、1.1 版の「最小の `html` / `body`」はこの読み替えとする（06 §1.3 D06-27）。06 の `app/(admin)/admin/layout.tsx` は CSS の読み込みだけで認証チェックを持たないため、印刷用ページは本書の認可（下記）だけで開け、06 の部品が必要とする CSS クラスは継承される。印刷用 CSS（§9.5）とフォント（§9.7）はこの `print/layout.tsx` で読み込む |
 | 認可の流れ | (1) `token` が無い／検証失敗 → 404（`verifyPdfToken` は `ApiError(404, NOT_FOUND)` を投げる。04 §7.2）。(2) トークンの `resultId` とパスの `[resultId]` の一致、`mode` / `scope` / `teamCode` とクエリの一致を確認（クエリの改ざん防止。不一致は 404）。(3) Admin SDK で取得した `results` 文書の `organizationId` とトークンの `organizationId` の一致を確認。(4) 文書の `respondentKind == "executive"` なら、トークンのペイロードの `role`（発行時のクレームの値。04 §7.2 D04-39 で 2.0 版に追加）が `owner` / `super_admin` であることを確認する。`adminUsers/{uid}` は再読しない（トークンは 120 秒の短命で、発行時に `requireAdmin` が停止・削除・役割を確認済み。1.3 版の文書再読は取り下げ。04 §7.2、08 I-47 (g)）。実装上は `{ uid: adminUid, organizationId, role }` を 02 の `Viewer` として `getResult({ resultId, viewer })` に渡せば、リポジトリが (3)(4) を同じ規則で判定して `null` を返す。いずれかに失敗したら 404 |
 | データ取得 | Admin SDK（`lib/firebase/admin.ts` 経由の `lib/db/` リポジトリ。00 §2.5）で `getResult({ resultId, viewer })` + `getRespondent({ respondentId, viewer })` + `getAiAnalysis({ aiAnalysisId: results.latestAiAnalysisId, resultId, organizationId })` + `scope` 指定時は `fetchPopulation({ organizationId, scope })`（02 §8.5）→ `compareWithPopulation`（03）。取得関数は 04 の `getResultDetail` / `getComparison` と同じリポジトリ・mapper（`toScoreResult` など。02 `lib/db/mappers/`）を使い、管理者 API の認可 3 段階（00 §4.1）の代わりにトークンから作った `Viewer` で上記 (3)(4) を行う `lib/services/print-data.ts`（本書が追加。§11）に置く。Admin SDK はセキュリティルールの対象外（全拒否ルールでも読める。00 §2.5）ため、認可は必ずこの関数のコードで行う |
-| 描画 | 06 の `components/admin/result/*` と `components/charts/*` を `components/pdf/PrintResultDocument.tsx` から再利用する。操作要素（戻る、ダウンロード、AI 解説の表示切替、第二候補を見る、他項目の一覧）は描画しない（06 §9）。`PdfSectionVisibility`（§9.5）を props で渡す |
+| 描画 | 06 の `components/admin/result/*` と `components/charts/*` を `components/pdf/PrintResultDocument.tsx` から再利用する。操作要素（戻る、ダウンロード、AI 解説の表示切替、第二候補を見る、他項目の一覧）は描画しない（06 §9）。`PdfSectionVisibility`（§9.5）を props で渡す。1.7 版: M7 の PR-7.8a・PR-7.8b から、印刷用ページは 11-4 の部品を印刷の形（`ResultDetailBody` の `variant="print"`）で描き、ボタン類（たたむ・並び替え・項目の説明・ほかの特性・第二候補・タブ）は画面と同じ位置・見た目で処理を付けずに描く（11-4 §2.18）。本項の改版は PR-7.12（11-5） |
 | 監査ログ | 書かない（04 §7.2。GET 側で 1 件） |
 | 検索避け | `robots: { index: false, follow: false }` を `metadata` で指定し、応答ヘッダー `X-Robots-Tag: noindex, nofollow` と `Referrer-Policy: no-referrer`（URL にトークンが載るため）を付ける。01 §8.7 の `next.config.ts`（`printPageHeaders`）で反映済み |
 | ミドルウェア | 管理者ログインを要求する `middleware.ts` の未認証遮断から `/admin/results/{resultId}/print` を除外する。01 §5.5 `PUBLIC_ADMIN_PATHS` と 04 §8.5 D04-41 で確定済み。除外しないと Chromium のアクセスがログイン画面へリダイレクトされる |
@@ -957,8 +957,8 @@ sequenceDiagram
 | セクション順 | 要件定義書 §7 の 1〜7 と同じ: 1 サマリー、2 個人特性、3 組織との相性、4 立ち位置・リスク（再掲）、5 育成方法、6 ソーシャルスタイル、7 AI 解説（`completed` かつ `full` のときのみ。`restricted` では印字しない。§7.2） | 06 §3.5 |
 | サマリーの配置 | 上段: 個別特性（評価レター・合致度・信頼係数のゲージ横並び、その下に 16 軸レーダー 320 px 角）。中段: タイプ（イラスト 96 px、タイプ名、キャラクター名、適性職種文）。下段: 立ち位置（イラスト 96 px、名称、説明）とリスク 7 ゲージ（4 + 3 の 2 行、各 96 px。06 `DonutGaugeProps.size` の 96 を使う） | 06 §3.5.4 の内容を縦に並べる |
 | レーダーのサイズ | 16 軸: 320 × 320 px、資質・ソーシャルスタイル: 280 × 280 px | 付録E §2 の取得値（440〜626 px）より小さいが軸ラベル 16 個が読める最小として仮置き。実機で確認して調整（D07-17） |
-| 育成方法 | 資質レーダーの下に第一候補の 14 項目、続けて第二候補の 14 項目を印字（見出し「第二候補: {表示名}」） | 06 §9 の提案を採用（設計判断 D07-18） |
-| ソーシャルスタイル | スタイル名・偉人イラスト・本文、4 軸レーダー、本タイプの対処法、タイプ別の対処法（閲覧者 4 スタイル分すべて。06 §3.5.8 と同じ） | |
+| 育成方法 | 資質レーダーの下に第一候補の 14 項目、続けて第二候補の 14 項目を印字（見出し「第二候補: {表示名}」） | 06 §9 の提案を採用（設計判断 D07-18）。1.7 版（M7 の PR-7.8b）: 印刷用ページは 11-4 の部品の印刷の形で描き、画面の状態は既定（育て方の第二候補は出さない、接し方のタイプ別の接し方はドライビングのタブの文 1 つ）で、ApexCharts は使わない。本項の改版は PR-7.12（11-5。10 K-26） |
+| ソーシャルスタイル | スタイル名・偉人イラスト・本文、4 軸レーダー、本タイプの対処法、タイプ別の対処法（閲覧者 4 スタイル分すべて。06 §3.5.8 と同じ） | 1.7 版（M7 の PR-7.8b）: 印刷用ページは 11-4 の部品の印刷の形で描き、画面の状態は既定（育て方の第二候補は出さない、接し方のタイプ別の接し方はドライビングのタブの文 1 つ）で、ApexCharts は使わない。本項の改版は PR-7.12（11-5。10 K-26） |
 | AI 解説 | 7 ブロック + 免責表示。判定 3 種は色なし（06 D06-15）。`restricted` ではセクション 7 全体（見出しを含む）を印字しない（D07-15） | §7.2 |
 | 比較未選択 | 評価・合致度・立ち位置・比較対象系列は「比較組織を選択すると表示されます」の固定文言のまま印字 | 06 D06-16 |
 | 母集団人数の注記 | 06 §3.5.3 の注記（1 名のときの参考値注記）を同様に印字 | |
@@ -1000,15 +1000,17 @@ export function visibilityForMode(mode: PdfMode, aiCompleted: boolean): PdfSecti
 
 ### 9.6 グラフを PDF に入れる方法（ApexCharts の SVG）
 
+1.7 版（M7 の PR-7.8b）: ApexCharts は依存から外した（10 K-23）。印刷用ページのグラフは 11-4 の部品の自作の SVG（16の特性のレーダーと、育て方・接し方の小さいレーダー）で、Chromium がそのままベクターで印刷する（PNG 化しないのは同じ）。見出しと下の表の ApexCharts の記述（方式・アニメーション・描画完了の検知の `mounted`・代替）は PR-7.8b から当たらない。節の作り直しは 11-5 の PR-7.12。
+
 | 項目 | 内容 |
 |---|---|
-| 方式 | 印刷用ページでも画面と同じ `react-apexcharts`（`next/dynamic` の `ssr: false`。01 §3.2）でレーダーを描画し、Chromium がその SVG をベクターのまま PDF に印刷する。**PNG 化や `dataURI()` は使わない**（設計判断 D07-19。ベクターの方が拡大しても劣化せず、変換工程が減る） |
-| アニメーション | 06 D06-21 のとおり全画面で `chart.animations.enabled = false`。印刷用ページでは描画途中を取り込まないための必須条件 |
-| 描画完了の検知 | 印刷用ページに Client Component `PrintReadyMarker` を置き、期待するレーダー個数（4 個。16 軸 ×2、資質、ソーシャルスタイル）の `mounted` イベント（ApexCharts の `chart.events.mounted`。06 §9 の提案）を数え、全部揃ったら `document.documentElement.setAttribute("data-print-ready", "true")` を設定する。`lib/pdf/` は `page.waitForSelector('html[data-print-ready="true"]', { timeout: 20_000 })` で待つ。ApexCharts の `mounted` が使えない場合の代替は `.apexcharts-svg` の個数を `page.waitForFunction` で数える。1.6 版（M7 の PR-7.8a）: 16の特性のレーダーは ApexCharts を使わない自作の SVG（06 §6.2、11-4 §2.8.3）になり、印刷用ページの上半分は 11-4 の部品の印刷の形で描くので、期待する個数は旧のセクション 5・6 の 2 個（資質・ソーシャルスタイル。`PRINT_RADAR_COUNT`）になった。PR-7.8b で 0 個になり、描画完了の待ちの作り直しは 11-5 の PR-7.12（本節の改版も PR-7.12） |
+| 方式 | 印刷用ページでも画面と同じ `react-apexcharts`（`next/dynamic` の `ssr: false`。01 §3.2）でレーダーを描画し、Chromium がその SVG をベクターのまま PDF に印刷する。**PNG 化や `dataURI()` は使わない**（設計判断 D07-19。ベクターの方が拡大しても劣化せず、変換工程が減る）。1.7 版（M7 の PR-7.8b）: `react-apexcharts` は使わない。グラフは 11-4 の部品の自作の SVG を `variant="print"` で描く |
+| アニメーション | 06 D06-21 のとおり全画面で `chart.animations.enabled = false`。印刷用ページでは描画途中を取り込まないための必須条件。1.7 版（M7 の PR-7.8b）: 自作の SVG はアニメーションを持たないので当たらない |
+| 描画完了の検知 | 印刷用ページに Client Component `PrintReadyMarker` を置き、期待するレーダー個数（4 個。16 軸 ×2、資質、ソーシャルスタイル）の `mounted` イベント（ApexCharts の `chart.events.mounted`。06 §9 の提案）を数え、全部揃ったら `document.documentElement.setAttribute("data-print-ready", "true")` を設定する。`lib/pdf/` は `page.waitForSelector('html[data-print-ready="true"]', { timeout: 20_000 })` で待つ。ApexCharts の `mounted` が使えない場合の代替は `.apexcharts-svg` の個数を `page.waitForFunction` で数える。1.6 版（M7 の PR-7.8a）: 16の特性のレーダーは ApexCharts を使わない自作の SVG（06 §6.2、11-4 §2.8.3）になり、印刷用ページの上半分は 11-4 の部品の印刷の形で描くので、期待する個数は旧のセクション 5・6 の 2 個（資質・ソーシャルスタイル。`PRINT_RADAR_COUNT`）になった。PR-7.8b で 0 個になり、描画完了の待ちの作り直しは 11-5 の PR-7.12（本節の改版も PR-7.12）。1.7 版（M7 の PR-7.8b）: 期待する個数は 0 個になった（育て方・接し方の小さいレーダーも自作の SVG。06 §6.3、11-4 §2.13.2）。印 `data-print-ready` はハイドレーションの後の次のフレームで付く。作り直しは PR-7.12 |
 | ゲージ・スライダー・評価レター | 06 §6 のとおり SVG／CSS で Server Component が描くため待ち合わせ不要 |
 | イラスト | `img` 要素（06 §7 の方針。`next/image` を使わない）。`public/images/...`（00 §3.8）を同一オリジンから読み込む。`page.goto(url, { waitUntil: "networkidle0" })` で画像の読み込み完了を待つ |
 | フォント読み込み | `document.fonts.ready` を `page.evaluate` で待つ（§9.7） |
-| 代替（将来 A 方式へ変える場合） | ApexCharts の `chart.dataURI()`（PNG/SVG の data URI）をブラウザ側で取得して API に送り、PDF に埋め込む方法があるが、サーバ側生成の設計と合わないため採用しない |
+| 代替（将来 A 方式へ変える場合） | ApexCharts の `chart.dataURI()`（PNG/SVG の data URI）をブラウザ側で取得して API に送り、PDF に埋め込む方法があるが、サーバ側生成の設計と合わないため採用しない。1.7 版（M7 の PR-7.8b）: ApexCharts を外したので当たらない |
 
 ### 9.7 日本語フォント
 
@@ -1229,8 +1231,8 @@ export async function renderResultPdf(args: RenderResultPdfArgs): Promise<Render
 | D07-15 | 設計判断（依頼主確認事項） | AI 解説の PDF 掲載 | `completed` かつ `full` のときのみ掲載し、**`restricted` では掲載しない**（付録D §3 が `cautions` へのリスク数値の引用を必須としており、`teichaku_risk` の判定も印字されるため。§7.2）。06 §3.5.11 の「`restricted` でも掲載」提案は不採用。依頼主が「`restricted` でも掲載する」と明示的に確認した場合のみ `visibilityForMode()` の 1 行で切り替える | 06、07、08 |
 | D07-16 | 設計判断（01 D01-04 の確定） | PDF 生成方式 | `puppeteer-core` + `@sparticuz/chromium`。`@react-pdf/renderer` と外部サービスは不採用 | 01、07 |
 | D07-17 | 設計判断（実機確認で調整） | A4 の余白・本文幅・レーダーのサイズ | 上下 14 mm 左右 12 mm、本文 186 mm、レーダー 320 / 280 px | 07 |
-| D07-18 | 設計判断（06 の提案を採用） | 育成方法の第二候補 | PDF では第一候補・第二候補を続けて印字 | 06、07 |
-| D07-19 | 設計判断 | グラフの取り込み | ApexCharts の SVG をベクターのまま印刷。PNG 化しない | 06、07 |
+| D07-18 | 設計判断（06 の提案を採用） | 育成方法の第二候補 | PDF では第一候補・第二候補を続けて印字。1.7 版（M7 の PR-7.8b）: 印刷用ページは 11-4 の部品の印刷の形で描き、画面の状態は既定（育て方の第二候補は出さない、接し方のタイプ別の接し方はドライビングのタブの文 1 つ）で、ApexCharts は使わない。本項の改版は PR-7.12（11-5。10 K-26） | 06、07 |
+| D07-19 | 設計判断 | グラフの取り込み | ApexCharts の SVG をベクターのまま印刷。PNG 化しない。1.7 版（M7 の PR-7.8b）: グラフはすべて自作の SVG と CSS（10 K-23）で、印刷用ページも同じ部品の SVG をベクターのまま印刷する（PNG 化しないのは同じ）。ApexCharts は使わない。本項の改版は PR-7.12（11-5） | 06、07 |
 | D07-20 | 未確認（Chromium 環境のフォント）＋ 推定（`public/` は関数バンドル外） | 日本語フォント | Noto Sans JP（OFL）を `public/fonts/` に同梱し印刷用ページの `@font-face` で読み込む。サブセット化しない（AI 解説の任意文字の豆腐化を避ける。§9.7）。`public/` が関数バンドルに含まれないことは Preview のビルドログで確認（PDF-08） | 01、07、08 |
 | D07-21 | 設計判断（1.3 版で Cloud Storage for Firebase に読み替え） | PDF の Storage 保存 | 本フェーズは保存せず同期ストリーム返却（00 §2.1、§3.2 と一致）。保存する場合の仕様は §9.11 に確定（既定バケットの `pdf-exports/{organizationId}/{resultId}/{mode}-{timestamp}.pdf`、`storage.rules` は全拒否のまま、Admin SDK の署名付き URL 60 秒のみ、24 時間削除。署名付き URL の生成可否は実装時確認） | 01、02、04、07 |
 | D07-22 | 設計判断 | 印刷用ページのオリジン | 01 §4.3 の `appBaseUrl()`（`NEXT_PUBLIC_APP_BASE_URL`、無ければ `https://${VERCEL_URL}`）を使う。受信 `Host` からは組み立てない（`RequestMeta` に `Host` が無く、`Host` 改ざんで印刷トークン付き URL が外部へ送られる経路を作らないため。§9.13） | 04、07 |
@@ -1249,3 +1251,4 @@ export async function renderResultPdf(args: RenderResultPdfArgs): Promise<Render
 | 1.4 | 2026-09-21 | Firebase 化後の分冊間整合。02 2.1 版・04 2.1 版に合わせ、§4.8（監査ログ `details` のトークン数は 04 §5.9 で確定）、§6.2（状態遷移は 02 の `markAiGenerationStarted`・`saveAiAnalysis`・`markAiGenerationFailed`・`countAiAnalysesSince` と 04 §5.9 の分担）、§6.3（GET で滞留を検知した場合も監査ログが残る）、§6.4（日次上限は `count()` 集計で確定）、§7.1（`generatedBy` で確定、同一バッチは `saveAiAnalysis()`）、§9.3・§9.4（印刷トークンの `adminUid`・`role`。可視性の再検証はトークンの `role` で行い `adminUsers` を再読しない）、§11 の 02・04 宛てを反映済みに更新。Claude API の呼び出し仕様・プロンプト・PDF の生成方式は変更なし |
 | 1.5 | 2026-09-24 | 本番デプロイで判明した事項の反映（§1.2・§2.2 のプロンプト `recruitment-v2`（アイリスト向け）と `AI_PROMPT_VERSION` の現在値、§2.3・§2.4・§3.2・§3.3 の職種例と「サロン」の文言（10 K-19。PR #13・#14）、§4.2 のワークスペースに属する API キー、§4.8・§9.8 の失敗時ログの `detail`、§9.8 の Chromium バイナリの同梱と `next build --webpack`、§10 PDF-08 の CI での同梱確認（PR #15）） |
 | 1.6 | 2026-11-11 | M7 の PR-7.8a（結果詳細の枠と上半分。11-4）。§9.6 の描画完了の検知に、期待するレーダーの個数が PR-7.8a から 2 個（資質・ソーシャルスタイル）、PR-7.8b で 0 個になる注記だけを足した（§9.4〜§9.6 の作り直しは 11-5 の PR-7.12。11 総論 6.1）。表の版と作成日に、1.5 版の記載が漏れていたのを足した |
+| 1.7 | 2026-11-11 | M7 の PR-7.8b（結果詳細の下半分と片付け。11-4）。注記だけを足した（§9.4〜§9.6 の作り直しは 11-5 の PR-7.12。11 総論 6.1）: §9.6 の描画完了の検知に、期待する個数が 0 個になり印はハイドレーションの後に付くこと。§9.4 の描画の行に、印刷の形ではボタン類を処理なしで描くこと（11-4 §2.18）。§0.2 の決定事項 1 の行、§9.5 の育成方法・ソーシャルスタイルの行、§12 の D07-18・D07-19 に、PR-7.8b から印刷用ページは 11-4 の部品の印刷の形で、画面の状態は既定（第二候補は出さない・タイプ別の接し方はドライビングのタブの文）、ApexCharts は使わないこと（改版は PR-7.12。10 K-26）。検証のあと: §9.6 の見出しの下と方式・アニメーション・代替の行に、ApexCharts を外したので当たらないことを書いた |
