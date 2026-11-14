@@ -111,6 +111,8 @@ export function ResultsView({
   const filterRef = useRef<ListFilterState>(DEFAULT_LIST_FILTER);
   const [searchText, setSearchText] = useState("");
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 入力から 150 ミリ秒の待ちの間の検索語（まだ絞り込みにも保存にも入れていない。待ちが無いときは null）
+  const pendingSearch = useRef<string | null>(null);
   const [limit, setLimit] = useState(LIST_PAGE_STEP);
 
   // ---- メニュー・ダイアログ
@@ -162,9 +164,17 @@ export function ResultsView({
     setSearchText(restored.q);
   }, []);
 
+  // 一覧を離れるとき（結果詳細を開くなど）、入力から 150 ミリ秒たつ前の検索語も保存する（§2.21 の 1.4 版。待ちを取り消すだけだと、
+  // 戻ったときに検索語が消える）
   useEffect(
     () => () => {
-      if (searchTimer.current !== null) clearTimeout(searchTimer.current);
+      if (searchTimer.current === null) return;
+      clearTimeout(searchTimer.current);
+      searchTimer.current = null;
+      if (pendingSearch.current !== null) {
+        saveFilter({ ...filterRef.current, q: pendingSearch.current });
+        pendingSearch.current = null;
+      }
     },
     [],
   );
@@ -373,9 +383,11 @@ export function ResultsView({
   const onSearchInput = (text: string) => {
     setSearchText(text);
     setLimit(LIST_PAGE_STEP);
+    pendingSearch.current = text;
     if (searchTimer.current !== null) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => {
       searchTimer.current = null;
+      pendingSearch.current = null;
       applyFilter({ ...filterRef.current, q: text }, false);
     }, SEARCH_DEBOUNCE_MS);
   };
@@ -387,6 +399,7 @@ export function ResultsView({
       clearTimeout(searchTimer.current);
       searchTimer.current = null;
     }
+    pendingSearch.current = null;
     setSearchText("");
     applyFilter(clearFilters(filterRef.current), false);
   };

@@ -199,13 +199,14 @@ test("M7-list-46 区分・検索・チーム・並び順は結果詳細から「
   await loginViaUi(page, adminOrg.ownerEmail);
   const tools = listTools(page);
   await tools.tab("求職者").click();
-  await tools.search.fill("テストテスト");
   await tools.team.selectOption("A");
   await tools.sort.selectOption("old");
   await expect(tools.count).toHaveText("3人を表示 ・ 絞り込みを解除");
   await expect.poll(() => rowNames(page)).toEqual([1, 2, 5].map(seedName));
 
-  // 行を押して結果詳細を開き、「回答一覧に戻る」
+  // 検索語を入れた直後（保存までの 150 ミリ秒がたつ前）に行を押して結果詳細を開き、「回答一覧に戻る」。一覧を離れるときに、待っていた
+  // 検索語も保存する（11-2 §2.21 の 1.4 版）。見本の氏名はすべて「テストテスト」なので、検索しても行は変わらない
+  await tools.search.fill("テストテスト");
   await rowOf(page, seedName(2)).locator(".rl-td--type").click();
   await page.waitForURL(`**/admin/results/${seedExam(adminOrg, 2).resultId}`);
   await page.getByRole("link", { name: /回答一覧に戻る/ }).click();
