@@ -3,8 +3,8 @@
 // 新しいレイアウト（#rs2）を兄弟で並べる（画面では .rd-body の間 16px が効く）。ComparisonProvider の内側で使う。
 // 画面（variant="screen"）は結果詳細のページが ResultDetailFrame の中に key={resultId} で置き、人が替わると作り直す。印刷用ページ
 // （variant="print"。11-5）は枠を使わずに置き、initialViewState（省くと既定）と visibility（非表示の PDF）で描く。
-// aiArea は AI 解説の領域（id ai を渡す側が持つ。PR-7.8a は今の AiAnalysisSection、印刷は AI 解説の印刷の塊。11-6 の PR-7.9 が
-// 置き換える）。headActions は見出しの塊のボタン（画面の形だけ。類似分析は PR-7.14）
+// aiArea は AI 解説の領域（id ai を渡す側が持つ。画面は結果詳細のページが作る 11-6 の AiArea、印刷は PR-7.12 まで PrintResultDocument が
+// 置く採用向けの表示の印刷の形）。headActions は見出しの塊のボタン（画面の形だけ。類似分析は PR-7.14）
 import type { ReactNode } from "react";
 
 import { ResultHead, type ResultHeadActions } from "./ResultHead";

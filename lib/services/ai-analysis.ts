@@ -1,22 +1,26 @@
-// AI 解説の生成と状態取得（04 §5.9、§7.1。07 §6）。provider は生成のみを担い、状態遷移・上限・保存・監査ログはここで行う
-import type { AiAnalysisDto } from "./dto/result";
-import { ApiError } from "./errors";
-import { assertAiDailyLimit } from "./rate-limit";
-import { loadVisibleResult, resultNotFound, toAiAnalysisDto } from "./result-detail";
+// AI 解説の種類ごとの生成と状態（11-6 §3.4・§3.5・§3.7.7。04 §5.9、§7.1。07 §6）。provider は生成のみを担い、状態の移り変わり・保存・
+// 監査ログはここで行う。日次上限は無い（K-25。11-6 §2.10）。PR-7.9 は採用向けだけが有効で、育成・定着と経年比較は無効
+// （promptVersionOf が null。生成の要求は 503 AI_KIND_DISABLED。要求の本文と前回の確かめは PR-7.10・PR-7.11b）
+import { buildAiArea } from "./ai-area";
+import type { AiKindResponse } from "./dto/ai";
+import { API_ERRORS, ApiError } from "./errors";
+import { loadVisibleResult, resultNotFound } from "./result-detail";
 import { AiProviderError } from "@/lib/ai/errors";
 import { buildAiAnalysisInput } from "@/lib/ai/input";
+import { AI_MAX_TOKENS, type AiAnalysisKind } from "@/lib/ai/kinds";
 import { getAiProvider } from "@/lib/ai/provider";
-import type { AiGenerateResult, AiProvider } from "@/lib/ai/types";
+import type { AiGenerateResult, AiProvider, GenerateOptions } from "@/lib/ai/types";
 import type { AdminContext } from "@/lib/auth/admin-context";
-import type { Result } from "@/lib/db/domain";
+import { aiKindState } from "@/lib/db/ai-kind-fields";
+import type { Respondent, Result } from "@/lib/db/domain";
 import {
-  getAiAnalysis,
   markAiGenerationFailed,
   markAiGenerationStarted,
   saveAiAnalysis,
 } from "@/lib/db/repositories/ai-analyses-repository";
 import { getRespondent } from "@/lib/db/repositories/respondents-repository";
 import { toScoreResult } from "@/lib/db/mappers/result";
+import { effectiveStaffRole } from "@/lib/presentation/employment";
 import { serverEnv } from "@/lib/utils/env";
 import { logger } from "@/lib/utils/logger";
 
@@ -28,11 +32,21 @@ export const AI_GENERATE_TIMEOUT_MS = 240_000;
 /** service が付ける失敗理由（provider 以外の失敗。04 §5.9） */
 export const AI_INTERNAL_ERROR = "internal_error";
 
-function isStale(result: Result, nowMs: number): boolean {
-  return (
-    result.aiGenerationStartedAt === null ||
-    nowMs - result.aiGenerationStartedAt.getTime() >= AI_STALE_AFTER_MS
-  );
+/**
+ * 種類の版（11-6 §3.7.7・§3.8）。採用向けは AI_PROMPT_VERSION。育成・定着と経年比較は版の環境変数がまだ無いので null（無効。
+ * AI_TRAINING_PROMPT_VERSION は PR-7.10、AI_LONGITUDINAL_PROMPT_VERSION は PR-7.11b が足す）
+ */
+export function promptVersionOf(kind: AiAnalysisKind): string | null {
+  return kind === "recruitment" ? serverEnv().AI_PROMPT_VERSION : null;
+}
+
+/** 生成できる設定か（11-6 §2.7.4）。採用向けは常に有効 */
+export function isAiKindEnabled(kind: AiAnalysisKind): boolean {
+  return promptVersionOf(kind) !== null;
+}
+
+function isStale(startedAt: Date | null, nowMs: number): boolean {
+  return startedAt === null || nowMs - startedAt.getTime() >= AI_STALE_AFTER_MS;
 }
 
 function alreadyGenerating(): ApiError {
@@ -54,53 +68,99 @@ function generationFailed(reason: string): ApiError {
   );
 }
 
-async function toDto(ctx: AdminContext, result: Result): Promise<AiAnalysisDto> {
-  const latest =
-    result.latestAiAnalysisId === null
-      ? null
-      : await getAiAnalysis({
-          aiAnalysisId: result.latestAiAnalysisId,
-          resultId: result.id,
-          organizationId: ctx.organizationId,
-        });
-  return toAiAnalysisDto(result, latest);
+/** 2. 対象の結果（閲覧範囲。見えなければ 404）と受検者（氏名・職業） */
+async function loadTarget(
+  ctx: AdminContext,
+  resultId: string,
+): Promise<{ readonly result: Result; readonly respondent: Respondent }> {
+  const result = await loadVisibleResult(ctx, resultId);
+  const respondent = await getRespondent({ respondentId: result.respondentId, viewer: ctx });
+  if (!respondent) throw resultNotFound();
+  return { result, respondent };
+}
+
+/** 3. 採用向け・育成・定着は、表示上の役職が責任者の受験では使えない（409 AI_NOT_APPLICABLE。K-21、11-6 §2.2） */
+function assertApplicable(result: Result, respondent: Respondent, kind: AiAnalysisKind): void {
+  if (
+    kind !== "longitudinal" &&
+    effectiveStaffRole(result.staffRole, respondent.occupationCode) === "manager"
+  ) {
+    throw API_ERRORS.aiNotApplicable();
+  }
+}
+
+/** 種類の応答（11-6 §3.6）。buildAiArea のその種類の分（その種類の分析だけを読む）に resultId と kind を付ける */
+async function kindResponse(
+  ctx: AdminContext,
+  result: Result,
+  respondent: Respondent,
+  kind: AiAnalysisKind,
+): Promise<AiKindResponse> {
+  const area = await buildAiArea({ viewer: ctx, result, respondent }, { onlyKind: kind });
+  switch (kind) {
+    case "recruitment":
+      if (area.recruitment === null) throw API_ERRORS.aiNotApplicable();
+      return { resultId: result.id, kind, ...area.recruitment };
+    case "training":
+      if (area.training === null) throw API_ERRORS.aiNotApplicable();
+      return { resultId: result.id, kind, ...area.training };
+    case "longitudinal":
+      return { resultId: result.id, kind, ...area.longitudinal };
+  }
 }
 
 /** 失敗の記録。記録自体の失敗は握りつぶしてログだけ残す（generating のまま残っても滞留検知で failed に戻る。04 D04-34） */
-async function recordFailure(ctx: AdminContext, resultId: string, reason: string): Promise<void> {
+async function recordFailure(
+  ctx: AdminContext,
+  resultId: string,
+  kind: AiAnalysisKind,
+  reason: string,
+): Promise<void> {
   try {
-    await markAiGenerationFailed({ resultId, viewer: ctx, reason, meta: ctx.request });
+    await markAiGenerationFailed({ resultId, viewer: ctx, kind, reason, meta: ctx.request });
   } catch (error) {
     logger.error("ai.mark_failed_failed", {
       resultId,
+      kind,
       reason,
       errorName: error instanceof Error ? error.constructor.name : typeof error,
     });
   }
 }
 
-/** GET …/ai-analysis。生成中の滞留（10 分超）を検知したら failed（timeout）に戻して返す */
-export async function getAiAnalysisState(
+/** GET …/ai-analysis/{kind}（11-6 §3.5）。生成中の滞留（10 分超）を見つけたら failed（timeout）に戻してから返す */
+export async function getAiState(
   ctx: AdminContext,
   resultId: string,
-): Promise<AiAnalysisDto> {
-  let result = await loadVisibleResult(ctx, resultId);
-  if (result.aiGenerationStatus === "generating" && isStale(result, Date.now())) {
-    await markAiGenerationFailed({ resultId, viewer: ctx, reason: "timeout", meta: ctx.request });
+  kind: AiAnalysisKind,
+): Promise<AiKindResponse> {
+  const target = await loadTarget(ctx, resultId);
+  assertApplicable(target.result, target.respondent, kind);
+  let { result } = target;
+  const state = aiKindState(result, kind);
+  if (state.status === "generating" && isStale(state.startedAt, Date.now())) {
+    await markAiGenerationFailed({
+      resultId,
+      viewer: ctx,
+      kind,
+      reason: "timeout",
+      meta: ctx.request,
+    });
     result = await loadVisibleResult(ctx, resultId);
   }
-  return toDto(ctx, result);
+  return kindResponse(ctx, result, target.respondent, kind);
 }
 
 interface GenerationLog {
   readonly result: Result;
+  readonly kind: AiAnalysisKind;
   readonly provider: AiProvider | null;
   readonly model: string;
   readonly promptVersion: string;
   readonly startedAt: number;
 }
 
-/** 1 回の生成につき 1 行（07 §4.8）。氏名・生テキスト・API キーは出さない */
+/** 1 回の生成につき 1 行（07 §4.8、11-6 §2.16）。氏名・入力とプロンプトの中身・出力の中身・API キーは出さない */
 function logGeneration(
   log: GenerationLog,
   outcome:
@@ -117,9 +177,11 @@ function logGeneration(
   const base = {
     resultId: log.result.id,
     organizationId: log.result.organizationId,
+    kind: log.kind,
     provider: log.provider?.name ?? null,
     model: log.model,
     promptVersion: log.promptVersion,
+    maxTokens: AI_MAX_TOKENS[log.kind],
     elapsedMs: Date.now() - log.startedAt,
   };
   if (outcome.status === "completed") {
@@ -147,40 +209,72 @@ function logGeneration(
   }
 }
 
-/** POST …/ai-analysis（同期方式。04 §5.9 の手順 1〜7） */
-export async function generateAiAnalysis(
+/**
+ * 9・10. 種類の入力を作り、provider を呼ぶ。PR-7.9 は採用向けだけ（育成・定着の 8 項目を足した入力は PR-7.10、経年比較の入力文は
+ * PR-7.11b。ほかの種類は 6 で 503 になり、ここには来ない）
+ */
+async function callProvider(
+  provider: AiProvider,
+  kind: AiAnalysisKind,
+  target: { readonly result: Result; readonly respondent: Respondent },
+  options: GenerateOptions,
+): Promise<AiGenerateResult> {
+  if (kind !== "recruitment") {
+    throw new AiProviderError("config_error", `no input for ${kind}`);
+  }
+  const input = buildAiAnalysisInput({
+    respondentName: target.respondent.name,
+    occupationCode: target.respondent.occupationCode,
+    score: toScoreResult(target.result),
+  });
+  return provider.generate(kind, input, options);
+}
+
+/** POST …/ai-analysis/{kind}（同期方式。11-6 §3.5 の手順 2・3・5〜13。本文は読まない） */
+export async function generateAi(
   ctx: AdminContext,
   resultId: string,
-): Promise<AiAnalysisDto> {
-  // 1. 対象結果と受検者（氏名・職業）
-  const result = await loadVisibleResult(ctx, resultId);
-  const respondent = await getRespondent({ respondentId: result.respondentId, viewer: ctx });
-  if (!respondent) throw resultNotFound();
-
-  // 2. 早期判定
-  if (result.aiGenerationStatus === "completed") return toDto(ctx, result);
-  if (result.aiGenerationStatus === "generating" && !isStale(result, Date.now())) {
+  kind: AiAnalysisKind,
+): Promise<AiKindResponse> {
+  // 2. 対象の結果と受検者
+  const target = await loadTarget(ctx, resultId);
+  const { result } = target;
+  // 3. 責任者の受験の採用向け・育成・定着
+  assertApplicable(result, target.respondent, kind);
+  // （4. 経年比較の前回の確かめは PR-7.11b）
+  // 5. 生成済みで最新の分析が読めるなら、保存済みを返す（作り直さない。読めなければ作り直す。11-6 §2.3.4）
+  const state = aiKindState(result, kind);
+  if (state.status === "completed") {
+    const saved = await kindResponse(ctx, result, target.respondent, kind);
+    if (saved.status === "completed") return saved;
+  }
+  // 6. 有効でない種類
+  const promptVersion = promptVersionOf(kind);
+  if (promptVersion === null) throw API_ERRORS.aiKindDisabled();
+  // 7. 生成中（開始から 10 分未満）
+  if (state.status === "generating" && !isStale(state.startedAt, Date.now())) {
     throw alreadyGenerating();
   }
 
-  // 3. 日次上限
-  await assertAiDailyLimit({ organizationId: ctx.organizationId, now: new Date() });
-
-  // 4. generating へ（トランザクション。二重起動は RepositoryError("AI_ALREADY_GENERATING") → 409）
+  // 8. generating へ（トランザクション。二重起動は RepositoryError("AI_ALREADY_GENERATING") → 409）
   const started = await markAiGenerationStarted({
     resultId,
     viewer: ctx,
+    kind,
     staleAfterMs: AI_STALE_AFTER_MS,
   });
-  if (started.alreadyCompleted) return toDto(ctx, await loadVisibleResult(ctx, resultId));
+  if (started.alreadyCompleted) {
+    return kindResponse(ctx, await loadVisibleResult(ctx, resultId), target.respondent, kind);
+  }
 
-  // 5. 生成
+  // 9・10. 生成
   const env = serverEnv();
   const log: { -readonly [K in keyof GenerationLog]: GenerationLog[K] } = {
     result,
+    kind,
     provider: null,
     model: env.AI_MODEL,
-    promptVersion: env.AI_PROMPT_VERSION,
+    promptVersion,
     startedAt: Date.now(),
   };
   const controller = new AbortController();
@@ -190,14 +284,9 @@ export async function generateAiAnalysis(
   try {
     provider = getAiProvider();
     log.provider = provider;
-    const input = buildAiAnalysisInput({
-      respondentName: respondent.name,
-      occupationCode: respondent.occupationCode,
-      score: toScoreResult(result),
-    });
-    generated = await provider.generate(input, {
+    generated = await callProvider(provider, kind, target, {
       model: env.AI_MODEL,
-      promptVersion: env.AI_PROMPT_VERSION,
+      promptVersion,
       signal: controller.signal,
     });
   } catch (error) {
@@ -213,17 +302,18 @@ export async function generateAiAnalysis(
           ? error.constructor.name
           : typeof error;
     logGeneration(log, { status: "failed", ...failure, detail });
-    // 7. 失敗
-    await recordFailure(ctx, resultId, failure.reason);
+    // 11. 失敗
+    await recordFailure(ctx, resultId, kind, failure.reason);
     throw generationFailed(failure.reason);
   }
   clearTimeout(timer);
 
-  // 6. 成功（aiAnalyses の作成・results の更新・監査ログを 1 バッチ）
+  // 12. 成功（aiAnalyses の作成・results のその種類の項目の更新・監査ログを 1 バッチ）
   try {
     await saveAiAnalysis({
       resultId,
       viewer: ctx,
+      kind,
       generated,
       provider: provider.name,
       reliability: result.reliability,
@@ -238,11 +328,13 @@ export async function generateAiAnalysis(
     });
     logger.error("ai.save_failed", {
       resultId,
+      kind,
       errorName: error instanceof Error ? error.constructor.name : typeof error,
     });
-    await recordFailure(ctx, resultId, AI_INTERNAL_ERROR);
+    await recordFailure(ctx, resultId, kind, AI_INTERNAL_ERROR);
     throw generationFailed(AI_INTERNAL_ERROR);
   }
   logGeneration(log, { status: "completed", generated });
-  return toDto(ctx, await loadVisibleResult(ctx, resultId));
+  // 13. 結果を読み直して返す
+  return kindResponse(ctx, await loadVisibleResult(ctx, resultId), target.respondent, kind);
 }

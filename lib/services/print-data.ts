@@ -1,13 +1,15 @@
 // PDF 印刷用ページのデータ取得と認可（07 §9.4、04 §7.2）。管理者 Cookie を使わず、印刷トークンだけで認可する。
-// Admin SDK はセキュリティルールの対象外のため、組織の一致と幹部の可視性はトークンから作った Viewer でリポジトリが判定する
+// Admin SDK はセキュリティルールの対象外のため、組織の一致と幹部の可視性はトークンから作った Viewer でリポジトリが判定する。
+// AI 解説は PR-7.12（11-6 §2.12・§3.7.8 の loadPrintAiArea・PrintAiArea）まで、全画面の PDF に生成済みの採用向けだけを載せる
+// （07 D07-15。責任者の受験は載せない: K-21）
+import { buildAiArea, visibleTabsOf } from "./ai-area";
 import { computeComparison } from "./comparison";
+import type { RecruitmentAiDto } from "./dto/ai";
 import type { ComparisonDto, ResultDetailDto } from "./dto/result";
 import { ApiError } from "./errors";
-import { toAiAnalysisDto } from "./result-detail";
 import { comparisonScopeQuerySchema, docIdSchema, pdfModeSchema } from "./schemas/common";
 import { type PdfTokenPayload, verifyPdfToken } from "@/lib/auth/pdf-token";
 import type { Viewer } from "@/lib/auth/claims";
-import { getAiAnalysis } from "@/lib/db/repositories/ai-analyses-repository";
 import { getRespondent } from "@/lib/db/repositories/respondents-repository";
 import { getResult } from "@/lib/db/repositories/results-repository";
 import { toScoreResult } from "@/lib/db/mappers/result";
@@ -15,7 +17,9 @@ import { type PdfSectionVisibility, visibilityForMode } from "@/lib/pdf/visibili
 import type { ComparisonScope } from "@/lib/scoring/types";
 
 export interface PrintData {
-  readonly detail: ResultDetailDto;
+  readonly detail: Omit<ResultDetailDto, "ai">;
+  /** 全画面の PDF に載せる採用向けの AI 解説（載せないときは null。PR-7.12 で表示中のタブの PrintAiArea に置き換える） */
+  readonly recruitmentAi: RecruitmentAiDto | null;
   readonly comparison: ComparisonDto | null;
   readonly mode: PdfTokenPayload["mode"];
   readonly visibility: PdfSectionVisibility;
@@ -84,16 +88,15 @@ export async function loadPrintData(input: {
   const respondent = await getRespondent({ respondentId: result.respondentId, viewer });
   if (!respondent) return null;
 
-  const visibility = visibilityForMode(payload.mode, result.aiGenerationStatus === "completed");
-  // AI 解説は掲載するときだけ読む（restricted では印字しない。07 D07-15）
-  const latest =
-    visibility.showAiAnalysis && result.latestAiAnalysisId !== null
-      ? await getAiAnalysis({
-          aiAnalysisId: result.latestAiAnalysisId,
-          resultId: result.id,
-          organizationId: payload.organizationId,
-        })
-      : null;
+  const visibility = visibilityForMode(
+    payload.mode,
+    visibleTabsOf(result, respondent).includes("recruitment") &&
+      result.aiGenerationStatus === "completed",
+  );
+  // AI 解説は掲載するときだけ、採用向けの最新の分析だけを読む（restricted と責任者の受験は AI の文書を読まない。07 D07-15）
+  const recruitmentAi = visibility.showAiAnalysis
+    ? (await buildAiArea({ viewer, result, respondent }, { onlyKind: "recruitment" })).recruitment
+    : null;
 
   let comparison: ComparisonDto | null = null;
   if (payload.scope) {
@@ -109,7 +112,6 @@ export async function loadPrintData(input: {
     }
   }
 
-  const ai = toAiAnalysisDto(result, latest);
   return {
     detail: {
       resultId: result.id,
@@ -125,15 +127,17 @@ export async function loadPrintData(input: {
       submittedAt: result.submittedAt.toISOString(),
       scoringVersion: result.scoringVersion,
       scores: toScoreResult(result),
-      aiAnalysis: {
-        status: ai.status,
-        startedAt: ai.startedAt,
-        error: ai.error,
-        latest: ai.latest,
-      },
     },
+    recruitmentAi,
     comparison,
     mode: payload.mode,
-    visibility: { ...visibility, showAiAnalysis: visibility.showAiAnalysis && latest !== null },
+    visibility: {
+      ...visibility,
+      // 保存した出力が読めないとき（failed・internal_error）は載せない
+      showAiAnalysis:
+        visibility.showAiAnalysis &&
+        recruitmentAi?.status === "completed" &&
+        recruitmentAi.latest !== null,
+    },
   };
 }

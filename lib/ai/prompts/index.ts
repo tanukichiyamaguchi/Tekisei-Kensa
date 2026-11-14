@@ -1,5 +1,6 @@
-// プロンプトの版とレジストリ（07 §2.2）。起動時検証（01 §4.3、lib/utils/env.ts）が AI_PROMPT_VERSION の存在確認に使う
+// プロンプトの版とレジストリ（07 §2.2、11-6 §3.7.2）。起動時検証（01 §4.3、lib/utils/env.ts）が AI_PROMPT_VERSION の存在確認に使う
 import { AiProviderError } from "@/lib/ai/errors";
+import type { AiAnalysisKind } from "@/lib/ai/kinds";
 
 import { RECRUITMENT_V1 } from "./recruitment-v1";
 import { RECRUITMENT_V2 } from "./recruitment-v2";
@@ -26,4 +27,19 @@ export function getPromptDefinition(version: string): PromptDefinition {
     throw new AiProviderError("config_error", `unknown prompt version: ${version}`);
   }
   return PROMPT_REGISTRY[version];
+}
+
+/**
+ * 種類の版（11-6 §3.7.2）。登録されていない版と、種類の違う版は AiProviderError("config_error")（例外の文は版と種類の名前だけ）。
+ * 登録されている版は今は採用向けだけ（育成・定着の training-v1 は PR-7.10、経年比較の longitudinal-v1 は PR-7.11b が足す）
+ */
+export function getPromptDefinitionForKind(
+  kind: AiAnalysisKind,
+  version: string,
+): PromptDefinition {
+  const prompt = getPromptDefinition(version);
+  if (prompt.analysisKind !== kind) {
+    throw new AiProviderError("config_error", `prompt version ${version} is not for ${kind}`);
+  }
+  return prompt;
 }

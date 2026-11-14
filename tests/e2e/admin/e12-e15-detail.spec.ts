@@ -13,6 +13,7 @@ import type { Locator, Page } from "@playwright/test";
 
 import { emulatorTask } from "../support/admin";
 import {
+  aiArea,
   alertToast,
   E2E_ADMIN_PASSWORD,
   expect,
@@ -260,7 +261,9 @@ test("M7-result-21 構成: サイドメニューと共通ヘッダーの無い�
     .locator("#rd .rd-body > *")
     .evaluateAll((els) => els.map((el) => el.id || el.tagName.toLowerCase()));
   expect(order).toEqual(["rd-head", "rsn-wrap", "ai", "rs2", "dialog", "dialog"]);
-  await expect(page.locator("#ai").getByTestId("ai-analysis-section")).toBeVisible();
+  // AI 解説の領域は 11-6 の AiArea（タブの行と採用向けのパネル。見本は求職者で責任者でない）
+  await expect(aiArea(page).tablist).toBeVisible();
+  await expect(aiArea(page).panel("recruitment")).toBeVisible();
 
   // 目次（§2.5。AI解説と 7 つのセクション）
   await expect(rd.toc).toBeVisible();
@@ -330,10 +333,10 @@ test("M7-result-21 構成: サイドメニューと共通ヘッダーの無い�
   }
 
   // 見出しに「AI解説を表示」が無い（11-6 の ai-04・ai-05）。旧の見出し（サマリー・個人特性・組織との相性・比較対象内での
-  // 立ち位置・リスク・育成方法・ソーシャルスタイル）が無く、.result-section の見出しは AI 解説の領域だけ。グラフは自作の SVG で、
-  // ApexCharts の要素は無い（K-23）
+  // 立ち位置・リスク・育成方法・ソーシャルスタイル）と、旧のセクションの .result-section が無い（PR-7.9 で AI 解説の領域も 11-6 の
+  // AiArea に置き換わった）。グラフは自作の SVG で、ApexCharts の要素は無い（K-23）
   await expect(rd.head.getByRole("button", { name: "AI解説を表示" })).toHaveCount(0);
-  await expect(page.locator(".result-section > h2")).toHaveText(["AI 解説"]);
+  await expect(page.locator(".result-section")).toHaveCount(0);
   await expect(page.locator(".apexcharts-canvas")).toHaveCount(0);
 
   // 「回答一覧に戻る」で /admin へ（§2.3.1）

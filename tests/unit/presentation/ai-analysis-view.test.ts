@@ -1,54 +1,15 @@
-// X-12（06 §11）と AI 解説セクションの画面状態の判定（06 §3.5.9）
-import { afterEach, describe, expect, it, vi } from "vitest";
+// AI 解説の生成の要求の失敗の分け方（M7-ai-22。11-6 §2.3.4・§3.7.10）・読み直しの間隔（11-6 §2.3.5）。失敗の理由の文（X-12。06 §11）は
+// 文言と一緒に ai-texts.ts へ移したので ai-texts.test.ts で確かめる
+import { describe, expect, it } from "vitest";
 
-import { AI_FAILURE_REASONS } from "@/lib/ai/errors";
-import { AI_FAILURE_TEXTS, aiFailureText } from "@/lib/presentation/admin-texts";
 import {
   AI_POLL_INTERVAL_MS,
   AI_POLL_MAX_MS,
   classifyAiPostFailure,
   pollingExpired,
 } from "@/lib/presentation/ai-analysis-view";
-import { fetchAiAnalysis, requestAiAnalysis } from "@/lib/utils/admin-api";
 
-describe("X-12 AI_FAILURE_TEXTS", () => {
-  it("07 §4.6 の AiFailureReason 全値と internal_error を持つ", () => {
-    expect(Object.keys(AI_FAILURE_TEXTS).sort()).toEqual(
-      [...AI_FAILURE_REASONS, "internal_error"].sort(),
-    );
-  });
-
-  it("06 §3.5.9 の表の文言", () => {
-    expect(aiFailureText("provider_error")).toBe(
-      "AI サービスとの通信に失敗しました。時間をおいて再試行してください",
-    );
-    expect(aiFailureText("rate_limited")).toBe(
-      "AI サービスが混み合っています。時間をおいて再試行してください",
-    );
-    for (const code of ["invalid_request", "auth_error", "config_error"]) {
-      expect(aiFailureText(code)).toBe(
-        "AI 連携の設定に問題があります。運用担当者にお問い合わせください",
-      );
-    }
-    expect(aiFailureText("timeout")).toBe(
-      "生成に時間がかかりすぎたため中断しました。再試行してください",
-    );
-    for (const code of ["invalid_json", "truncated"]) {
-      expect(aiFailureText(code)).toBe("AI の応答を解釈できませんでした。再試行してください");
-    }
-    expect(aiFailureText("refusal")).toBe("AI が解説の生成を行いませんでした。再試行してください");
-  });
-
-  it("internal_error・未知の値・null は既定文言（理由コードをそのまま見せない）", () => {
-    const fallback = "生成処理でエラーが発生しました。再試行してください";
-    expect(aiFailureText("internal_error")).toBe(fallback);
-    expect(aiFailureText("unknown_code")).toBe(fallback);
-    expect(aiFailureText("toString")).toBe(fallback);
-    expect(aiFailureText(null)).toBe(fallback);
-  });
-});
-
-describe("classifyAiPostFailure（06 §3.5.9 の POST の応答ごとの扱い）", () => {
+describe("M7-ai-22 classifyAiPostFailure（11-6 §2.3.4 の生成の要求の失敗ごとの扱い）", () => {
   const err = (status: number, code: string, details: Record<string, unknown> = {}) => ({
     status,
     code,
@@ -56,12 +17,39 @@ describe("classifyAiPostFailure（06 §3.5.9 の POST の応答ごとの扱い�
     details,
   });
 
-  it("409 → ポーリング、429 → 上限（文言とロック）、502 → failed（理由コード）、404 → 通知", () => {
-    expect(classifyAiPostFailure(err(409, "AI_ALREADY_GENERATING"))).toEqual({ kind: "poll" });
+  it("日次上限は無くなった（K-25）: 429 AI_DAILY_LIMIT_EXCEEDED は分類が無く、ほかの 4xx と同じ通知", () => {
     expect(classifyAiPostFailure(err(429, "AI_DAILY_LIMIT_EXCEEDED"))).toEqual({
-      kind: "limit",
+      kind: "error",
       message: "m-AI_DAILY_LIMIT_EXCEEDED",
     });
+  });
+
+  it("409 AI_NOT_APPLICABLE（責任者の受験）と 503 AI_KIND_DISABLED（有効でない種類）は、応答の文を通知に出す（GET で確かめない）", () => {
+    expect(classifyAiPostFailure(err(409, "AI_NOT_APPLICABLE"))).toEqual({
+      kind: "error",
+      message: "m-AI_NOT_APPLICABLE",
+    });
+    expect(classifyAiPostFailure(err(503, "AI_KIND_DISABLED"))).toEqual({
+      kind: "error",
+      message: "m-AI_KIND_DISABLED",
+    });
+  });
+
+  it("経年比較の 409（LONGITUDINAL_PREVIOUS_REQUIRED・LONGITUDINAL_PAIR_CHANGED・LONGITUDINAL_ORDER_INVALID）も、応答の文を通知に出す", () => {
+    for (const code of [
+      "LONGITUDINAL_PREVIOUS_REQUIRED",
+      "LONGITUDINAL_PAIR_CHANGED",
+      "LONGITUDINAL_ORDER_INVALID",
+    ]) {
+      expect(classifyAiPostFailure(err(409, code)), code).toEqual({
+        kind: "error",
+        message: `m-${code}`,
+      });
+    }
+  });
+
+  it("409 AI_ALREADY_GENERATING → 読み直し、502 → failed（理由コード）、404 → 通知（今のまま）", () => {
+    expect(classifyAiPostFailure(err(409, "AI_ALREADY_GENERATING"))).toEqual({ kind: "poll" });
     expect(
       classifyAiPostFailure(err(502, "AI_GENERATION_FAILED", { reason: "invalid_json" })),
     ).toEqual({ kind: "failed", reason: "invalid_json" });
@@ -75,10 +63,11 @@ describe("classifyAiPostFailure（06 §3.5.9 の POST の応答ごとの扱い�
     });
   });
 
-  it("通信断（status 0）・関数の打ち切り（504）・500 は GET で状態を確認する", () => {
+  it("通信断（status 0）・関数の打ち切り（504）・500・AI_KIND_DISABLED でない 503 は GET で状態を確認する", () => {
     expect(classifyAiPostFailure(err(0, "NETWORK_ERROR"))).toEqual({ kind: "check" });
     expect(classifyAiPostFailure(err(504, "INTERNAL_ERROR"))).toEqual({ kind: "check" });
     expect(classifyAiPostFailure(err(500, "INTERNAL_ERROR"))).toEqual({ kind: "check" });
+    expect(classifyAiPostFailure(err(503, "SERVICE_UNAVAILABLE"))).toEqual({ kind: "check" });
   });
 
   it("その他の 4xx は通知", () => {
@@ -93,26 +82,5 @@ describe("classifyAiPostFailure（06 §3.5.9 の POST の応答ごとの扱い�
     expect(AI_POLL_MAX_MS).toBe(600_000);
     expect(pollingExpired(599_999)).toBe(false);
     expect(pollingExpired(600_000)).toBe(true);
-  });
-});
-
-describe("requestAiAnalysis / fetchAiAnalysis", () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  it("POST・GET を …/ai-analysis に送る", async () => {
-    const dto = { resultId: "r1", status: "completed", startedAt: null, error: null, latest: null };
-    const calls: [string, string | undefined][] = [];
-    const fetchMock = vi.fn(async (input: string, init: RequestInit) => {
-      calls.push([input, init.method]);
-      return new Response(JSON.stringify(dto), { status: 200 });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    await expect(requestAiAnalysis("r1")).resolves.toEqual(dto);
-    await expect(fetchAiAnalysis("r1")).resolves.toEqual(dto);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(calls).toEqual([
-      ["/api/v1/admin/results/r1/ai-analysis", "POST"],
-      ["/api/v1/admin/results/r1/ai-analysis", "GET"],
-    ]);
   });
 });

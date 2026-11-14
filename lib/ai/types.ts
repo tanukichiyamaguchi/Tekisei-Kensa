@@ -1,10 +1,30 @@
-// AI 連携の型（00 §3.6 をそのまま実装）。provider・プロンプトの実装は M5（07 分冊）
+// AI 連携の型（00 §3.6、11-6 §3.7.3）。provider・プロンプトの実装は 07 分冊
+import type { AiAnalysisKind } from "@/lib/ai/kinds";
+import type { TrainingContext } from "@/lib/masters/training-context";
 import type { ScoreResult } from "@/lib/scoring/types";
 
+/** 採用向けの入力 */
 export interface AiAnalysisInput {
   readonly respondentName: string;
   readonly occupationLabel: string;
   readonly result: ScoreResult;
+}
+
+/** 育成・定着の入力（採用向けの入力に 8 項目を足す。11-6 §3.7.3。組み立ては PR-7.10） */
+export interface TrainingAiInput extends AiAnalysisInput {
+  readonly context: TrainingContext;
+}
+
+/** 経年比較の入力（buildLongitudinalUserText の結果。氏名を含まない。11-6 §3.7.3。組み立ては PR-7.11b） */
+export interface LongitudinalAiInput {
+  readonly userText: string;
+}
+
+/** 種類ごとの入力 */
+export interface AiInputByKind {
+  readonly recruitment: AiAnalysisInput;
+  readonly training: TrainingAiInput;
+  readonly longitudinal: LongitudinalAiInput;
 }
 
 /** 付録D §2 の JSON スキーマと 1 対 1 */
@@ -28,6 +48,16 @@ export interface AiAnalysisOutput {
   };
 }
 
+/**
+ * 種類ごとの出力（11-6 §3.7.3）。育成・定着と経年比較の出力の型は、それぞれのスキーマと一緒に PR-7.10・PR-7.11b が
+ * 入れ替える（それまでは never。PR-7.9 の provider の中身は採用向けだけ。11-6 §4.4）
+ */
+export interface AiOutputByKind {
+  readonly recruitment: AiAnalysisOutput;
+  readonly training: never;
+  readonly longitudinal: never;
+}
+
 /** 生成オプション（04 §7.1。signal は 04 D04-38 の 240 秒） */
 export interface GenerateOptions {
   readonly model: string;
@@ -43,13 +73,13 @@ export interface AiUsage {
   readonly cacheCreationInputTokens: number;
 }
 
-/** generate() の戻り値（07 §5.1） */
-export interface AiGenerateResult {
-  readonly output: AiAnalysisOutput;
+/** generate() の戻り値（07 §5.1、11-6 §3.7.3） */
+export interface AiGenerateResult<K extends AiAnalysisKind = AiAnalysisKind> {
+  readonly output: AiOutputByKind[K];
   readonly rawText: string;
   readonly model: string;
   readonly promptVersion: string;
-  readonly analysisKind: string;
+  readonly analysisKind: K;
   readonly usage: AiUsage | null;
   readonly stopReason: string | null;
   readonly requestId: string | null;
@@ -57,7 +87,11 @@ export interface AiGenerateResult {
 
 export interface AiProvider {
   readonly name: "anthropic" | "stub";
-  generate(input: AiAnalysisInput, options: GenerateOptions): Promise<AiGenerateResult>;
+  generate<K extends AiAnalysisKind>(
+    kind: K,
+    input: AiInputByKind[K],
+    options: GenerateOptions,
+  ): Promise<AiGenerateResult<K>>;
 }
 
 export const AI_GENERATION_STATUSES = [

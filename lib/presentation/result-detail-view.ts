@@ -320,8 +320,11 @@ function styleOf(scores: ScoreResult): ResultDetailView["style"] {
   });
 }
 
-/** ResultDetailDto から、比較に依存しない画面の値をすべて組み立てる（11-4 §3.5） */
-export function buildResultDetailView(detail: ResultDetailDto): ResultDetailView {
+/**
+ * ResultDetailDto から、比較に依存しない画面の値をすべて組み立てる（11-4 §3.5）。AI 解説の領域（ai）は読まない（印刷用ページの
+ * データは ai を持たないので、ai を除いた形で受ける。11-6 §3.7.8）
+ */
+export function buildResultDetailView(detail: Omit<ResultDetailDto, "ai">): ResultDetailView {
   const { scores } = detail;
   const typeDefinition = APTITUDE_TYPES.get(scores.aptitudeType);
   const typeTexts = TYPE_TEXTS[scores.aptitudeType];

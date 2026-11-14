@@ -16,7 +16,7 @@ import { PATCH as patchRespondentRoute } from "@/app/api/v1/admin/respondents/[r
 import {
   GET as getAiRoute,
   POST as postAiRoute,
-} from "@/app/api/v1/admin/results/[resultId]/ai-analysis/route";
+} from "@/app/api/v1/admin/results/[resultId]/ai-analysis/[kind]/route";
 import { GET as getComparisonRoute } from "@/app/api/v1/admin/results/[resultId]/comparison/route";
 import { GET as getResultRoute } from "@/app/api/v1/admin/results/[resultId]/route";
 import { GET as listResultsRoute } from "@/app/api/v1/admin/results/route";
@@ -190,8 +190,8 @@ describe("作成時の値（M7 の項目を書く）", () => {
     const submitted = await submitAnswerSet(org, uniformAnswers(2), { name: "生成 花子" });
     const res = await callRoute(postAiRoute, {
       method: "POST",
-      url: `/api/v1/admin/results/${submitted.resultId}/ai-analysis`,
-      params: { resultId: submitted.resultId },
+      url: `/api/v1/admin/results/${submitted.resultId}/ai-analysis/recruitment`,
+      params: { resultId: submitted.resultId, kind: "recruitment" },
       cookieHeader: owner.cookieHeader,
     });
     expect(res.status).toBe(200);
@@ -269,9 +269,12 @@ describe("M7 より前の形の文書を読んでも壊れない（例外的な�
           { resultId },
         ),
       ai: () =>
-        adminGet(getAiRoute, `/api/v1/admin/results/${resultId}/ai-analysis`, legacyOwner, {
-          resultId,
-        }),
+        adminGet(
+          getAiRoute,
+          `/api/v1/admin/results/${resultId}/ai-analysis/recruitment`,
+          legacyOwner,
+          { resultId, kind: "recruitment" },
+        ),
       me: () => adminGet(getMeRoute, "/api/v1/admin/me", legacyOwner),
       session: () => respondentApi.progress(draft.sessionId, draft.cookieHeader),
     };
@@ -283,8 +286,8 @@ describe("M7 より前の形の文書を読んでも壊れない（例外的な�
     executive = await submitAnswerSet(legacyOrg, uniformAnswers(4), { kind: "executive" });
     const generated = await callRoute(postAiRoute, {
       method: "POST",
-      url: `/api/v1/admin/results/${target.resultId}/ai-analysis`,
-      params: { resultId: target.resultId },
+      url: `/api/v1/admin/results/${target.resultId}/ai-analysis/recruitment`,
+      params: { resultId: target.resultId, kind: "recruitment" },
       cookieHeader: legacyOwner.cookieHeader,
     });
     expect(generated.status).toBe(200);
@@ -412,6 +415,7 @@ describe("M7 より前の形の文書を読んでも壊れない（例外的な�
         aiAnalysisId,
         resultId: target.resultId,
         organizationId: legacyOrg.organizationId,
+        kind: "recruitment",
       }),
     ).toMatchObject({ trainingContext: null, previousResultId: null, usedTrainingAction: null });
   });

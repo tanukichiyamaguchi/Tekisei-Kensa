@@ -1,4 +1,4 @@
-// U-11（08 §3.2.2）: lib/ai/prompt-builder.ts・input.ts・prompts/ の埋め込み規則（07 §2.3、§2.4）
+// U-11（08 §3.2.2）: lib/ai/prompt-builder.ts・input.ts・prompts/ の埋め込み規則（07 §2.3、§2.4）。buildMessages(kind, …)（11-6 §3.7.3）
 import { describe, expect, it } from "vitest";
 
 import { AiProviderError } from "@/lib/ai/errors";
@@ -19,7 +19,7 @@ import { scoreAnswers } from "@/lib/scoring/score";
 import type { ScoreResult } from "@/lib/scoring/types";
 
 import { cyclicAnswers } from "../scoring/helpers";
-import { t06Input } from "./helpers";
+import { longitudinalInput, t06Input, t06TrainingInput } from "./helpers";
 
 /** 07 §2.4 のユーザー入力の例（T-06 を埋めたもの） */
 const EXPECTED_T06_USER = `【氏名】山田 太郎
@@ -45,7 +45,7 @@ const EXPECTED_T06_USER = `【氏名】山田 太郎
 
 describe("U-11 buildMessages", () => {
   it("T-06 の ScoreResult で 07 §2.4 のユーザー入力と一致し、system は定義そのもの", () => {
-    const messages = buildMessages(t06Input(), "recruitment-v1");
+    const messages = buildMessages("recruitment", t06Input(), "recruitment-v1");
     expect(messages.user).toBe(EXPECTED_T06_USER);
     expect(messages.system).toBe(RECRUITMENT_V1.system);
     expect(messages.user).not.toContain("{{");
@@ -53,18 +53,38 @@ describe("U-11 buildMessages", () => {
   });
 
   it("純関数: 同じ入力で同じ文字列（日時・乱数を含めない）", () => {
-    const a = buildMessages(t06Input(), "recruitment-v1");
-    const b = buildMessages(t06Input(), "recruitment-v1");
+    const a = buildMessages("recruitment", t06Input(), "recruitment-v1");
+    const b = buildMessages("recruitment", t06Input(), "recruitment-v1");
     expect(a).toEqual(b);
   });
 
   it("未知のプロンプト版は config_error", () => {
-    expect(() => buildMessages(t06Input(), "recruitment-v0")).toThrow(AiProviderError);
+    expect(() => buildMessages("recruitment", t06Input(), "recruitment-v0")).toThrow(
+      AiProviderError,
+    );
     try {
-      buildMessages(t06Input(), "recruitment-v0");
+      buildMessages("recruitment", t06Input(), "recruitment-v0");
     } catch (error) {
       expect((error as AiProviderError).reason).toBe("config_error");
     }
+  });
+
+  it("採用向け以外は config_error（育成・定着の差し込みは PR-7.10、経年比較は PR-7.11b。種類の違う版も同じ）", () => {
+    const reasonOf = (build: () => unknown) => {
+      try {
+        build();
+      } catch (error) {
+        expect(error).toBeInstanceOf(AiProviderError);
+        return (error as AiProviderError).reason;
+      }
+      return null;
+    };
+    expect(reasonOf(() => buildMessages("training", t06TrainingInput(), "recruitment-v1"))).toBe(
+      "config_error",
+    );
+    expect(
+      reasonOf(() => buildMessages("longitudinal", longitudinalInput(), "recruitment-v2")),
+    ).toBe("config_error");
   });
 
   it("負値（スタイル・相性・リスク）は 0、資質の 100 超はそのまま、信頼係数は四捨五入", () => {
@@ -78,7 +98,7 @@ describe("U-11 buildMessages", () => {
       risks: { ...base.risks, misconduct: -5, complaint: 37.5, careless_mistake: 110 },
       aptitudeType: "conductor",
     };
-    const user = buildMessages(t06Input({ result }), "recruitment-v1").user;
+    const user = buildMessages("recruitment", t06Input({ result }), "recruitment-v1").user;
     expect(user).toContain("【信頼係数】90%");
     expect(user).toContain("ドライビング:0 エクスプレッシブ:28.75");
     expect(user).toContain("直感型:122.5 柔軟型:68.75");
@@ -90,6 +110,7 @@ describe("U-11 buildMessages", () => {
 
   it("値に {{ が含まれても再展開しない。氏名は前後の空白を除く", () => {
     const user = buildMessages(
+      "recruitment",
       t06Input({ respondentName: "  {{name}} 花子 " }),
       "recruitment-v1",
     ).user;

@@ -1,5 +1,5 @@
 // 管理画面の E2E の共通操作（08 §3.4.3 E-10〜E-18、11-2 §5.3 M7-list-34〜52、11-3 §5.3 M7-zaiseki-31〜43・48、
-// 11-4 §5.3 M7-result-21〜35）。
+// 11-4 §5.3 M7-result-21〜35、11-6 §5.3 M7-ai-38〜50）。
 // ログインは画面から行い、Cookie の注入はしない（08 §3.4.1）
 import AxeBuilder from "@axe-core/playwright";
 import {
@@ -83,6 +83,30 @@ export function submitType(
   aptitudeType: AptitudeTypeKey,
 ): { readonly resultId: string; readonly respondentId: string } {
   return emulatorTask("submit-type", organizationId, aptitudeType);
+}
+
+/**
+ * 指定の氏名の受験を 1 件送信する（求職者・チームなし・職業コード 7「事務スタッフ」で責任者でない・固定シードの乱数回答）。
+ * M7-ai-42 は氏名を __INVALID_JSON__ にして、スタブの不正な JSON（07 §5.4、D07-24）で採用向けの生成を失敗させる
+ */
+export function submitNamed(
+  organizationId: string,
+  name: string,
+): { readonly resultId: string; readonly respondentId: string } {
+  return emulatorTask("submit-named", organizationId, name);
+}
+
+/**
+ * 採用向けの AI 解説を、別の画面で生成を始めた状態（start）か、その生成が失敗した状態（fail。reason は失敗の理由）にする
+ * （11-6 §2.3.5 の「開いたときに generating」。アプリと同じリポジトリの関数でオーナーとして書く。直接は書かない）
+ */
+export function aiGenerationElsewhere(
+  org: AdminOrg,
+  resultId: string,
+  step: "start" | "fail",
+  reason = "",
+): void {
+  emulatorTask("ai-generation", step, org.organizationId, org.ownerUid, resultId, reason);
 }
 
 /** 受験が 0 件の組織（組織・オーナー・管理者だけ。M7-list-47） */
@@ -429,6 +453,74 @@ export const OB_ROOT_OUTLINE = {
   offset: "2px",
 } as const;
 
+// ---- AI 解説の領域（11-6 §2.1〜§2.4。結果詳細の #ai。クラスは別表C）の要素
+
+/** AI 解説の種類（タブとパネル。PR-7.9 は採用向けと育成・定着の 2 つ。経年比較のタブは PR-7.11a） */
+export type AiKind = "recruitment" | "training" | "longitudinal";
+
+/** AI 解説の領域の部品（タブ・パネル・生成ボタン・生成中・失敗の枠・採用向けの表示） */
+export const aiArea = (page: Page) => ({
+  /** 領域（section#ai。読み上げの名前「AI解説」） */
+  root: page.locator("#ai"),
+  /** タブの行（role="tablist"。読み上げの名前「AI解説の種類」） */
+  tablist: page.getByRole("tablist", { name: "AI解説の種類" }),
+  tabs: page.getByRole("tablist", { name: "AI解説の種類" }).getByRole("tab"),
+  tab: (kind: AiKind) => page.locator(`#ai-tab-${kind}`),
+  /** パネル（role="tabpanel"。data-status は種類の状態） */
+  panel: (kind: AiKind) => page.locator(`#ai-panel-${kind}`),
+  /** 生成ボタン（「採用向けAI解説を生成」「育成・定着AI解説を生成」） */
+  genButton: (kind: "recruitment" | "training") =>
+    page.locator(`#ai-panel-${kind}`).getByRole("button", {
+      name: kind === "recruitment" ? "採用向けAI解説を生成" : "育成・定着AI解説を生成",
+      exact: true,
+    }),
+  /** 生成中（.ai-loading。読み上げは中の role="status"） */
+  loading: page.locator("#ai .ai-loading"),
+  /** 失敗の枠（.ai-fail。role="alert"） */
+  fail: page.locator("#ai .ai-fail"),
+  /** 採用向けの表示（.ai-rec） */
+  view: page.locator("#ai .ai-rec"),
+});
+
+/** 採用向けの AI 解説の API のパス（11-6 §3.4） */
+const recruitmentAiPath = (resultId: string): string =>
+  `/api/v1/admin/results/${resultId}/ai-analysis/recruitment`;
+
+/** 採用向けの生成の要求（POST …/ai-analysis/recruitment）を数える（返す配列に出た要求の URL が入る） */
+export function watchAiPosts(page: Page, resultId: string): string[] {
+  const posts: string[] = [];
+  page.on("request", (req) => {
+    if (req.method() === "POST" && new URL(req.url()).pathname === recruitmentAiPath(resultId)) {
+      posts.push(req.url());
+    }
+  });
+  return posts;
+}
+
+/** 採用向けの状態の読み直し（GET …/ai-analysis/recruitment）を数える（返す配列に、出た要求の時刻（ミリ秒）が入る） */
+export function watchAiGets(page: Page, resultId: string): number[] {
+  const gets: number[] = [];
+  page.on("request", (req) => {
+    if (req.method() === "GET" && new URL(req.url()).pathname === recruitmentAiPath(resultId)) {
+      gets.push(Date.now());
+    }
+  });
+  return gets;
+}
+
+/** 採用向けの生成の要求を止める（生成中の表示を確かめるため）。返す関数で放すと、要求はそのままサーバへ送られる */
+export async function holdAiPost(page: Page, resultId: string): Promise<() => void> {
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(`**${recruitmentAiPath(resultId)}`, async (route) => {
+    if (route.request().method() === "POST") await held;
+    await route.continue();
+  });
+  return release;
+}
+
 // ---- クリップボード（回答リンクのコピー。11-2 §2.17）
 
 export async function grantClipboard(context: BrowserContext): Promise<void> {
@@ -500,11 +592,13 @@ export function activeOutline(page: Page): Promise<{
 
 /**
  * axe の color-contrast の対象から外す節点か: 押せない状態の表示（aria-disabled の操作の要素と、押せない「削除する」）と、
- * 枠の文字のロゴ「適性検査」（11-8 の .adm-logo。K-49 の対象外。PR-7.13a で入る）だけ（11 総論 5.1）
+ * 記号だけの印（AI 解説の育成・定着の案内の警告の「！」の丸 .warn-i。文字に添えた印で K-49 の対象外。11-6 §2.17・M7-ai-50）と、
+ * 枠の文字のロゴ「適性検査」（11-8 の .adm-logo。K-49 の対象外。PR-7.13a で入る）だけ（11 総論 5.1）。押せない生成ボタン（11-6
+ * §2.3.2）は disabled の属性のボタンで、axe の color-contrast が調べない
  */
 const isContrastExempt = (node: { readonly html: string; readonly target: unknown[] }) =>
   /aria-disabled="true"/.test(node.html) ||
-  node.target.some((t) => String(t).includes(".adm-logo"));
+  node.target.some((t) => String(t).includes(".warn-i") || String(t).includes(".adm-logo"));
 
 /**
  * axe の重大・深刻な違反が無いこと（wcag2a・wcag2aa。文字のコントラスト color-contrast も検査する）。
@@ -541,3 +635,61 @@ export const rectOf = (locator: Locator) =>
     const r = el.getBoundingClientRect();
     return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
   });
+
+export type Rect = Awaited<ReturnType<typeof rectOf>>;
+
+/** inner が outer の中にある（±0.5px） */
+export function expectInside(inner: Rect, outer: Rect, label: string): void {
+  expect(inner.left, label).toBeGreaterThanOrEqual(outer.left - 0.5);
+  expect(inner.top, label).toBeGreaterThanOrEqual(outer.top - 0.5);
+  expect(inner.right, label).toBeLessThanOrEqual(outer.right + 0.5);
+  expect(inner.bottom, label).toBeLessThanOrEqual(outer.bottom + 0.5);
+}
+
+/** 焦点の枠（部品の外側 4px。2px の線と、離す 2px）の矩形 */
+export const ringOf = (box: Rect): Rect => ({
+  left: box.left - 4,
+  top: box.top - 4,
+  right: box.right + 4,
+  bottom: box.bottom + 4,
+});
+
+/** 2 つの矩形が重なる（接するだけは重ならない） */
+export const overlaps = (a: Rect, b: Rect): boolean =>
+  a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+/** 焦点のある部品の外側 4px（焦点の枠の 2px と、離す 2px）までが、結果詳細のスクロールする領域の縁の内側に入る（11-4 §2.2） */
+export async function expectRingInsideScroll(
+  page: Page,
+  target: Locator,
+  label: string,
+): Promise<void> {
+  await expect(target).toBeFocused();
+  expectInside(ringOf(await rectOf(target)), await rectOf(resultDetail(page).scroll), label);
+}
+
+/**
+ * 焦点のある部品の焦点の枠（外側 4px）が、固定の状態の目次の下端より下で、.rd-scroll の縁の内側にある（領域を動かす処理は描いた後の
+ * 次のフレームなので、そうなるまで待つ。11-4 §2.2・§2.5・§2.13）
+ */
+export async function expectRingVisibleBelowToc(
+  page: Page,
+  target: Locator,
+  label: string,
+): Promise<void> {
+  const rd = resultDetail(page);
+  await expect(target).toBeFocused();
+  await expect
+    .poll(
+      async () => {
+        const ring = ringOf(await rectOf(target));
+        const scroll = await rectOf(rd.scroll);
+        const toc = await rectOf(rd.toc);
+        return ring.top >= toc.bottom - 0.5 && ring.bottom <= scroll.bottom + 0.5;
+      },
+      { message: label },
+    )
+    .toBe(true);
+  await expect(page.locator("#rsn")).toHaveClass("stuck");
+  await expectRingInsideScroll(page, target, label);
+}

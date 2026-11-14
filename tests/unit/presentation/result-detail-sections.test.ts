@@ -61,7 +61,7 @@ import { cyclicAnswers, uniformAnswers } from "../scoring/helpers";
  * いちばん低い特性は謙虚さ（13。こだわり・発想力と同点で項目順の先）、信頼係数は 78.685 */
 const CONDUCTOR: ScoreResult = { ...scoreAnswers(cyclicAnswers()), aptitudeType: "conductor" };
 
-function dtoOf(scores: ScoreResult = CONDUCTOR): ResultDetailDto {
+function dtoOf(scores: ScoreResult = CONDUCTOR): Omit<ResultDetailDto, "ai"> {
   return {
     resultId: "ResSample0001",
     respondent: {
@@ -76,7 +76,6 @@ function dtoOf(scores: ScoreResult = CONDUCTOR): ResultDetailDto {
     submittedAt: "2026-04-04T15:30:00Z",
     scoringVersion: scores.scoringVersion,
     scores,
-    aiAnalysis: { status: "not_generated", startedAt: null, error: null, latest: null },
   };
 }
 
@@ -168,6 +167,7 @@ const ACTIONS = {
   setTraitHelp: noop,
   setSecondOpen: noop,
   setViewerStyle: noop,
+  setAiTab: noop,
 };
 
 // ---- HTML を読む補助
@@ -435,7 +435,7 @@ describe("M7-result-18 印刷の形の見出しの塊と目次（11-4 §2.18、1
   });
 
   it("目次: 固定しない表示（「目次」あり、氏名の欄と「↑ 先頭へ」なし、data-print）。描かない行き先のリンクは無く、強調は先頭（AI 解説があれば AI解説、無ければ概要）", () => {
-    const aiArea = createElement("section", { id: "ai", className: "result-section" }, "AI");
+    const aiArea = createElement("section", { id: "ai", "aria-label": "AI解説" }, "AI");
     const full = printBody(READY_DTO, { aiArea });
     const wrap = elementOf(full, 'id="rsn-wrap"');
     expect(openTag(wrap)).toBe('<div id="rsn-wrap" data-print="">');

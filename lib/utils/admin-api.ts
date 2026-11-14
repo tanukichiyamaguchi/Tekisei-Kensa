@@ -1,5 +1,6 @@
 // 管理画面（ブラウザ）から API を呼ぶ口（06 §10.4）。応答型は 04 §8.2 の Dto を import type で参照する。
 // /api/v1/admin/** は adminFetch() を通し、401 はログイン画面へ、403（停止・未登録）は再読み込みで E-01 を描画させる
+import type { AiAnalysisKind } from "@/lib/ai/kinds";
 import type { ComparisonScope } from "@/lib/scoring/types";
 import type { EmploymentStatus, StaffRole } from "@/lib/db/types";
 import { ADMIN_TEXTS } from "@/lib/presentation/admin-texts";
@@ -10,7 +11,8 @@ import type {
   PersonUpdatedDto,
   UsageLogListDto,
 } from "@/lib/services/dto/admin";
-import type { AiAnalysisDto, ComparisonDto } from "@/lib/services/dto/result";
+import type { AiKindResponse } from "@/lib/services/dto/ai";
+import type { ComparisonDto } from "@/lib/services/dto/result";
 
 /** 04 §2.4 のエラー応答。未知のコードも落とさないよう code は string で受ける */
 export class AdminApiError extends Error {
@@ -160,21 +162,33 @@ export function fetchComparison(
   });
 }
 
-// ---- AI 解説（04 §5.9。06 §3.5.9）
+// ---- AI 解説（11-6 §3.4。04 §5.9）
 
-/** POST …/ai-analysis。同期方式のためブラウザ側のタイムアウトは設けない（04 の maxDuration に委ねる） */
-export function requestAiAnalysis(resultId: string): Promise<AiAnalysisDto> {
-  return adminFetch(`${admin}/results/${encodeURIComponent(resultId)}/ai-analysis`, {
-    method: "POST",
-  });
+/** 種類の応答（AiKindResponse のうち kind がその種類のもの） */
+type AiKindResponseOf<K extends AiAnalysisKind> = Extract<AiKindResponse, { readonly kind: K }>;
+
+function aiKindPath(resultId: string, kind: AiAnalysisKind): string {
+  return `${admin}/results/${encodeURIComponent(resultId)}/ai-analysis/${kind}`;
 }
 
-/** GET …/ai-analysis（ポーリング・通信断後の状態確認） */
-export function fetchAiAnalysis(resultId: string, signal?: AbortSignal): Promise<AiAnalysisDto> {
-  return adminFetch(`${admin}/results/${encodeURIComponent(resultId)}/ai-analysis`, {
-    method: "GET",
-    signal,
-  });
+/**
+ * POST …/ai-analysis/{kind}（生成）。本文なし（育成・定着の 8 項目と経年比較の前回は PR-7.10・PR-7.11b）。同期方式のため
+ * ブラウザ側のタイムアウトは設けない（04 の maxDuration に委ねる）
+ */
+export function requestAiKind<K extends AiAnalysisKind>(
+  resultId: string,
+  kind: K,
+): Promise<AiKindResponseOf<K>> {
+  return adminFetch(aiKindPath(resultId, kind), { method: "POST" });
+}
+
+/** GET …/ai-analysis/{kind}（生成中の読み直し・通信の失敗の後の状態の確かめ） */
+export function fetchAiKind<K extends AiAnalysisKind>(
+  resultId: string,
+  kind: K,
+  signal?: AbortSignal,
+): Promise<AiKindResponseOf<K>> {
+  return adminFetch(aiKindPath(resultId, kind), { method: "GET", signal });
 }
 
 // ---- PDF（04 §5.10。06 §3.5.11）

@@ -14,11 +14,15 @@ import {
   expect,
   expectAccessibleAdmin,
   expectComparison,
+  expectInside,
   expectNoHorizontalScroll,
+  expectRingInsideScroll,
+  expectRingVisibleBelowToc,
   focusByKeyboard,
   loginViaUi,
   moreTraitsButton,
   openResultDetail,
+  overlaps,
   rdFold,
   rdLearn,
   rdPopup,
@@ -26,6 +30,7 @@ import {
   rdStyle,
   rectOf,
   resultDetail,
+  ringOf,
   seedName,
   submitType,
   test,
@@ -48,7 +53,6 @@ const RS_OUTLINE = {
   offset: "2px",
 } as const;
 
-type Rect = Awaited<ReturnType<typeof rectOf>>;
 type Outline = Awaited<ReturnType<typeof activeOutline>>;
 
 /**
@@ -87,27 +91,6 @@ async function stickToc(page: Page, top = 900): Promise<void> {
 /** grid の列の数 */
 const columns = (locator: Locator): Promise<number> =>
   locator.evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(" ").length);
-
-/** inner が outer の中にある（±0.5px） */
-function expectInside(inner: Rect, outer: Rect, label: string): void {
-  expect(inner.left, label).toBeGreaterThanOrEqual(outer.left - 0.5);
-  expect(inner.top, label).toBeGreaterThanOrEqual(outer.top - 0.5);
-  expect(inner.right, label).toBeLessThanOrEqual(outer.right + 0.5);
-  expect(inner.bottom, label).toBeLessThanOrEqual(outer.bottom + 0.5);
-}
-
-/** 焦点のある部品の外側 4px（焦点の枠の 2px と、離す 2px）までが、スクロールする領域の縁の内側に入る（11-4 §2.2） */
-async function expectRingInsideScroll(page: Page, target: Locator, label: string): Promise<void> {
-  await expect(target).toBeFocused();
-  const box = await rectOf(target);
-  const ring = {
-    left: box.left - 4,
-    top: box.top - 4,
-    right: box.right + 4,
-    bottom: box.bottom + 4,
-  };
-  expectInside(ring, await rectOf(resultDetail(page).scroll), label);
-}
 
 /** 目次の今見ているセクションの行き先の先頭が、目次の下端から 16px（±1）に来るまで待つ（11-4 §2.5） */
 async function expectLandedBelowToc(page: Page, id: string): Promise<void> {
@@ -155,18 +138,6 @@ async function expectAccessibleDetail(page: Page, size: string): Promise<void> {
   await expectAccessibleAdmin(page, `目次の固定の状態（${size}）`);
 }
 
-/** 焦点の枠（部品の外側 4px）の矩形 */
-const ringOf = (box: Rect): Rect => ({
-  left: box.left - 4,
-  top: box.top - 4,
-  right: box.right + 4,
-  bottom: box.bottom + 4,
-});
-
-/** 2 つの矩形が重なる（接するだけは重ならない） */
-const overlaps = (a: Rect, b: Rect): boolean =>
-  a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-
 /** カードの中の要素（SVG の中の図形と文字を除く）の左右が、カードの外形の内側にある（±0.5px）。外に出た要素の class か要素名を返す */
 const outsideOfCard = (card: Locator): Promise<string[]> =>
   card.evaluate((el) => {
@@ -187,32 +158,6 @@ async function expectInsideLearnStyleCards(page: Page, size: string): Promise<vo
   for (const [i, card] of (await cards.all()).entries()) {
     expect(await outsideOfCard(card), `育て方・接し方のカード ${i + 1}（${size}）`).toEqual([]);
   }
-}
-
-/**
- * 焦点のある部品の焦点の枠（外側 4px）が、固定の状態の目次の下端より下で、.rd-scroll の縁の内側にある（領域を動かす処理は描いた後の
- * 次のフレームなので、そうなるまで待つ。11-4 §2.2・§2.5・§2.13）
- */
-async function expectRingVisibleBelowToc(
-  page: Page,
-  target: Locator,
-  label: string,
-): Promise<void> {
-  const rd = resultDetail(page);
-  await expect(target).toBeFocused();
-  await expect
-    .poll(
-      async () => {
-        const ring = ringOf(await rectOf(target));
-        const scroll = await rectOf(rd.scroll);
-        const toc = await rectOf(rd.toc);
-        return ring.top >= toc.bottom - 0.5 && ring.bottom <= scroll.bottom + 0.5;
-      },
-      { message: label },
-    )
-    .toBe(true);
-  await expect(page.locator("#rsn")).toHaveClass("stuck");
-  await expectRingInsideScroll(page, target, label);
 }
 
 test("M7-result-33 目次（1440×900）: スクロールすると固定の状態（氏名の欄と「↑ 先頭へ」、「目次」なし）で、上端はスクロールする領域の上端（縁 + 4px）に留まり、上の 4px を白い影で覆う。今見ているセクションに aria-current、リンク（育て方・接し方を含む 8 つ）で行き先の先頭が目次の下 16px、「↑ 先頭へ」で先頭に戻る", async ({

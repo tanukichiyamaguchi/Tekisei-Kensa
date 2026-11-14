@@ -1,9 +1,11 @@
-// U-15（08 §3.2.2）: lib/ai/prompts/recruitment-v1.ts が付録D §3 と一致すること（07 §2.2、D07-03）
+// U-15（08 §3.2.2）: lib/ai/prompts/recruitment-v1.ts が付録D §3 と一致すること（07 §2.2、D07-03）。
+// 種類の版の引き方 getPromptDefinitionForKind（11-6 §3.7.2）
 import { describe, expect, it } from "vitest";
 
 import { AiProviderError } from "@/lib/ai/errors";
 import {
   getPromptDefinition,
+  getPromptDefinitionForKind,
   isKnownPromptVersion,
   PROMPT_REGISTRY,
   PROMPT_VERSIONS,
@@ -89,6 +91,35 @@ describe("プロンプトのレジストリ（07 §2.2）", () => {
     expect(getPromptDefinition("recruitment-v2")).toBe(RECRUITMENT_V2);
     expect(isKnownPromptVersion("recruitment-v3")).toBe(false);
     expect(() => getPromptDefinition("recruitment-v3")).toThrow(AiProviderError);
+  });
+
+  it("登録されている版はすべて採用向け（育成・定着の版は PR-7.10、経年比較の版は PR-7.11b が足す）", () => {
+    for (const def of Object.values(PROMPT_REGISTRY)) expect(def.analysisKind).toBe("recruitment");
+  });
+
+  it("getPromptDefinitionForKind（11-6 §3.7.2）: 種類の合う版は定義、種類の違う版・未知の版は config_error（文は版と種類の名前だけ）", () => {
+    const def = getPromptDefinitionForKind("recruitment", "recruitment-v2");
+    expect(def).toBe(RECRUITMENT_V2);
+    expect(def.analysisKind).toBe("recruitment");
+    expect(getPromptDefinitionForKind("recruitment", "recruitment-v1")).toBe(RECRUITMENT_V1);
+
+    const cases = [
+      ["training", "recruitment-v2", "prompt version recruitment-v2 is not for training"],
+      ["longitudinal", "recruitment-v1", "prompt version recruitment-v1 is not for longitudinal"],
+      ["recruitment", "recruitment-v9", "unknown prompt version: recruitment-v9"],
+      ["training", "training-v1", "unknown prompt version: training-v1"],
+    ] as const;
+    for (const [kind, version, message] of cases) {
+      let caught: unknown;
+      try {
+        getPromptDefinitionForKind(kind, version);
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught, `${kind} ${version}`).toBeInstanceOf(AiProviderError);
+      expect((caught as AiProviderError).reason).toBe("config_error");
+      expect((caught as AiProviderError).message).toBe(message);
+    }
   });
 });
 

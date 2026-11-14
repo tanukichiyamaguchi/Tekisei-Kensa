@@ -73,7 +73,7 @@ function dtoOf(
     readonly submittedAt?: string;
     readonly scores?: ScoreResult;
   } = {},
-): ResultDetailDto {
+): Omit<ResultDetailDto, "ai"> {
   const scores = overrides.scores ?? CONDUCTOR;
   return {
     resultId: "Res01",
@@ -89,7 +89,6 @@ function dtoOf(
     submittedAt: overrides.submittedAt ?? "2026-04-04T15:30:00Z",
     scoringVersion: scores.scoringVersion,
     scores,
-    aiAnalysis: { status: "not_generated", startedAt: null, error: null, latest: null },
   };
 }
 

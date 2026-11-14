@@ -6,11 +6,16 @@ import { registerAndSave, seedLocal } from "../../../scripts/seed-local";
 import { randomAnswers, uniformAnswers } from "../../../scripts/lib/synthetic-answers";
 import { createAdminAccount } from "@/lib/auth/admin-accounts";
 import { COLLECTIONS } from "@/lib/db/collections";
+import {
+  markAiGenerationFailed,
+  markAiGenerationStarted,
+} from "@/lib/db/repositories/ai-analyses-repository";
 import { submitSession } from "@/lib/db/repositories/assessment-sessions-repository";
 import { createOrganization } from "@/lib/db/repositories/organizations-repository";
 import { adminAuth, adminFirestore } from "@/lib/firebase/admin";
 import { scoreAnswers } from "@/lib/scoring/score";
 import type { AnswerMap } from "@/lib/scoring/types";
+import { AI_STALE_AFTER_MS } from "@/lib/services/ai-analysis";
 
 const meta = { ipAddress: "127.0.0.1", userAgent: "e2e" } as const;
 let emailSeq = 0;
@@ -215,6 +220,42 @@ async function run(task: string | undefined, args: string[]): Promise<unknown> {
         ownerEmail: emails.owner,
         adminEmail: emails.admin,
       };
+    }
+    case "submit-named": {
+      // 指定の氏名の受験を 1 件送信する（求職者・チームなし・番号 51 で職業コード 7「事務スタッフ」。責任者でない）。11-6 の M7-ai-42 は
+      // 氏名を __INVALID_JSON__ にして、スタブの不正な JSON（07 §5.4、D07-24）で採用向けの生成を失敗させる。直接は書かない
+      const [organizationId = "", name = ""] = args;
+      const registered = await registerAndSave(
+        organizationId,
+        51,
+        "applicant",
+        randomAnswers(51),
+        4,
+        null,
+        name,
+      );
+      const { resultId } = await submitSession({ sessionId: registered.sessionId, meta });
+      return { resultId, respondentId: registered.respondentId };
+    }
+    case "ai-generation": {
+      // 採用向けの AI 解説を、別の画面で生成を始めた状態（start）と、その生成が失敗した状態（fail。理由は args の 5 つ目）にする
+      // （11-6 §2.3.5 の「開いたときに generating」。M7-ai-38）。アプリと同じリポジトリの関数（生成の開始のトランザクションと失敗の
+      // 記録）でオーナーとして書く。直接は書かない
+      const [step = "", organizationId = "", ownerUid = "", resultId = "", reason = ""] = args;
+      const viewer = { uid: ownerUid, organizationId, role: "owner" } as const;
+      if (step === "start") {
+        await markAiGenerationStarted({
+          resultId,
+          viewer,
+          kind: "recruitment",
+          staleAfterMs: AI_STALE_AFTER_MS,
+        });
+      } else if (step === "fail") {
+        await markAiGenerationFailed({ resultId, viewer, kind: "recruitment", reason, meta });
+      } else {
+        throw new Error(`未知の段階です: ${step}`);
+      }
+      return { ok: true };
     }
     case "submit-type": {
       // 指定の適性タイプになる回答を固定シードの乱数回答から探して送信する（E-12 のコンダクタータイプ例）

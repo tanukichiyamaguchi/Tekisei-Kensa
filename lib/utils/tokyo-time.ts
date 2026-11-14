@@ -1,6 +1,6 @@
 // Asia/Tokyo の暦で日時を扱う純関数（11-2 §3.11、11-6 §3.7.5、11 総論 8.3 の 2）。firebase・React・lib/db を読まない
-// （画面の lib/presentation とサーバの両方から使う）。日本は夏時間が無いため、Asia/Tokyo は UTC+9 で固定する
-// （lib/services/rate-limit.ts の startOfTokyoDay と同じ扱い）。実行環境の時間帯（TZ）に左右されないよう UTC のメソッドだけで計算する
+// （画面の lib/presentation とサーバの両方から使う）。日本は夏時間が無いため、Asia/Tokyo は UTC+9 で固定する。
+// 実行環境の時間帯（TZ）に左右されないよう UTC のメソッドだけで計算する
 
 const TOKYO_OFFSET_MS = 9 * 60 * 60 * 1000;
 

@@ -1,6 +1,6 @@
 // 配色の単体テストが CSS を読む補助（exam-css.test.ts と同じ書き方。11 総論 8.3 の配色の取り決め）。
 // コメントを除いて規則を書かれた順に取り出し（@media・@container の中は 1 段まで。@keyframes は飛ばす）、宣言を読む。
-// 色は #hex・rgb()・rgba() を読み、var() は指定したセレクタの規則の変数で解く。WCAG 2 の相対輝度とコントラスト比を求め、
+// 色は #hex（6 けたと 3 けた）・rgb()・rgba() を読み、var() は指定したセレクタの規則の変数で解く。WCAG 2 の相対輝度とコントラスト比を求め、
 // 半透明の色・不透明度は下の地に重ねて、各成分を四捨五入（0.5 は切り上げ。Math.round）して 8 ビットにする
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -135,7 +135,7 @@ export interface Rgba {
   readonly alpha: number;
 }
 
-/** #hex（6 けた）・rgb()・rgba() を読む（var() は先に解いておく） */
+/** #hex（6 けたと 3 けた）・rgb()・rgba() を読む（var() は先に解いておく） */
 export function parseColor(value: string): Rgba {
   const v = value.trim().toLowerCase();
   const hex = /^#([0-9a-f]{6})$/.exec(v);
@@ -145,6 +145,11 @@ export function parseColor(value: string): Rgba {
       rgb: [parseInt(n.slice(0, 2), 16), parseInt(n.slice(2, 4), 16), parseInt(n.slice(4, 6), 16)],
       alpha: 1,
     };
+  }
+  const short = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/.exec(v);
+  if (short) {
+    const digit = (c: string | undefined) => parseInt(`${c ?? ""}${c ?? ""}`, 16);
+    return { rgb: [digit(short[1]), digit(short[2]), digit(short[3])], alpha: 1 };
   }
   const rgba = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)$/.exec(v);
   if (rgba) {

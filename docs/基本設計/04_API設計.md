@@ -3,8 +3,8 @@
 | 項目 | 内容 |
 |---|---|
 | 文書名 | 適性検査システム 基本設計 04 API・サーバ処理設計 |
-| 版 | 2.8 |
-| 作成日 | 2026-09-17（1.1 版: 2026-09-19、1.2 版: 2026-09-21、2.0 版: 2026-09-21。技術構成の変更（Supabase → Firebase。10 K-06）を反映した全面改版。2.1 版: 2026-09-21。Firebase 化後の分冊間整合（02 2.1 版の関数名・型名に統一）。2.2 版: 2026-09-24。本番デプロイで判明した事項の反映。2.3 版: 2026-11-09。M7 の PR-7.3（受検者画面。11 総論 5.4、11-1 §3.4）。2.4 版: 2026-11-10。M7 の PR-7.4（再受験のつながりと母集団。11 総論 5.4、11-1 §3.4.1・§3.4.3、11-5 §2.1）。2.5 版: 2026-11-10。M7 の PR-7.5（回答一覧の API。11 総論 5.4、11-2 §3.5〜§3.11）。2.6 版: 2026-11-10。M7 の PR-7.6（回答一覧の画面。11 総論 5.4、11-2 §4.1）。2.7 版: 2026-11-10。M7 の PR-7.7a（組織内分類。11 総論 5.4、11-3 §3.2・§4.1）。2.8 版: 2026-11-11。M7 の PR-7.7b（在籍・退職。11 総論 5.4、11-3 §3.3〜§3.6・§4.1）。改版履歴は §12） |
+| 版 | 2.9 |
+| 作成日 | 2026-09-17（1.1 版: 2026-09-19、1.2 版: 2026-09-21、2.0 版: 2026-09-21。技術構成の変更（Supabase → Firebase。10 K-06）を反映した全面改版。2.1 版: 2026-09-21。Firebase 化後の分冊間整合（02 2.1 版の関数名・型名に統一）。2.2 版: 2026-09-24。本番デプロイで判明した事項の反映。2.3 版: 2026-11-09。M7 の PR-7.3（受検者画面。11 総論 5.4、11-1 §3.4）。2.4 版: 2026-11-10。M7 の PR-7.4（再受験のつながりと母集団。11 総論 5.4、11-1 §3.4.1・§3.4.3、11-5 §2.1）。2.5 版: 2026-11-10。M7 の PR-7.5（回答一覧の API。11 総論 5.4、11-2 §3.5〜§3.11）。2.6 版: 2026-11-10。M7 の PR-7.6（回答一覧の画面。11 総論 5.4、11-2 §4.1）。2.7 版: 2026-11-10。M7 の PR-7.7a（組織内分類。11 総論 5.4、11-3 §3.2・§4.1）。2.8 版: 2026-11-11。M7 の PR-7.7b（在籍・退職。11 総論 5.4、11-3 §3.3〜§3.6・§4.1）。2.9 版: 2026-11-14。M7 の PR-7.9（AI 解説の 3 つのタブと採用向け。11 総論 5.4、11-6 §3.4〜§3.7・§4.1）。改版履歴は §12） |
 | 対象 | 実装者（Route Handler、`lib/services/`、`lib/auth/`、`lib/db/` の実装担当）、05〜08 分冊の設計者 |
 
 ## 0. 本書の位置づけ
@@ -262,7 +262,7 @@ export type ApiErrorCode =
   | "FORBIDDEN" | "ADMIN_SUSPENDED" | "ADMIN_NOT_REGISTERED" | "ROLE_REQUIRED"
   | "NOT_FOUND" | "ORGANIZATION_NOT_FOUND" | "SESSION_NOT_FOUND" | "RESULT_NOT_FOUND" | "RESPONDENT_NOT_FOUND"
   | "SESSION_ALREADY_SUBMITTED" | "ANSWERS_INCOMPLETE" | "LEFT_BEFORE_HIRED" | "POPULATION_EMPTY"
-  | "AI_ALREADY_GENERATING" | "AI_GENERATION_FAILED" | "AI_DAILY_LIMIT_EXCEEDED"
+  | "AI_ALREADY_GENERATING" | "AI_GENERATION_FAILED" | "AI_NOT_APPLICABLE" | "AI_KIND_DISABLED"
   | "PDF_GENERATION_FAILED" | "INVITE_TOKEN_INVALID" | "EMAIL_ALREADY_REGISTERED" | "CURRENT_PASSWORD_MISMATCH"
   | "RATE_LIMITED" | "SERVICE_UNAVAILABLE" | "INTERNAL_ERROR";
 
@@ -303,7 +303,8 @@ export class ApiError extends Error {
 | 409 | `POPULATION_EMPTY` | 比較対象となる受検者がいません | 比較計算（母集団 0 件。03 D3-08） |
 | 409 | `AI_ALREADY_GENERATING` | AI 解説を生成中です。しばらくしてから再度お試しください | AI 生成 |
 | 502 | `AI_GENERATION_FAILED` | AI 解説の生成に失敗しました。再度お試しください | AI 生成（provider エラー・JSON 検証失敗・タイムアウト） |
-| 429 | `AI_DAILY_LIMIT_EXCEEDED` | 本日の AI 解説の生成回数の上限に達しました | AI 生成（§2.8。上限値は 01 の仮置き。10 K-03） |
+| 409 | `AI_NOT_APPLICABLE` | この受験では、この AI 解説は使えません | AI 解説の採用向け・育成・定着の生成と取得で、表示上の役職が責任者の受験（K-21。§5.9、11-6 §3.4。2.9 版） |
+| 503 | `AI_KIND_DISABLED` | この AI 解説は準備中です | AI 解説の生成で、その種類が有効でなく生成済みでない（11-6 §2.7.4・§3.4。2.9 版。PR-7.9 では育成・定着と経年比較） |
 | 500 | `PDF_GENERATION_FAILED` | PDF の生成に失敗しました。再度お試しください | PDF |
 | 404 | `INVITE_TOKEN_INVALID` | 管理者追加用リンクが無効です。管理者に新しいリンクを発行してもらってください | 招待受理 |
 | 409 | `EMAIL_ALREADY_REGISTERED` | このメールアドレスはすでに登録されています | 招待受理、メール変更（Firebase Auth の `auth/email-already-exists`） |
@@ -314,6 +315,7 @@ export class ApiError extends Error {
 
 - 設計判断 D04-07: 他組織のリソース、論理削除済みのリソース、`admin` が見られない幹部（`executive`）のリソースは、いずれも **404** で返し、403 と区別しません（存在自体を見せない。00 §5）。Firestore にはこの絞り込みを担うルールが無いため、service が「取得した文書の `organizationId` がクレームと一致しない」「`deletedAt != null`」「`respondentKind == "executive"` かつ `canViewExecutives == false`」のいずれかを検出したときに、これらのコードを投げます。
 - 設計判断 D04-08: `AI_GENERATION_FAILED` は 502（上流エラー）にします。500 と区別することで、監視（01）で自システムの障害と外部 API の障害を分けて数えられます。
+- 2.9 版: AI 生成の日次上限（K-03 の 200 回）を廃止したので（K-25。§2.8）、429 `AI_DAILY_LIMIT_EXCEEDED` を消しました。経年比較の 409 `LONGITUDINAL_PREVIOUS_REQUIRED`・`LONGITUDINAL_PAIR_CHANGED`・`LONGITUDINAL_ORDER_INVALID` は、経年比較の生成を作る PR-7.11b で足します（11-6 §3.4）。
 - `message` は画面にそのまま表示できる日本語にします（06・05 分冊は原則としてこの文言を表示し、必要なら上書きします）。個人情報・トークン・Firestore のパス・スタックトレース・Firebase のエラーコード文字列を含めません。
 - 05 §7.1 が仮称として挙げた 401 `UNAUTHORIZED` は採用せず、`RESPONDENT_TOKEN_INVALID`（Cookie なし・不一致・文書なし）と `RESPONDENT_TOKEN_EXPIRED`（期限切れ）の 2 つに分けます（設計判断 D04-42: 画面の表示は同じ E-04 でよいが、期限切れは「登録し直し」の案内、それ以外は「受検リンクから開き直す」の案内に分けられるようにする）。05 §7.1・§9・D05-26 の読み替えは §10 に列挙します。
 
@@ -592,14 +594,14 @@ export function enqueueAuditLog(writer: AuditWriter, entry: AuditEntry): void;
 
 ### 2.8 レート制限
 
-01 の方針を実装に落とします。Vercel Firewall（基盤側）に加えて、アプリ側で判定するものは次の 2 つです。件数は Firestore の **`count()` 集計クエリ** で数え、文書本体は読みません（実装時確認: 集計クエリが範囲条件と等価条件の組み合わせで使えること、必要な複合インデックス）。
+01 の方針を実装に落とします。Vercel Firewall（基盤側）に加えて、アプリ側で判定するものは次の 1 つです（2.9 版で AI 生成の日次上限を廃止した。下の注記）。件数は Firestore の **`count()` 集計クエリ** で数え、文書本体は読みません（実装時確認: 集計クエリが範囲条件と等価条件の組み合わせで使えること、必要な複合インデックス）。
 
 | 対象 | 判定方法 | 上限（仮置き） | 応答 |
 |---|---|---|---|
 | 受検者登録 `POST /api/v1/respondent/sessions` | `auditLogs` を `organizationId == 対象組織`、`action == "respondent.register"`、`ipAddress == 接続元`、`createdAt > now − 10 分` で `count()`（`countRecentAuditLogs({ organizationId, action: "respondent.register", ipAddress, since })`。02 §8.6）。1.x 版と同じく **監査ログの `ipAddress` を使う**（設計判断 D04-13。`assessmentSessions` に IP を持たない）。複合インデックス `organizationId + action + ipAddress + createdAt` は 02 Q11 で定義済み | 20 件 / 10 分 / IP / 組織（01 の仮置き） | 429 `RATE_LIMITED`、`Retry-After: 600` |
-| AI 解説生成 `POST …/ai-analysis` | `aiAnalyses` を `organizationId == 自組織`、`createdAt >= 当日 00:00（Asia/Tokyo）` で `count()`（`countAiAnalysesSince({ organizationId, since })`。02 §8.6、Q14）。`admin` が呼んだ場合も幹部分を含めて数える（1.x 版の RLS による誤差は無くなる） | 200 件 / 日 / 組織（01 の仮置き。10 K-03「仮置きのまま実装」） | 429 `AI_DAILY_LIMIT_EXCEEDED` |
 
 - `ipAddress` が取得できない（`null`）場合はアプリ側の登録レート制限を適用しません（Firewall 側に委ねる）。
+- 2.9 版: AI 解説の生成の日次上限（組織あたり 1 日 200 回、429 `AI_DAILY_LIMIT_EXCEEDED`。10 K-03）は廃止しました（K-25。参照元に回数の上限は無い。11-6 §2.10）。費用は Anthropic Console の利用上限で管理します（01 D01-15・D01-17）。`countAiAnalysesSince`（`aiAnalyses` の `count()`）と 02 の Q14 のインデックスは、`scripts/verify-firebase.ts` とインデックスの結合テストが使うので残します。
 - 回答保存・送信・PDF・一覧は Firewall のみ（01）。`POST /auth/session` と `POST /auth/invite` も Firewall（IP あたり 1 分 5 件を推奨。§6）で、Firebase Auth 側の組み込み制限（`auth/too-many-requests`）は 429 `RATE_LIMITED` に変換します。
 - 集計クエリが使えない場合の代替: 対象文書を `select()` で最小の射影にして `limit(上限 + 1)` で読み、件数を数える（読み取り回数は上限 + 1 で頭打ち）。
 
@@ -609,7 +611,7 @@ export function enqueueAuditLog(writer: AuditWriter, entry: AuditEntry): void;
 
 | Route Handler | `maxDuration` | 本書での扱い |
 |---|---|---|
-| `POST …/ai-analysis` | 300 | 同期方式（§7.1）。応答を待つ間ブラウザは「生成中」を表示 |
+| `POST …/ai-analysis/{kind}` | 300 | 同期方式（§7.1）。応答を待つ間ブラウザは「生成中」を表示。2.9 版で種類ごとのルート（`app/api/v1/admin/results/[resultId]/ai-analysis/[kind]/route.ts`。11-6 §3.4）に移した（GET も同じファイル） |
 | `GET …/pdf` | 120 | 同期生成してストリーム返却（§7.2） |
 | `POST …/submit` | 既定（10 秒） | 採点は数十 ms（03 §10.9）。Firestore のトランザクション 1 回（読み取り 2 件、書き込み 5 件） |
 | `GET /api/v1/admin/results`、`GET …/classification`、`GET …/comparison` | 既定（10 秒） | 組織内の `results` を全件読む（数百件規模）。件数が増えた場合の見直しは §5.3 の目安に従う |
@@ -734,15 +736,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ resu
 | POST | `/api/v1/admin/organization/invite-token` | 管理者追加用リンクの再発行。追加（平文のトークンはこの応答でだけ返す） | owner／super_admin | §5.2 |
 | GET | `/api/v1/admin/admin-users` | 同一組織の管理者一覧（アカウント画面 M-07。06 D06-20 の依頼）。追加（2.0 版で変更: `email` を含める） | owner／super_admin | §5.11 |
 | GET | `/api/v1/admin/results` | 回答一覧の全行（同じ人の受験を 1 行にまとめ、つながりを返す。検索・絞り込み・並び替えは画面。2.5 版） | admin 以上（幹部は owner のみ） | §5.3 |
-| GET | `/api/v1/admin/results/{resultId}` | 結果詳細（全指標・受検者情報・AI 解説の状態と本文） | 同上 | §5.4 |
+| GET | `/api/v1/admin/results/{resultId}` | 結果詳細（全指標・受検者情報・AI 解説の領域の出すタブと種類ごとの状態と本文。2.9 版） | 同上 | §5.4 |
 | GET | `/api/v1/admin/results/{resultId}/comparison` | 比較計算（都度計算、非永続化） | 同上 | §5.5 |
 | PATCH | `/api/v1/admin/respondents/{respondentId}` | チーム・除外・区分・入社日・退職日・役職の更新（つながった全受験に 1 回のバッチで書く。役職で受検者区分も変わる。2.5 版） | 同上 | §5.6 |
 | DELETE | `/api/v1/admin/respondents/{respondentId}` | 削除（論理削除） | 同上 | §5.6 |
 | GET | `/api/v1/admin/classification` | 組織内分類の人の一覧（同じ人の受験は代表の受験で数え、除外した受験は数えない。集計と絞り込みは画面。2.7 版） | 同上 | §5.7 |
 | GET | `/api/v1/admin/employment` | 在籍・退職の人の一覧と基準日（組織内分類と同じ人。タブの振り分け・勤続・分析は画面。電話番号は返さない。2.8 版） | 同上 | §5.7 |
 | GET | `/api/v1/admin/usage-logs` | 利用履歴（送信済みの全件。2.5 版） | 同上 | §5.8 |
-| POST | `/api/v1/admin/results/{resultId}/ai-analysis` | AI 解説の生成（生成済みなら保存済みを返す） | 同上 | §5.9 |
-| GET | `/api/v1/admin/results/{resultId}/ai-analysis` | AI 解説の取得（状態のポーリングにも使う） | 同上 | §5.9 |
+| POST | `/api/v1/admin/results/{resultId}/ai-analysis/{kind}` | AI 解説の種類ごとの生成（生成済みなら保存済みを返す。`kind` は `recruitment`・`training`・`longitudinal`。2.9 版で種類なしの `…/ai-analysis` を置き換えた） | 同上 | §5.9 |
+| GET | `/api/v1/admin/results/{resultId}/ai-analysis/{kind}` | AI 解説の種類ごとの取得（状態のポーリングにも使う。2.9 版） | 同上 | §5.9 |
 | GET | `/api/v1/admin/results/{resultId}/pdf` | PDF 出力（`mode=full` / `restricted`） | 同上 | §5.10 |
 
 ### 3.3 認証系（`/api/v1` の外）
@@ -1448,7 +1450,7 @@ export type UpdateMeInput = z.infer<typeof updateMeInputSchema>;
 | 項目 | 内容 |
 |---|---|
 | 認可 | admin 以上（幹部は owner／super_admin） |
-| 処理 | `results` 1 文書（`getResult({ resultId, viewer })`。02 §8.5。`organizationId` 一致・`deletedAt == null`・`respondentKind` と役割の判定はリポジトリ内で行い、満たさなければ `null` → 404。service 側の `assertVisibleToAdmin` は二重防御として同じ判定を再実行する）→ `respondents` 1 文書（`getRespondent({ respondentId, viewer })`）→ `latestAiAnalysisId` があれば `aiAnalyses` 1 文書（`getAiAnalysis({ aiAnalysisId, resultId, organizationId })`）。読み取りは最大 3 回、HTTP は 1 リクエスト（要件定義書 §9 性能）。指標は `toScoreResult(doc)`（02 `lib/db/mappers/`。`results` 文書の map をそのまま `ScoreResult` に写す）で変換し、そのまま `scores` に入れる |
+| 処理 | `results` 1 文書（`getResult({ resultId, viewer })`。02 §8.5。`organizationId` 一致・`deletedAt == null`・`respondentKind` と役割の判定はリポジトリ内で行い、満たさなければ `null` → 404。service 側の `assertVisibleToAdmin` は二重防御として同じ判定を再実行する）→ `respondents` 1 文書（`getRespondent({ respondentId, viewer })`）→ AI 解説の領域（`buildAiArea({ viewer, result, respondent })`。11-6 §3.7.7。2.9 版）: 出せる種類のうち、生成済みで最新の分析の ID がある採用向けと育成・定着の `aiAnalyses` を最大 2 文書（`getAiAnalysis({ aiAnalysisId, resultId, organizationId, kind })`。経年比較の前回・次の受験は PR-7.11a が足す）。読み取りは最大 4 回、HTTP は 1 リクエスト（要件定義書 §9 性能）。指標は `toScoreResult(doc)`（02 `lib/db/mappers/`。`results` 文書の map をそのまま `ScoreResult` に写す）で変換し、そのまま `scores` に入れる |
 | 監査ログ | `result.view`（`targetCollection: "results"`） |
 
 レスポンス（200）:
@@ -1497,19 +1499,25 @@ export type UpdateMeInput = z.infer<typeof updateMeInputSchema>;
     "socialStyle": "amiable",
     "reliability": 92.65
   },
-  "aiAnalysis": {
-    "status": "completed",
-    "startedAt": null,
-    "error": null,
-    "latest": {
-      "aiAnalysisId": "Aia5Hj7Kl9Mn1Pq3Rs5T",
-      "provider": "anthropic",
-      "model": "（AI_MODEL の値）",
-      "promptVersion": "（AI_PROMPT_VERSION の値）",
-      "generatedAt": "2026-09-17T02:00:00.000Z",
-      "reliability": 92.65,
-      "output": { "summary": "…", "verdict": { "sokusenryoku": "高い", "teichaku_risk": "低い", "sougou": "推奨" }, "strengths": [], "cautions": [], "questions": [], "retention": { "levers": [], "sign": "…", "action": "…" } }
-    }
+  "ai": {
+    "visibleTabs": ["recruitment", "training"],
+    "recruitment": {
+      "status": "completed",
+      "startedAt": null,
+      "error": null,
+      "enabled": true,
+      "latest": {
+        "aiAnalysisId": "Aia5Hj7Kl9Mn1Pq3Rs5T",
+        "provider": "anthropic",
+        "model": "（AI_MODEL の値）",
+        "promptVersion": "（AI_PROMPT_VERSION の値）",
+        "generatedAt": "2026-09-17T02:00:00.000Z",
+        "reliability": 92.65,
+        "output": { "summary": "…", "verdict": { "sokusenryoku": "高い", "teichaku_risk": "低い", "sougou": "推奨" }, "strengths": [], "cautions": [], "questions": [], "retention": { "levers": [], "sign": "…", "action": "…" } }
+      }
+    },
+    "training": { "status": "not_generated", "startedAt": null, "error": null, "enabled": false, "context": null, "latest": null },
+    "longitudinal": { "status": "not_generated", "startedAt": null, "error": null, "enabled": false }
   }
 }
 ```
@@ -1521,10 +1529,10 @@ export type UpdateMeInput = z.infer<typeof updateMeInputSchema>;
 | 404 | `NOT_FOUND` | `resultId` が文書 ID の形式でない |
 | 404 | `RESULT_NOT_FOUND` | 他組織・削除済み・`admin` に対する幹部データ（`assertVisibleToAdmin` が投げる。D04-07） |
 
-- 06 §8.2 が依頼した `aiGenerationStatus` / `aiGenerationError` / `latestAiAnalysis` は、本書では `aiAnalysis.status` / `aiAnalysis.error` / `aiAnalysis.latest` にまとめています（§5.9 の GET と同じ形にして画面の型を 1 つにするため）。06 §8.2 の任意項目 `availableTeamCodes`（D06-09）は **採用しません**（設計判断 D04-48: 「チームごとの人数」を閲覧者の可視範囲で数えると `fetchPopulation()` の母集団（幹部を含む。00 D-06）と一致せず、比較の `populationSize` と食い違う値を画面に出すことになる。06 D06-09 は「含まれない場合は全チームを同じ表記で表示」で成立する）。
+- 06 §8.2 が依頼した `aiGenerationStatus` / `aiGenerationError` / `latestAiAnalysis` は、2.9 版から `ai`（11-6 §3.6 の `AiAreaDto`）にまとめています: 出すタブ `visibleTabs`（11-6 §2.2。PR-7.9 は採用向けと育成・定着で、表示上の役職が責任者の受験は `[]`。経年比較のタブは PR-7.11a が足す）と、種類ごとの状態・`enabled`（生成できる設定か）・最新の分析（§5.9 の GET と同じ形。画面の型を 1 つにするため）。`visibleTabs` に無い採用向け・育成・定着は `null`。経年比較は PR-7.9 では状態だけ（前回・次の受験・受験回のつながり・レポートは PR-7.11a・PR-7.11b）。2.8 版までの `aiAnalysis`（採用向けだけ）は無くなりました。06 §8.2 の任意項目 `availableTeamCodes`（D06-09）は **採用しません**（設計判断 D04-48: 「チームごとの人数」を閲覧者の可視範囲で数えると `fetchPopulation()` の母集団（幹部を含む。00 D-06）と一致せず、比較の `populationSize` と食い違う値を画面に出すことになる。06 D06-09 は「含まれない場合は全チームを同じ表記で表示」で成立する）。
 - `scores` は 00 §3.4 の `ScoreResult` と **同じキー名**（指標キーは snake_case の `TraitKey` などをそのまま使う。00 §3.1 の「JSON キーは camelCase」の例外。設計判断 D04-28: `TraitKey` 等は識別子であり、`results` 文書の map のキー・マスタ・画面・テストで同じ文字列を使う方が誤りが少ない。00 §2.1「指標の格納」と一致）。
 - 数値は丸めません（03 §9）。表示の丸め・色分け・文言の出し分けは 06 分冊の `lib/presentation/` が行います。上の数値は形式を示す例であり、整合した実データではありません。
-- `aiAnalysis.output` は付録D §2 のスキーマそのもの（00 §3.6 `AiAnalysisOutput`）。`latest` は生成が一度も成功していなければ `null`。
+- `ai.recruitment.latest.output` は付録D §2 のスキーマそのもの（00 §3.6 `AiAnalysisOutput`）。`latest` は生成が一度も成功していなければ `null`。保存した出力が今のスキーマで読めないときは、その種類を `status: "failed"`・`error: "internal_error"`・`latest: null` として返す（保存はしない。11-6 §2.3.4）。
 - 電話番号は結果詳細画面に表示されないため含めません（要件定義書 §7 S-06）。
 
 ### 5.5 比較計算 `GET /api/v1/admin/results/{resultId}/comparison`
@@ -1853,11 +1861,11 @@ export type UpdatePersonInput = z.infer<typeof updatePersonInputSchema>;
 | 403 | `ADMIN_NOT_REGISTERED` / `ADMIN_SUSPENDED` | `requireAdmin` 共通（§5.1） |
 | 503 | `SERVICE_UNAVAILABLE` | Firestore の一時的な失敗（§2.4） |
 
-### 5.9 AI 解説 `POST/GET /api/v1/admin/results/{resultId}/ai-analysis`
+### 5.9 AI 解説 `POST/GET /api/v1/admin/results/{resultId}/ai-analysis/{kind}`
 
-要件定義書 §6.2 A-09、§6.6、付録D、00 §3.6、00 §2.2（`aiAnalyses`、`results.aiGenerationStatus` / `latestAiAnalysisId`）、01（`maxDuration` 300）に対応します。生成処理そのもの（プロンプト組み立て、provider 呼び出し、JSON 検証、`aiAnalyses` への保存、状態遷移）は 07 分冊の `lib/ai/` と `lib/services/ai-analysis.ts` の共同責任で、本書は **API の契約と状態の扱い** を定めます。`results` の AI 関連フィールド `aiGenerationStartedAt`（Timestamp または `null`）と `aiGenerationError`（string または `null`）は 02 §3.5 で確定済みです（00 §2.2 にも 2.1 版で追記）。
+要件定義書 §6.2 A-09、§6.6、付録D、00 §3.6、00 §2.2（`aiAnalyses`、`results` の種類ごとの AI の項目）、01（`maxDuration` 300）に対応します。2.9 版（M7 の PR-7.9）で、種類ごとの API に改めました（11-6 §3.4・§3.5 が正。本書はその要約）。種類 `kind` は `recruitment`（採用向け）・`training`（育成・定着）・`longitudinal`（経年比較）の 3 つで、PR-7.9 では採用向けだけが生成でき、育成・定着（PR-7.10）と経年比較（PR-7.11b）は有効でない種類として状態だけを返します。種類なしの `…/ai-analysis` は消しました。生成処理そのもの（プロンプト組み立て、provider 呼び出し、JSON 検証、`aiAnalyses` への保存、状態遷移）は 07 分冊の `lib/ai/` と `lib/services/ai-analysis.ts` の共同責任で、本書は **API の契約と状態の扱い** を定めます。`results` の AI の項目は種類ごとに 4 つ（状態・開始日時・理由・最新の分析の ID。採用向けは今の `aiGenerationStatus`・`aiGenerationStartedAt`・`aiGenerationError`・`latestAiAnalysisId`、育成・定着と経年比較は 11-6 §3.1）で、02 §3.5 で確定済みです。
 
-#### 状態遷移（00 D-10、07 §6.2）
+#### 状態遷移（00 D-10、07 §6.2。種類ごと）
 
 ```mermaid
 stateDiagram-v2
@@ -1870,30 +1878,32 @@ stateDiagram-v2
     generating --> failed: 滞留（aiGenerationStartedAt から 10 分超）を次の POST/GET が検知
 ```
 
-#### `POST /api/v1/admin/results/{resultId}/ai-analysis`
+- 状態は種類ごとに持ち、ある種類の生成・失敗・滞留は、ほかの種類の項目を変えません（11-6 §3.1 の種類と項目の対応 `AI_KIND_FIELDS`）。生成済み（`completed`）でも、保存した出力が今のスキーマで読めなければ、作り直せます（11-6 §2.3.4）。
+
+#### `POST /api/v1/admin/results/{resultId}/ai-analysis/{kind}`
 
 | 項目 | 内容 |
 |---|---|
 | 認可 | admin 以上（対象結果が見えること） |
-| リクエスト | 本文なし |
+| リクエスト | 本文なし（読まない。育成・定着の 8 項目は PR-7.10、経年比較の `previousResultId` は PR-7.11b が読み始める。11-6 §3.4） |
 | 処理 | 下記の手順。**同期方式**（応答まで生成を待つ。`maxDuration = 300`） |
-| 監査ログ | `result.ai_generate`（`details: { "status": "completed" / "failed", "aiAnalysisId", "inputTokens", "outputTokens" }`。トークン数は 07 §4.8 の `AiGenerateResult.usage` から（stub は `null`）。開始時には書かず、終了時に成功・失敗の書き込みと同じバッチで 1 件） |
+| 監査ログ | `result.ai_generate`（成功は `details: { "status": "completed", "kind", "aiAnalysisId", "inputTokens", "outputTokens" }`、失敗は `{ "status": "failed", "kind", "reason" }`。トークン数は 07 §4.8 の `AiGenerateResult.usage` から（stub は `null`）。開始時には書かず、終了時に成功・失敗の書き込みと同じバッチで 1 件。氏名は入れない） |
 
-処理手順（`lib/services/ai-analysis.ts`）:
+処理手順（`generateAi(ctx, resultId, kind)`。11-6 §3.5）:
 
-1. `getResult({ resultId, viewer: ctx })` → `assertVisibleToAdmin`。無ければ 404 `RESULT_NOT_FOUND`。`respondents` 1 文書（氏名・職業）を `getRespondent({ respondentId, viewer: ctx })` で取得する。
-2. `aiGenerationStatus` で分岐（トランザクション前の早期判定）:
-   - `completed` → `aiAnalyses` の最新文書（`latestAiAnalysisId`）を返す（200、再生成しない。要件定義書 §6.6）。
-   - `generating` かつ `aiGenerationStartedAt > now − 10 分` → 409 `AI_ALREADY_GENERATING`。
-   - `generating` かつ 10 分以上前 → 滞留とみなし、手順 4 のトランザクションで `failed` 経由の再開始として扱う（設計判断 D04-34: Vercel の関数が途中で打ち切られた場合の復旧）。
-   - `not_generated` / `failed` → 続行。
-3. 日次上限の判定（§2.8。`count()` 集計）。超過なら 429 `AI_DAILY_LIMIT_EXCEEDED`。
-4. トランザクション（`markAiGenerationStarted({ resultId, viewer: ctx, staleAfterMs: 10 分 })`。02 §8.6）で `generating` に遷移: `results/{resultId}` を `transaction.get` し、`aiGenerationStatus` が `not_generated` / `failed`、または `generating` かつ `aiGenerationStartedAt <= now − 10 分` のときだけ `{ aiGenerationStatus: "generating", aiGenerationStartedAt: now, aiGenerationError: null }` に `update` する。`completed` なら `{ alreadyCompleted: true, latestAiAnalysisId }` が返るので保存済みを返す（手順 2 と同じ）。条件を満たさなければ `RepositoryError("AI_ALREADY_GENERATING")` → 409 `AI_ALREADY_GENERATING`（二重起動防止。1.x 版の条件付き `UPDATE` の代替。D04-59。同一結果に対する同時リクエストは楽観ロックにより片方だけがコミットに成功する）。
-5. `AiAnalysisInput`（氏名、職業表示名、`ScoreResult`）を組み立て、`AiProvider.generate()`（07）を呼ぶ。
-6. 成功: `saveAiAnalysis({ resultId, viewer: ctx, generated, reliability, meta: ctx.request })`（`ai-analyses-repository.ts`。02 §8.6）で `aiAnalyses` 文書の作成（`organizationId`・`respondentId` は `results` 文書の値、`resultId`、`provider`、`model`、`promptVersion`、`analysisKind`、`rawText`、`output`、`usage`、`stopReason`、`requestId`、`reliability`、`generatedBy` = `ctx.uid`（02 §3.6 で確定。07 §7.1 と同名）、監査フィールド）と `results` の `update`（`aiGenerationStatus: "completed"`、`latestAiAnalysisId`、`aiGenerationError: null`）と `auditLogs`（`result.ai_generate`）を **1 バッチ** で書く（07 §7.1「同一バッチ」）→ 200。
-7. 失敗: `markAiGenerationFailed({ resultId, viewer: ctx, reason, meta: ctx.request })`（02 §8.6）で `results` を `{ aiGenerationStatus: "failed", aiGenerationError: reason }` に `update` し、`auditLogs` を同じバッチで書く（下記の短い理由コード。個人情報・API キー・生の応答本文を含めない）→ 502 `AI_GENERATION_FAILED`（`details.reason` に同じコードを載せる）。`aiAnalyses` 文書は作らない（07 §4.6）。
+1. `kind` が 3 つのどれでもない、または `resultId` が文書 ID の形でなければ 404 `NOT_FOUND`（`kind` はルート、`resultId` の形は手順 2 の `loadVisibleResult` が判定する）。
+2. `loadVisibleResult(ctx, resultId)`（`getResult` と `assertVisibleToAdmin`）と `getRespondent`（氏名・職業）。見えなければ 404 `RESULT_NOT_FOUND`。
+3. 採用向け・育成・定着: 表示上の役職（`effectiveStaffRole(result.staffRole, respondent.occupationCode)`。11-2 §3.11）が `manager`（責任者）なら 409 `AI_NOT_APPLICABLE`（K-21）。
+4. その種類の状態が `completed` で、最新の分析が読める（11-6 §2.8 のスキーマで検証できる）なら、保存済みを返す（200、再生成しない。要件定義書 §6.6）。読めなければ（最新の分析の ID が無い・文書が無い・必須の項目が無い・参照が合わない・スキーマに合わない。11-6 §3.7.7）、手順 7 で作り直す。
+5. その種類が有効でなければ 503 `AI_KIND_DISABLED`（`isAiKindEnabled(kind)`。PR-7.9 は育成・定着と経年比較が有効でない。11-6 §2.7.4）。
+6. `generating` かつ開始日時から 10 分（`AI_STALE_AFTER_MS`）未満なら 409 `AI_ALREADY_GENERATING`。10 分以上前なら滞留とみなし、手順 7 で再開始する（設計判断 D04-34: Vercel の関数が途中で打ち切られた場合の復旧）。
+7. トランザクション（`markAiGenerationStarted({ resultId, viewer: ctx, kind, staleAfterMs: 10 分 })`。02 §8.6）で、結果を読み直して手順 4・6 と同じ判定をし（読めるかの判定のため最新の分析も読む）、その種類の状態を `generating`、開始日時を今、理由を `null` に `update` する。生成済みで読める（ほかの要求が先に終えた）なら `{ alreadyCompleted: true, latestAiAnalysisId }` が返るので、手順 4 と同じく保存済みを返す。条件を満たさなければ `RepositoryError("AI_ALREADY_GENERATING")` → 409 `AI_ALREADY_GENERATING`（二重起動防止。D04-59。同じ結果・同じ種類に対する同時リクエストは楽観ロックにより片方だけがコミットに成功する）。
+8. `AiAnalysisInput`（氏名、職業表示名、`ScoreResult`）を組み立て、`AiProvider.generate(kind, input, { model, promptVersion, signal })`（07。`promptVersion` は種類の版、240 秒で打ち切る）を呼ぶ。
+9. 成功: `saveAiAnalysis({ resultId, viewer: ctx, kind, generated, reliability, meta: ctx.request })`（`ai-analyses-repository.ts`。02 §8.6）で `aiAnalyses` 文書の作成（`organizationId`・`respondentId` は `results` 文書の値、`resultId`、`provider`、`model`、`promptVersion`、`analysisKind`（`kind`）、`rawText`、`output`、`usage`、`stopReason`、`requestId`、`reliability`、`generatedBy` = `ctx.uid`、監査フィールド）と、その種類の `results` の項目の `update`（`completed`・最新の分析の ID・理由 `null`）と `auditLogs`（`result.ai_generate`）を **1 バッチ** で書く（07 §7.1「同一バッチ」）。保存の失敗は理由 `internal_error` で手順 10 と同じ。
+10. 失敗: `markAiGenerationFailed({ resultId, viewer: ctx, kind, reason, meta: ctx.request })`（02 §8.6）でその種類を `failed`・理由に `update` し、`auditLogs` を同じバッチで書く（下記の短い理由コード。個人情報・API キー・生の応答本文を含めない。記録の失敗はログだけ）→ 502 `AI_GENERATION_FAILED`（`details.reason` に同じコードを載せる）。`aiAnalyses` 文書は作らない（07 §4.6）。
+11. 結果を読み直し、`buildAiArea(…, { onlyKind: kind })`（11-6 §3.7.7）のその種類の状態と最新の分析に `resultId` と `kind` を付けて返す（200。読み直した結果で、その種類が出せないタブになっていれば（生成の間に役職を責任者にした）409 `AI_NOT_APPLICABLE`）。
 
-`aiGenerationError` に保存する値（07 §4.6 の `AI_FAILURE_REASONS` と同じ語彙。07 の一覧が正で、本書は service 側が付ける `internal_error` だけを追加する）:
+その種類の理由の項目（採用向けは `aiGenerationError`。11-6 §3.1）に保存する値（07 §4.6 の `AI_FAILURE_REASONS` と同じ語彙。07 の一覧が正で、本書は service 側が付ける `internal_error` だけを追加する）:
 
 ```text
 provider_error   5xx / 529 overloaded / 接続エラー（再試行で回復し得る）
@@ -1905,17 +1915,19 @@ invalid_json     応答本文を付録D §2 のスキーマで検証できなか
 truncated        stop_reason = max_tokens
 refusal          stop_reason = refusal
 config_error     プロンプト版・provider 名の不整合
-internal_error   Firestore の書き込みエラーなど自システム側の失敗（07 §6.2 の依頼どおり service が付ける）
+internal_error   Firestore の書き込みエラーなど自システム側の失敗（07 §6.2 の依頼どおり service が付ける）。保存した出力が今のスキーマで読めないときも、この理由の failed として返す（保存はしない。11-6 §2.3.4）
 ```
 
-レスポンス（200。GET と同じ形）:
+レスポンス（200。GET と同じ形。11-6 §3.6 の `AiKindResponse`。採用向けの例）:
 
 ```json
 {
   "resultId": "Res4Lm6Np8Qr1St3Uv5W",
+  "kind": "recruitment",
   "status": "completed",
   "startedAt": null,
   "error": null,
+  "enabled": true,
   "latest": {
     "aiAnalysisId": "Aia5Hj7Kl9Mn1Pq3Rs5T",
     "provider": "anthropic",
@@ -1944,26 +1956,34 @@ internal_error   Firestore の書き込みエラーなど自システム側の�
 }
 ```
 
+- 育成・定着の応答は、採用向けの形に `context`（生成のときの 8 項目。PR-7.9 ではいつも `null`）を足したもの。経年比較の応答は、PR-7.9 では状態だけ（`status`・`startedAt`・`error`・`enabled`。前回・次の受験・受験回のつながり・レポートは PR-7.11a・PR-7.11b が足す）。
+- 保存した出力が今のスキーマで読めないとき（生成済みなのに最新の分析の ID が無い・文書が無い・必須の項目が無い・参照が合わない・スキーマに合わない。11-6 §3.7.7）は、その種類を `status: "failed"`・`error: "internal_error"`・`latest: null` として返す（保存はしない。ログ `ai.output_unreadable`。11-6 §2.16）。
+
 エラー:
 
 | HTTP | code | 条件 |
 |---:|---|---|
+| 404 | `NOT_FOUND` | `kind` が 3 つのどれでもない、`resultId` が文書 ID の形でない |
 | 404 | `RESULT_NOT_FOUND` | 対象結果が見えない |
+| 409 | `AI_NOT_APPLICABLE` | 採用向け・育成・定着で、表示上の役職が責任者 |
 | 409 | `AI_ALREADY_GENERATING` | 生成中（10 分以内） |
-| 429 | `AI_DAILY_LIMIT_EXCEEDED` | 組織の日次上限 |
 | 502 | `AI_GENERATION_FAILED` | 生成失敗（`details: { "reason": "invalid_json" }`） |
+| 503 | `AI_KIND_DISABLED` | その種類が有効でなく、生成済みでない |
 
-#### `GET /api/v1/admin/results/{resultId}/ai-analysis`
+- 2.9 版で 429 `AI_DAILY_LIMIT_EXCEEDED` は無くなりました（日次上限の廃止。K-25。§2.8）。422 `VALIDATION_ERROR`（育成・定着・経年比較の本文）と 409 `LONGITUDINAL_PREVIOUS_REQUIRED`・`LONGITUDINAL_PAIR_CHANGED`・`LONGITUDINAL_ORDER_INVALID` は、本文を読み始める PR-7.10・PR-7.11b で足します（11-6 §3.4）。
+
+#### `GET /api/v1/admin/results/{resultId}/ai-analysis/{kind}`
 
 | 項目 | 内容 |
 |---|---|
 | 認可 | admin 以上 |
-| 処理 | `results` の AI 関連 4 フィールド（`aiGenerationStatus`、`aiGenerationStartedAt`、`aiGenerationError`、`latestAiAnalysisId`）+ `aiAnalyses` 最新文書。`generating` の滞留（10 分超）を検知したら `markAiGenerationFailed({ resultId, viewer: ctx, reason: "timeout", meta })` で `failed` に更新して返す（02 の契約により `result.ai_generate`（`status: "failed"`、`reason: "timeout"`）の監査ログも同じバッチで残る。2.1 版で「監査ログは書かない」を改めた） |
+| 処理 | `getAiState(ctx, resultId, kind)`: POST の手順 1〜3（3 は採用向け・育成・定着だけ）を当て、その種類の状態の項目と最新の分析（`buildAiArea(…, { onlyKind: kind })`）を返す。`generating` の滞留（10 分超）を検知したら `markAiGenerationFailed({ resultId, viewer: ctx, kind, reason: "timeout", meta })` で `failed` に更新してから返す（02 の契約により `result.ai_generate`（`status: "failed"`、`kind`、`reason: "timeout"`）の監査ログも同じバッチで残る。ほかの種類の項目は変えない） |
 | 監査ログ | なし（結果詳細の `result.view` に含まれる扱い） |
-| レスポンス | POST と同じ形。`latest` は無ければ `null` |
+| レスポンス | POST と同じ形。`latest` は無ければ `null`。有効でない種類も 200 で状態を返す（`enabled: false`） |
+| エラー | 404 `NOT_FOUND`・`RESULT_NOT_FOUND`、409 `AI_NOT_APPLICABLE`（表示上の役職が責任者の受験の採用向け・育成・定着）だけ |
 
 - 07 分冊が非同期方式（生成をバックグラウンドで続け、POST が `generating` で即応答）に変更した場合も、この GET をポーリングに使えるよう `status` と `startedAt` を含めています（§7.1）。
-- 結果詳細（§5.4）の応答に `aiAnalysis` を含めているため、画面の初期表示でこの GET を呼ぶ必要はありません。
+- 結果詳細（§5.4）の応答の `ai` に、出せる種類の状態と最新の分析を含めているため、画面の初期表示でこの GET を呼ぶ必要はありません。画面は生成中の読み直し（3 秒ごと。11-6 §2.3.5）にだけ使います。
 
 ### 5.10 PDF 出力 `GET /api/v1/admin/results/{resultId}/pdf`
 
@@ -2154,11 +2174,11 @@ Vercel の Node.js Function は `maxDuration` を超えると打ち切られま�
 | 観点 | 設計 |
 |---|---|
 | 方式 | 同期（POST が生成完了まで待つ）。`maxDuration = 300`。既存も「AI解説を表示」ボタン押下から表示までを 1 操作としていた（要件定義書 §6.2 A-09） |
-| 打ち切り対策 | 生成開始時に `generating` + `aiGenerationStartedAt` を保存しておき、打ち切られて `generating` のまま残った文書は、次の POST/GET が 10 分経過で `failed` に戻す（§5.9 手順 2）。ブラウザは 502 やタイムアウト（ネットワーク切断）を受けたら GET で状態を確認する（06） |
+| 打ち切り対策 | 生成開始時に、その種類の状態を `generating` にして開始日時を保存しておき（採用向けは `aiGenerationStartedAt`）、打ち切られて `generating` のまま残った種類は、次の POST/GET が 10 分経過で `failed` に戻す（§5.9 手順 6）。ブラウザは 502 やタイムアウト（ネットワーク切断）を受けたら GET で状態を確認する（06） |
 | provider 側のタイムアウト | `AiProvider.generate()` に 240 秒の AbortSignal を渡す（設計判断 D04-38: `maxDuration` 300 の内側で自前のタイムアウトを先に発火させ、`failed` への遷移と応答を確実に行う）。07 分冊の provider 実装は `signal` を受け取る |
-| 二重起動 | Firestore のトランザクション（§5.9 手順 4）の楽観ロックに依存する（D04-59）。Vercel の同時実行では同一結果に対する 2 本目が必ず 409 になる |
+| 二重起動 | Firestore のトランザクション（§5.9 手順 7）の楽観ロックに依存する（D04-59）。Vercel の同時実行では同一結果・同じ種類に対する 2 本目が必ず 409 になる |
 | 非同期化への切替 | 07 分冊が非同期（例: `waitUntil` や外部キュー）を選ぶ場合、POST は 202 `{ "status": "generating", "startedAt": "…" }` を返し、GET をポーリングに使う。応答の形は本書のまま。切替の判断基準: 実測の生成時間の中央値が 60 秒を超える場合 |
-| コスト上限 | 日次上限（§2.8）と Anthropic Console の月額上限（01。10 K-03） |
+| コスト上限 | Anthropic Console の利用上限（01 D01-15）。日次上限は 2.9 版で廃止した（K-25。§2.8） |
 
 `AiProvider` への引き渡し（07 との境界）:
 
@@ -2168,12 +2188,15 @@ import type { AiAnalysisInput, AiProvider } from "@/lib/ai/types";
 
 export interface GenerateOptions {
   readonly model: string;          // AI_MODEL
-  readonly promptVersion: string;  // AI_PROMPT_VERSION
+  readonly promptVersion: string;  // 種類の版（採用向けは AI_PROMPT_VERSION。11-6 §3.8）
   readonly signal: AbortSignal;    // 240 秒
 }
 export function getAiProvider(): AiProvider;  // AI_PROVIDER に応じた実装（anthropic / stub。00 §3.2、07 §5.4）
+// AiProvider.generate(kind, input, options): Promise<AiGenerateResult<kind>>（2.9 版。種類ごとの入力・出力は 00 §3.6、11-6 §3.7.3）
 export function buildAiAnalysisInput(args: { respondentName: string; occupationCode: number; score: ScoreResult }): AiAnalysisInput;
 ```
+
+- 2.9 版（11-6 §3.7.1・§3.7.3）: `AiProvider.generate` は種類 `kind`（`AiAnalysisKind`）を受け、出力の上限 `max_tokens` は `AI_MAX_TOKENS[kind]`（採用向け 16000・育成・定着 16000・経年比較 32000。K-25）。版の種類が `kind` と違えば `config_error`（API を呼ばない）。PR-7.9 では、provider・スタブとも採用向けだけを生成し、育成・定着（PR-7.10）と経年比較（PR-7.11b）は `config_error`（サービスは有効でない種類を 503 `AI_KIND_DISABLED` で先に止めるので、provider までは来ない）。
 
 - `AiAnalysisInput.occupationLabel` は `lib/masters/occupations.ts` の表示名（例: `アイリスト`、`ネイリスト`）です（00 §1.10、10 K-19）。
 - 応答の `output` は `zod` で付録D §2 のスキーマに検証済みのもの（07）。検証に失敗した生テキストは `aiAnalyses` に保存せず（成功時のみ文書を作成。07 §4.6）、`aiGenerationError = "invalid_json"` にします。
@@ -2216,7 +2239,7 @@ lib/services/
 ├── firebase-errors.ts           # translateFirebaseError（§2.4 の対応表。2.0 版で rpc-errors.ts を置き換え）
 ├── audit.ts                     # writeAuditLog / enqueueAuditLog（§2.6。02 の appendAuditLog / addAuditLogToBatch を呼ぶ）
 ├── visibility.ts                # assertVisibleToAdmin（認可 3 段階の (3) と幹部可視性。§5 冒頭。2.0 版で追加）
-├── rate-limit.ts                # 受検者登録・AI 日次上限（§2.8。count() 集計）
+├── rate-limit.ts                # 受検者登録のレート制限（§2.8。count() 集計。AI の日次上限は 2.9 版で消した）
 ├── schemas/                     # zod スキーマ（§2.3、各 API）
 │   ├── common.ts
 │   ├── respondent.ts
@@ -2238,13 +2261,15 @@ lib/services/
 ├── respondent-management.ts     # updatePerson / deleteRespondent（§5.6。2.5 版で updateRespondent を置き換えた）
 ├── classification.ts            # getClassification(ctx)（§5.7。2.7 版でクエリをやめた）・getEmployment(ctx, now?)（§5.7。2.8 版）
 ├── usage-log-list.ts            # listUsageLogs(ctx)（§5.8。2.5 版でクエリをやめた）
-├── ai-analysis.ts               # generateAiAnalysis / getAiAnalysis（§5.9、07 と共同）
+├── ai-analysis.ts               # generateAi / getAiState / isAiKindEnabled / promptVersionOf（§5.9、07 と共同。2.9 版）
+├── ai-area.ts                   # buildAiArea / visibleTabsOf（結果詳細・AI の API・印刷で共用する AI 解説の領域。11-6 §3.7.7。2.9 版）
 ├── pdf-export.ts                # exportPdf（§5.10、07 と共同）
 ├── invite-acceptance.ts         # validateInviteToken / acceptInvite（§6.3。06 M-02 の事前検証も含む）
 └── dto/                         # 応答 Dto の型（§8.2）
     ├── respondent.ts
     ├── admin.ts
-    └── result.ts
+    ├── result.ts
+    └── ai.ts                    # AI 解説の領域と種類ごとの応答（11-6 §3.6。2.9 版）
 ```
 
 - ファイル名は本書が正です。08（1.2 版）§2.4 PR-3.1・§2.5 PR-4.1 が挙げる `answers.ts`、`results.ts`、`respondents.ts`、`usage-logs.ts` は上表の `answer-saving.ts`、`result-list.ts` + `result-detail.ts`、`respondent-management.ts`、`usage-log-list.ts` に読み替えます（設計判断 D04-52。08 2.0 版で反映済み）。07 が追加する `print-data.ts`（07 §9.4）はこの一覧に含めず、07 が置きます。
@@ -2453,23 +2478,7 @@ export interface UsageLogItemDto {
 // lib/services/dto/result.ts
 import type { ComparisonResult, ScoreResult, TeamCode } from "@/lib/scoring/types";
 import type { RespondentKind } from "@/lib/db/types";
-import type { AiAnalysisOutput, AiGenerationStatus } from "@/lib/ai/types";
-
-export interface AiAnalysisDto {
-  readonly resultId: string;
-  readonly status: AiGenerationStatus;
-  readonly startedAt: string | null;
-  readonly error: string | null;
-  readonly latest: {
-    readonly aiAnalysisId: string;
-    readonly provider: string;
-    readonly model: string;
-    readonly promptVersion: string;
-    readonly generatedAt: string;
-    readonly reliability: number;
-    readonly output: AiAnalysisOutput;
-  } | null;
-}
+import type { AiAreaDto } from "@/lib/services/dto/ai";
 
 export interface ResultDetailDto {
   readonly resultId: string;
@@ -2485,7 +2494,7 @@ export interface ResultDetailDto {
   readonly submittedAt: string;
   readonly scoringVersion: string;
   readonly scores: ScoreResult;
-  readonly aiAnalysis: Omit<AiAnalysisDto, "resultId">;
+  readonly ai: AiAreaDto; // 2.9 版。aiAnalysis（AiAnalysisDto）を置き換えた
 }
 
 export interface ComparisonDto extends ComparisonResult {
@@ -2494,6 +2503,47 @@ export interface ComparisonDto extends ComparisonResult {
   readonly includesSubject: boolean;
   readonly computedAt: string;
 }
+```
+
+```ts
+// lib/services/dto/ai.ts（2.9 版。11-6 §3.6 が正。PR-7.9 の形）
+import type { AiAnalysisKind } from "@/lib/ai/kinds";
+import type { AiAnalysisOutput, AiGenerationStatus, AiOutputByKind } from "@/lib/ai/types";
+import type { TrainingContext } from "@/lib/masters/training-context";
+
+export interface AiKindStateDto {
+  readonly status: AiGenerationStatus;
+  readonly startedAt: string | null;
+  readonly error: string | null;
+  readonly enabled: boolean; // 生成できる設定か。採用向けは常に true
+}
+export interface AiLatestDto<O> {
+  readonly aiAnalysisId: string;
+  readonly provider: string;
+  readonly model: string;
+  readonly promptVersion: string;
+  readonly generatedAt: string; // 画面には出さない
+  readonly reliability: number;
+  readonly output: O;
+}
+export interface RecruitmentAiDto extends AiKindStateDto {
+  readonly latest: AiLatestDto<AiAnalysisOutput> | null;
+}
+export interface TrainingAiDto extends AiKindStateDto {
+  readonly context: TrainingContext | null; // PR-7.9 ではいつも null
+  readonly latest: AiLatestDto<AiOutputByKind["training"]> | null; // 出力の型は PR-7.10 が入れる
+}
+export type LongitudinalAiDto = AiKindStateDto; // 前回・次の受験・links・latest は PR-7.11a・PR-7.11b
+export interface AiAreaDto {
+  readonly visibleTabs: readonly AiAnalysisKind[];
+  readonly recruitment: RecruitmentAiDto | null; // visibleTabs に無ければ null
+  readonly training: TrainingAiDto | null;
+  readonly longitudinal: LongitudinalAiDto;
+}
+export type AiKindResponse =
+  | ({ readonly resultId: string; readonly kind: "recruitment" } & RecruitmentAiDto)
+  | ({ readonly resultId: string; readonly kind: "training" } & TrainingAiDto)
+  | ({ readonly resultId: string; readonly kind: "longitudinal" } & LongitudinalAiDto);
 ```
 
 ### 8.3 service 関数の一覧
@@ -2514,7 +2564,7 @@ export interface ComparisonDto extends ComparisonResult {
 | `rotateInviteToken(ctx)` | — | `{ adminInvite, rotatedAt }` | `rotateInviteToken`（バッチ） | `organization.rotate_invite_token`（同バッチ） |
 | `listAdminUsers(ctx)` | `AdminContext`（`requireOwner` 済み） | `AdminUserListDto` | `listAdminUsers`、Admin SDK `getUsers` | なし |
 | `listResultRows(ctx)` | — | `ResultListDto`（2.5 版。§5.3） | `listResults`（Q3 / Q4 の全件。射影に 8 項目を足した）、`buildPersonRows`、`getRespondentsByIds`（代表の受検者） | `result.list`（`{ rowCount, examCount }`） |
-| `getResultDetail(ctx, resultId)` | 文書 ID | `ResultDetailDto` | `getResult`、`getRespondent`、`getAiAnalysis` | `result.view` |
+| `getResultDetail(ctx, resultId)` | 文書 ID | `ResultDetailDto` | `getResult`、`getRespondent`、`buildAiArea`（内部で `getAiAnalysis`。2.9 版） | `result.view` |
 | `getComparison(ctx, { resultId, scope })` | | `ComparisonDto` | `getResult`、`fetchPopulation`（Q1（改）+ `selectPopulation`。2.4 版） | `result.comparison` |
 | `updatePerson(ctx, respondentId, input)`（2.5 版。`updateRespondent` を置き換えた） | `UpdatePersonInput` | `PersonUpdatedDto` | `getRespondent`、`listResults`（Q3 / Q4）、`buildPersonRows`・`findPersonRow`、`updatePersonAttributes`（バッチ。つながりの `respondents` + `results`、役職のときは `usageLogs` も） | `respondent.update_team` / `respondent.update_exclusion` / `result.update_employment` / `result.update_staff_role`（同バッチ） |
 | `deleteRespondent(ctx, respondentId)` | | void | `softDeleteRespondent`（バッチ。3 文書） | `respondent.delete`（同バッチ） |
@@ -2522,8 +2572,10 @@ export interface ComparisonDto extends ComparisonResult {
 | `getEmployment(ctx, now?)`（2.8 版。`now` は基準日のテスト用） | — | `EmploymentDto`（§5.7） | `listOrganizationPeople`（下の行）、`todayInTokyo`（`lib/presentation/employment.ts`） | `employment.view`（`{ count }` は人数） |
 | `listOrganizationPeople(ctx)`（2.7 版。`organization-people.ts`。組織内分類と在籍・退職で共用） | — | `OrganizationPerson[]`（代表の `submittedAt` の降順。11-3 §3.6） | `listResults`（Q3 / Q4 の全件）、`selectCountedHeads`、`getRespondentsByIds`（代表の受検者） | なし（呼び出し側が書く） |
 | `listUsageLogs(ctx)`（2.5 版でクエリをやめた） | — | `UsageLogListDto` | `listUsageLogs({ viewer })`（Q5（改）/ Q6（改）の全件。送信済みだけ） | `usage_log.view` |
-| `generateAiAnalysis(ctx, resultId)` | | `AiAnalysisDto` | `getResult`、`getRespondent`、`countAiAnalysesSince`、`markAiGenerationStarted`（トランザクション）、07 の provider、`saveAiAnalysis` / `markAiGenerationFailed`（バッチ） | `result.ai_generate`（同バッチ） |
-| `getAiAnalysis(ctx, resultId)` | | `AiAnalysisDto` | `getResult`、`getAiAnalysis`、滞留時 `markAiGenerationFailed` | 滞留時のみ `result.ai_generate`（failed） |
+| `generateAi(ctx, resultId, kind)`（2.9 版。`generateAiAnalysis` を置き換えた） | 種類（本文は PR-7.10・PR-7.11b から） | `AiKindResponse` | `getResult`、`getRespondent`、`markAiGenerationStarted`（トランザクション。種類の項目）、07 の provider、`saveAiAnalysis` / `markAiGenerationFailed`（バッチ）、`buildAiArea`（応答） | `result.ai_generate`（同バッチ。`details.kind`） |
+| `getAiState(ctx, resultId, kind)`（2.9 版。`getAiAnalysisState` を置き換えた） | 種類 | `AiKindResponse` | `getResult`、`getRespondent`、`buildAiArea`、滞留時 `markAiGenerationFailed` | 滞留時のみ `result.ai_generate`（failed） |
+| `isAiKindEnabled(kind)`・`promptVersionOf(kind)`（2.9 版） | 種類 | 真偽・版（無効なら `null`） | なし（環境変数。PR-7.9 は採用向けだけが `AI_PROMPT_VERSION`） | なし |
+| `buildAiArea({ viewer, result, respondent }, { onlyKind? })`・`visibleTabsOf(result, respondent)`（2.9 版。`ai-area.ts`） | 結果・受検者 | `AiAreaDto`・出すタブ | `getAiAnalysis`（種類の一致も確かめる。読めなければ `failed`・`internal_error` とログ `ai.output_unreadable`） | なし |
 | `exportPdf(ctx, { resultId, mode, scope })` | | `{ bytes: Uint8Array; filename: string }` | `getResult`（可視性確認）、`fetchPopulation`（`scope` 指定時の 0 件判定）+ 07 の `lib/pdf` | `result.pdf_export` |
 | `validateInviteToken(inviteToken)` | 平文トークン | `{ organizationName } \| null`（例外を投げない。06 M-02 の事前検証） | `findOrganizationByInviteTokenHash` | なし |
 | `acceptInvite(input, request)` | `AcceptInviteInput` | `{ organizationName, email, nextUrl }` | `findOrganizationByInviteTokenHash`、`createAdminAccount`（`lib/auth/admin-accounts.ts`。内部で `createUser` / `setCustomUserClaims` / `createAdminUser` / `appendAuditLog`） | `admin.signup`（`createAdminAccount` が書く。§6.3 D04-36 改） |
@@ -2578,11 +2630,11 @@ canLinkAsPrevious({ organizationId, resultId }): Promise<boolean>               
 fetchPopulation({ organizationId, scope }): Promise<readonly PopulationRow[]>                           // Q1（改）+ selectPopulation()（2.4 版）。PopulationRow = PopulationMember + resultId
 
 // 02 §8.6 ai-analyses-repository.ts / usage-logs-repository.ts / audit-logs-repository.ts
-markAiGenerationStarted({ resultId, viewer, staleAfterMs }): Promise<{ alreadyCompleted, latestAiAnalysisId }>   // トランザクション。AI_ALREADY_GENERATING
-saveAiAnalysis({ resultId, viewer, generated, reliability, meta }): Promise<{ aiAnalysisId }>           // バッチ + result.ai_generate
-markAiGenerationFailed({ resultId, viewer, reason, meta }): Promise<void>                               // 更新 + result.ai_generate
-getAiAnalysis({ aiAnalysisId, resultId, organizationId }): Promise<AiAnalysis | null>
-countAiAnalysesSince({ organizationId, since }): Promise<number>                                        // Q14 count()
+markAiGenerationStarted({ resultId, viewer, kind, staleAfterMs }): Promise<{ alreadyCompleted, latestAiAnalysisId }>   // トランザクション。AI_ALREADY_GENERATING。種類の項目（2.9 版）
+saveAiAnalysis({ resultId, viewer, kind, generated, reliability, meta }): Promise<{ aiAnalysisId }>           // バッチ + result.ai_generate（details.kind）
+markAiGenerationFailed({ resultId, viewer, kind, reason, meta }): Promise<void>                               // 更新 + result.ai_generate（details.kind）
+getAiAnalysis({ aiAnalysisId, resultId, organizationId, kind }): Promise<AiAnalysis | null>                    // 種類が違えば AI_ANALYSIS_MISMATCH
+countAiAnalysesSince({ organizationId, since }): Promise<number>                                        // Q14 count()（日次上限には使わない。verify とインデックスの結合テスト）
 listUsageLogs({ viewer }): Promise<readonly UsageLog[]>                                                 // Q5（改）/ Q6（改）全件。送信済みだけ（2.5 版。Q13 count() はやめた）
 appendAuditLog(entry: AuditEntry): Promise<{ auditLogId }>
 addAuditLogToBatch(batch: AuditWriter, entry: AuditEntry): string
@@ -2600,7 +2652,7 @@ toAnswerMap(answers: AssessmentSessionDoc["answers"]): Record<number, number>   
 
 ```ts
 // lib/db/mappers/dto.ts（本書が定める）
-export function toAiAnalysisDto(result: Result, latest: AiAnalysis | null): Omit<AiAnalysisDto, "resultId">;
+// toAiAnalysisDto は 2.9 版で消した（AI 解説の領域は lib/services/ai-area.ts の buildAiArea が作る）
 export function toUsageLogItemDto(log: UsageLog): UsageLogItemDto;
 ```
 
@@ -2692,23 +2744,23 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant A as 管理者（ブラウザ）
-    participant API as POST …/ai-analysis
+    participant API as POST …/ai-analysis/{kind}
     participant S as lib/services/ai-analysis
     participant P as lib/ai（AiProvider, 07）
     participant DB as Firestore（Admin SDK）
     A->>API: POST
-    API->>S: generateAiAnalysis
-    S->>DB: results（可視性、status 確認）、aiAnalyses count()（日次上限）
-    S->>DB: トランザクション: results を読み、not_generated / failed / 滞留なら generating に update
+    API->>S: generateAi(kind)
+    S->>DB: results・respondents（可視性、表示上の役職、その種類の status 確認）
+    S->>DB: トランザクション: results を読み、その種類が not_generated / failed / 滞留 / 読めない生成済みなら generating に update
     alt 条件不成立（別リクエストが先行）
         S-->>API: 409 AI_ALREADY_GENERATING
     else 遷移成功
-        S->>P: generate(input, { model, promptVersion, signal })
+        S->>P: generate(kind, input, { model, promptVersion, signal })
         alt 成功
-            S->>DB: バッチ: aiAnalyses create + results completed + auditLogs result.ai_generate
-            S-->>API: 200 AiAnalysisDto
+            S->>DB: バッチ: aiAnalyses create + results（その種類）completed + auditLogs result.ai_generate
+            S-->>API: 200 AiKindResponse
         else 失敗
-            S->>DB: バッチ: results failed + aiGenerationError + auditLogs result.ai_generate
+            S->>DB: バッチ: results（その種類）failed + 理由 + auditLogs result.ai_generate
             S-->>API: 502 AI_GENERATION_FAILED
         end
     end
@@ -2748,8 +2800,8 @@ sequenceDiagram
 | 03（採点） | **2.1 版: 03 1.4 版で確認済み**。`InvalidAnswerMapError` → 422 `ANSWERS_INCOMPLETE`、`EmptyPopulationError` → 409 `POPULATION_EMPTY` に変換（§4.5、§5.5）。`ComparisonResult` は丸めずに `ComparisonDto` に載せる。`assessmentSessions.answers` の map（文字列キー）は 02 の `submitSession()` が `toAnswerMap()` で数値キーに変換してから `assertAnswerMap` に渡す（03 §2.1 の「そのまま渡してよい」は文字列キーでも動く前提だが、本書は数値キーに揃える）。`lib/masters/exam-pages.ts`（§4.4 D04-46）は 03 の `QUESTION_PAGE_LAYOUT` と `ACTIVE_QUESTIONS` を import する純関数で、03 の `lib/masters/` に置く（05 の `lib/presentation/exam-pages.ts` は再エクスポート）。**2.3 版: 03 1.5 版に合わせ、`lib/masters/exam-steps.ts`（`QUESTION_STEP_SIZES` と `ACTIVE_QUESTIONS` から `EXAM_STEP_COUNT`・`questionNosOfStep`）に置き換えた** |
 | 05（受検者画面） | **2.3 版: 05 2.0 版（11-1）に合わせた**: (a) `PUT …/answers` は `{ stepNo, answers }`（1〜41 問。D04-18・D04-19 改）、(b) `SessionProgressDto.lastSavedStepNo`・`AnswersSavedDto.stepNo`、(c) 受験者登録の画面は `GET organizations/{id}` と `resumable` を使わない（D04-43 改）、(d) 送信のあとの 2 秒の待ちは画面（§4.5）、(e) `ANSWERS_INCOMPLETE` は `missing[0]` のステップへ（§4.5）、(f) 電話番号は必須と 30 文字の上限だけ（D04-06 改）。以下は 2.2 版までの記録。**2.1 版: 05 1.4 版で `lastSavedPageNo` を反映済み**。2.0 版で **受検者 API の契約は変更なし**（パス・入出力・エラーコード）。05 1.3 版（D05-38）の読み替え（文書 ID の形式、`sessionTokenHash`、`answers` map の部分更新、`SESSION_NOT_FOUND` の条件）は本書 §2.1・§2.5.2・§4.4・§4.5 と一致していることを確認した。追加: 503 `SERVICE_UNAVAILABLE`（§2.4）は E-03（保存失敗の再試行）と同じ扱いでよい。画面遷移と API の対応、05 §7.1・§9・D05-26 の読み替え（1.1〜1.2 版で確定済み）は変更なし: (1) 401 `RESPONDENT_TOKEN_INVALID` / `RESPONDENT_TOKEN_EXPIRED`（D04-42）、`details.missing`。(2) 404 `SESSION_NOT_FOUND` は送信トランザクション内でのみ。(3) `answers` は昇順配列（D04-44）、`resumePageNo` は含めない。(4) `POST …/start` の応答は `SessionStartedDto`（D04-45）。(5) `PUT …/answers` の `pageNo` とページ所属の検証（D04-18 改）。(6) `SessionCreatedDto`。(7) `SessionSubmittedDto` の `nextUrl`。(8) Server Component は `requireRespondentSessionFromCookies(sessionId)` を呼ぶ |
 | 06（管理者画面） | **2.5 版（M7 の PR-7.5）**: 回答一覧 `ResultListDto`（§5.3）・受検者の更新 `PersonUpdatedDto`（§5.6）・利用履歴 `UsageLogListDto`（§5.8）は、M7 の PR-7.6 の新しい回答一覧の画面（11-2 §2）が使う（一覧は Server Component の `listResultRows`、更新は `updatePerson()`、利用履歴は全件の `fetchUsageLogs()`）。**2.6 版（M7 の PR-7.6）: 06 1.8 版に反映済み**（06 §3.4・§3.4.7 を 11-2 の要約と参照に改め、§8.1・§8.2 を新しい画面の使い方にした。旧 `listResults(ctx, query)`・`PagedDto`・`ResultListItemDto` は消した）。**2.7 版（M7 の PR-7.7a）: 06 1.9 版に反映済み**（組織内分類 `ClassificationDto`（§5.7。人の一覧）は、作り直した組織内分類の画面（06 §3.6、11-3 §2）の Server Component が `getClassification(ctx)` で受け取り、集計と絞り込みは画面で行う。1.x 版から継続の読み替えのうち組織内分類の `socialStyle` / `aptitudeType` / `members` は使わなくなった）。**2.8 版（M7 の PR-7.7b）: 06 1.10 版に反映済み**（在籍・退職 `EmploymentDto`（§5.7。人の一覧と基準日）は、新設した在籍・退職の画面（06 §3.8、11-3 §2.13〜§2.17）の Server Component が `getEmployment(ctx)` を直接呼んで使い、変更ダイアログの保存は §5.6 の `updatePerson()` の `employment` を使う）。**2.1 版: 06 1.4 版に反映済み**。06 1.3 版 §8.2 の依頼への回答: (1) `POST /auth/invite` の本文は `{ inviteToken, name, email }` で確定。パスワード再設定メールは **画面（クライアント SDK `sendPasswordResetEmail`）が送る**（06 §3.2 の (1) はそのまま。D04-58）。(2) `POST /auth/session` は有効な ID トークンに対して常に Cookie を発行し、停止中・未所属の判定は `requireAdmin()` に委ねる（D04-54。06 §3.1 の前提どおり。応答は `{ expiresAt }`）。(3) `DELETE /auth/session` は 204。他端末のセッションも失効する（§6.2）。(4) `PATCH /api/v1/admin/me` は **即時反映・`pendingEmail` なし**（D04-57）。現在のパスワードの検証は画面側の再認証（`signInWithEmailAndPassword` → `getIdToken` → `signOut`）で得た `reauthIdToken` を本文に入れる方式（D04-47 改。`currentPassword` は API に送らない）。メール・パスワード変更後は応答の `reloginRequired: true` とともに Cookie が削除されるので、T-36 相当の案内でログイン画面へ遷移する。T-32（確認メール）は不要。(5) `admin.login` は `login-events` のまま（D04-24 改）。**2.0 版の Dto の変更**: `MeDto.links.adminInvite` は常に `null`、`adminInviteIssuedAt` を追加（D04-56。招待リンクは owner が「再発行」した応答の `adminInvite` をその場で表示・コピーさせる。`admin` には表示できない。1.x 版 D04-22 の取り下げ）。`AdminUserItemDto` に `email` を追加（§5.11。管理者一覧に表示してよい）。`MeDto.email` は `string \| null`。`PATCH /me` の応答型は `MeUpdatedDto`。§2.4 に 401 `ID_TOKEN_INVALID`（`POST /auth/session` の失敗。T-24 でよい）と 503 `SERVICE_UNAVAILABLE`（`Toast` で再試行を促す）を追加。**1.x 版から継続の読み替え（変更なし）**: 結果詳細 `aiAnalysis.status` / `error` / `latest`、`availableTeamCodes` 不採用（D04-48）、組織内分類 `socialStyle` / `aptitudeType` / `members`、利用履歴 `name`、管理者一覧 `adminUserId`、回答一覧の `aptitudeType` / `socialStyle` / `aiGenerationStatus`（D04-27）、比較の `populationSize` / `includesSubject`（D04-29）、象限は所属分類（D04-33）、削除の 404 時は一覧再取得（D04-30） |
-| 07（AI・PDF） | **2.1 版: 07 1.4 版に反映済み**。`AiProvider.generate()` は `signal`（240 秒）を受け取る（D04-38）。生成の状態遷移・滞留判定は §5.9 のとおり service が担い、provider は生成のみ。`aiGenerationError` は 07 §4.6 の `AiFailureReason` + service 側の `internal_error`（§5.9 手順 7）。`aiAnalyses` の作成と `results` の更新と監査ログは 1 バッチ（07 §7.1 と一致）。`generatedBy` は 07 の名前のまま `aiAnalyses.generatedBy` に保存（02 §3.6。本書の `generatedByUid` は取り下げ）。PDF は `issuePdfToken` / `verifyPdfToken`（§7.2。ペイロードの `adminUserId` → `adminUid`、`role` を追加）を使い、印刷用ページ（`lib/services/print-data.ts`）は Admin SDK でデータ取得し、`assertVisibleToAdmin` と同じ判定関数でトークンの `organizationId`・`role` に対する可視性を再検証する（07 §9.4 と一致）。`middleware.ts` からの `/admin/results/[resultId]/print` の除外は §8.5 で維持（D04-41）。非同期化する場合は POST を 202 に変える（§7.1）。日次上限は `aiAnalyses` の `count()` 集計（成功件数。07 §6.4 の「失敗は上限を消費しない」と一致） |
-| 08（テスト） | **2.5 版（M7 の PR-7.5）: 08 2.7 版に反映済み**: 結合テスト M7-list-21〜30・32・33（11-2 §5.2）と I-20〜I-22・I-31・I-32・I-36・I-50 の改め、PF-08（1,000 件の一覧と更新の時間。D04-55 の目安の検証）。**2.7 版（M7 の PR-7.7a）: 08 2.9 版に反映済み**: 結合テスト M7-zaiseki-24・25・27〜30（11-3 §5.2。27〜29 は組織内分類の分）と I-22 の改め（`includeExcluded` は「付けても同じ応答」）、PF-09（1,000 件の組織内分類の時間。M7-zaiseki-46 の組織内分類の分）。**2.8 版（M7 の PR-7.7b）: 08 2.10 版に反映済み**: 結合テスト M7-zaiseki-26 と 27〜29 の在籍・退職の分（11-3 §5.2）と I-31 の改め（`employment.view`）、PF-10（1,000 件の在籍・退職と、変更ダイアログの保存の後の読み直しの時間。M7-zaiseki-46 の在籍・退職の分）。**2.1 版: 08 2.1 版に反映済み**（観点 (1)〜(15) は 08 §5・§8 の I-xx / PF-xx に対応）。結合テスト（Firebase Emulator Suite。00 D-33）の観点: (1) `admin` で幹部の結果が一覧・詳細・分類・履歴・比較対象の詳細のいずれでも 404／非表示になり、母集団には含まれる（`fetchPopulation`）。(2) 二重送信で片方が 409（トランザクションの競合）。(3) 比較 API を 2 回呼んでも Firestore に比較値のフィールド・文書が増えない。(4) `POPULATION_EMPTY`。(5) 期限切れ Cookie で 401 `RESPONDENT_TOKEN_EXPIRED`、Cookie なしで 401 `RESPONDENT_TOKEN_INVALID`。(6) `AI_ALREADY_GENERATING` の同時実行。(7) 監査ログの action ごとの記録有無（§2.6 の表。`admin.signup` は `POST /auth/invite` 直後に 1 件、`login-events` を複数回呼んでも増えない、`session.submit` / `respondent.delete` / `organization.rotate_invite_token` が本処理と同じバッチで残る）。(8) `PUT …/answers` でページに属さない設問番号が 422、`answers` map がページ外のキーを保持したまま部分更新される。(9) `GET /api/v1/admin/admin-users` が `admin` で 403 `ROLE_REQUIRED`、owner で削除済みを除く全員を `email` 付きで返す。(10) `PATCH /api/v1/admin/me` のパスワード変更後に旧 Cookie が 401 になり（`revokeRefreshTokens`）、`reauthIdToken` の `uid` 不一致・`auth_time` 超過で 422。(11) 印刷用ページが管理者 Cookie なし + 有効トークンで 200、トークンなしで 404、他組織の `resultId` を含むトークンで 404。(12) `POST /auth/session` が `auth_time` の古い ID トークンを 401 にし、発行された Cookie で `requireAdmin` が通る。`DELETE /auth/session` 後に同じ Cookie が 401。(13) `PATCH /respondents/{id}` 後に `respondents` と `results` の `teamCode` / `isExcluded` が一致（00 D-34）。(14) `admin` の一覧・分類・履歴で `respondentKind == "applicant"` 条件が効く（`usageLogs.respondentKind`）。(15) 未定義の複合インデックスが Emulator の警告で検出されない（§8.4 の一覧）。性能: 1 組織 1,000 件の `results` で一覧・比較・分類の応答時間を測る（D04-55 の目安の検証）。**08 §2.4 PR-3.1・§2.5 PR-4.1 の service ファイル名は本書 §8.1 に合わせて改版済み**（`answers.ts` → `answer-saving.ts`、`results.ts` → `result-list.ts` + `result-detail.ts`、`respondents.ts` → `respondent-management.ts`、`usage-logs.ts` → `usage-log-list.ts`。`organization-lookup.ts`、`session-progress.ts`、`invite-acceptance.ts`、`admin-session.ts`、`visibility.ts`、`firebase-errors.ts` を追加。D04-52）。08 PR-2.2 の `lib/db/{server-client,service-client,browser-client}.ts` は 00 §3.3 の `lib/firebase/{admin,client}.ts` + `lib/db/{collections,repositories,mappers}` に読み替える |
+| 07（AI・PDF） | **2.1 版: 07 1.4 版に反映済み**。`AiProvider.generate()` は `signal`（240 秒）を受け取る（D04-38）。生成の状態遷移・滞留判定は §5.9 のとおり service が担い、provider は生成のみ。`aiGenerationError` は 07 §4.6 の `AiFailureReason` + service 側の `internal_error`（§5.9 手順 7）。`aiAnalyses` の作成と `results` の更新と監査ログは 1 バッチ（07 §7.1 と一致）。`generatedBy` は 07 の名前のまま `aiAnalyses.generatedBy` に保存（02 §3.6。本書の `generatedByUid` は取り下げ）。PDF は `issuePdfToken` / `verifyPdfToken`（§7.2。ペイロードの `adminUserId` → `adminUid`、`role` を追加）を使い、印刷用ページ（`lib/services/print-data.ts`）は Admin SDK でデータ取得し、`assertVisibleToAdmin` と同じ判定関数でトークンの `organizationId`・`role` に対する可視性を再検証する（07 §9.4 と一致）。`middleware.ts` からの `/admin/results/[resultId]/print` の除外は §8.5 で維持（D04-41）。非同期化する場合は POST を 202 に変える（§7.1）。日次上限は `aiAnalyses` の `count()` 集計（成功件数。07 §6.4 の「失敗は上限を消費しない」と一致）。**2.9 版（M7 の PR-7.9）: 07 1.8 版に反映済み**: 種類ごとの API（§5.9）、`AiProvider.generate(kind, …)` と種類ごとの `max_tokens`（`AI_MAX_TOKENS`。§7.1）、ログ `ai.generate` の `kind`・`maxTokens`、日次上限の廃止（K-25。§2.8）。PR-7.12 までの PDF の AI 解説は採用向けの表示だけ（11-6 §2.12） |
+| 08（テスト） | **2.5 版（M7 の PR-7.5）: 08 2.7 版に反映済み**: 結合テスト M7-list-21〜30・32・33（11-2 §5.2）と I-20〜I-22・I-31・I-32・I-36・I-50 の改め、PF-08（1,000 件の一覧と更新の時間。D04-55 の目安の検証）。**2.7 版（M7 の PR-7.7a）: 08 2.9 版に反映済み**: 結合テスト M7-zaiseki-24・25・27〜30（11-3 §5.2。27〜29 は組織内分類の分）と I-22 の改め（`includeExcluded` は「付けても同じ応答」）、PF-09（1,000 件の組織内分類の時間。M7-zaiseki-46 の組織内分類の分）。**2.8 版（M7 の PR-7.7b）: 08 2.10 版に反映済み**: 結合テスト M7-zaiseki-26 と 27〜29 の在籍・退職の分（11-3 §5.2）と I-31 の改め（`employment.view`）、PF-10（1,000 件の在籍・退職と、変更ダイアログの保存の後の読み直しの時間。M7-zaiseki-46 の在籍・退職の分）。**2.1 版: 08 2.1 版に反映済み**（観点 (1)〜(15) は 08 §5・§8 の I-xx / PF-xx に対応）。結合テスト（Firebase Emulator Suite。00 D-33）の観点: (1) `admin` で幹部の結果が一覧・詳細・分類・履歴・比較対象の詳細のいずれでも 404／非表示になり、母集団には含まれる（`fetchPopulation`）。(2) 二重送信で片方が 409（トランザクションの競合）。(3) 比較 API を 2 回呼んでも Firestore に比較値のフィールド・文書が増えない。(4) `POPULATION_EMPTY`。(5) 期限切れ Cookie で 401 `RESPONDENT_TOKEN_EXPIRED`、Cookie なしで 401 `RESPONDENT_TOKEN_INVALID`。(6) `AI_ALREADY_GENERATING` の同時実行。(7) 監査ログの action ごとの記録有無（§2.6 の表。`admin.signup` は `POST /auth/invite` 直後に 1 件、`login-events` を複数回呼んでも増えない、`session.submit` / `respondent.delete` / `organization.rotate_invite_token` が本処理と同じバッチで残る）。(8) `PUT …/answers` でページに属さない設問番号が 422、`answers` map がページ外のキーを保持したまま部分更新される。(9) `GET /api/v1/admin/admin-users` が `admin` で 403 `ROLE_REQUIRED`、owner で削除済みを除く全員を `email` 付きで返す。(10) `PATCH /api/v1/admin/me` のパスワード変更後に旧 Cookie が 401 になり（`revokeRefreshTokens`）、`reauthIdToken` の `uid` 不一致・`auth_time` 超過で 422。(11) 印刷用ページが管理者 Cookie なし + 有効トークンで 200、トークンなしで 404、他組織の `resultId` を含むトークンで 404。(12) `POST /auth/session` が `auth_time` の古い ID トークンを 401 にし、発行された Cookie で `requireAdmin` が通る。`DELETE /auth/session` 後に同じ Cookie が 401。(13) `PATCH /respondents/{id}` 後に `respondents` と `results` の `teamCode` / `isExcluded` が一致（00 D-34）。(14) `admin` の一覧・分類・履歴で `respondentKind == "applicant"` 条件が効く（`usageLogs.respondentKind`）。(15) 未定義の複合インデックスが Emulator の警告で検出されない（§8.4 の一覧）。性能: 1 組織 1,000 件の `results` で一覧・比較・分類の応答時間を測る（D04-55 の目安の検証）。**08 §2.4 PR-3.1・§2.5 PR-4.1 の service ファイル名は本書 §8.1 に合わせて改版済み**（`answers.ts` → `answer-saving.ts`、`results.ts` → `result-list.ts` + `result-detail.ts`、`respondents.ts` → `respondent-management.ts`、`usage-logs.ts` → `usage-log-list.ts`。`organization-lookup.ts`、`session-progress.ts`、`invite-acceptance.ts`、`admin-session.ts`、`visibility.ts`、`firebase-errors.ts` を追加。D04-52）。08 PR-2.2 の `lib/db/{server-client,service-client,browser-client}.ts` は 00 §3.3 の `lib/firebase/{admin,client}.ts` + `lib/db/{collections,repositories,mappers}` に読み替える。**2.9 版（M7 の PR-7.9）: 08 2.14 版に反映済み**: 結合テスト M7-ai-24・25・27・28・32〜34・36（11-6 §5.2。I-40〜I-44・I-48 の観点は新しい API のパスと種類で残した。I-42 の周辺に 429 のテストは無かったので M7-ai-25 を足した）と I-47 の改め |
 
 ## 11. 未確認事項・設計判断一覧
 
@@ -2840,5 +2892,6 @@ sequenceDiagram
 | 2.6 | 2026-11-10 | M7 の PR-7.6（回答一覧の画面。11 総論 5.4・6.1、11-2 §4.1・§4.3）。API の形は変えていない（2.5 版のまま）。今の画面（旧レイアウト）のために残した注記と型・関数の記述を消した: §2.2 の `pagingSchema` の注記、§2.3 の `pagingSchema` のコード、§8.2 の `ResultListItemDto`・`PagedDto`、§8.3 の旧 `listResults(ctx, query)` の行と `toResultListItemDto`（実装に無い）。§5.3・§5.6・§5.8 の「PR-7.6 まで」の注記を、新しい画面が `listResultRows`（Server Component）・`updatePerson()`・`fetchUsageLogs()` を使う形に改めた。§8.1 の `result-list.ts` のコメント、§10 の 06 の行、D04-26 |
 | 2.7 | 2026-11-10 | M7 の PR-7.7a（組織内分類。11 総論 5.4・6.1、11-3 §3.2・§3.5・§3.6・§4.1・§4.3）。§3.2 の組織内分類の行（人の一覧）。§5.7 を 11-3 §3.2 の要約（クエリなし・`includeExcluded` の廃止（付いていても無視し 422 にしない）、`getClassification(ctx)` → `listOrganizationPeople` の手順 1〜7、`ClassificationDto { people }` と見本の値、監査 `classification.view` の `count` は人数、個人情報は代表の受検者の氏名・電話番号だけ、16 タイプの枠は返さない、エラー表から 422 の行を消して 503 を足した）に置き換え、在籍・退職（11-3 §3.3）は PR-7.7b が足すと書いた。§8.1 のファイル（`organization-people.ts`、`person-chain.ts` の `selectCountedHeads`、`schemas/admin-results.ts` を消した）、§8.2 の Dto（`ClassificationMemberDto` と旧形の `ClassificationDto` を `ClassificationDto { people }`・`ClassificationPersonDto` に置き換えた）、§8.3 の関数（`getClassification(ctx)`・`listOrganizationPeople`）、§8.4（`listResultsForClassification` を消し、`listResults` の用途に組織内分類）、§10 の 06・08 宛て、§11 の D04-31（K-29 を引く）・D04-32（除外者を数えない。`includeExcluded` は廃止。K-39 Q-24）・D04-55 を改めた |
 | 2.8 | 2026-11-11 | M7 の PR-7.7b（在籍・退職。11 総論 5.4・6.1、11-3 §3.3〜§3.6・§4.1）。§2.6 の `AuditAction` の型の写しとタイミングの閲覧系に `employment.view`。§3.2 に `GET /api/v1/admin/employment` の行。§5.7 の見出しを「組織内分類・在籍・退職」にし、前置きの「在籍・退職の API は PR-7.7b が足します」を改め、在籍・退職の小節（11-3 §3.3 の要約: 認可・クエリなし・`getEmployment(ctx)` の手順・基準日 `today`（Asia/Tokyo）・監査ログ `employment.view` の `{ count }`・`EmploymentDto` と見本の値・電話番号を返さない・エラー・区分などの更新は §5.6 の `PATCH`（API を足さない）・画面の Server Component も `getEmployment` を直接呼ぶ）を足した。§8.1（`classification.ts` の `getEmployment`）、§8.2（`EmploymentDto`・`EmploymentPersonDto`）、§8.3（`getEmployment(ctx, now?)` の行）、§10 の 06・08 宛て、§11 の D04-31（在籍・退職も閲覧範囲で数える）・D04-55（在籍・退職も同じ目安。PF-10）を改めた |
+| 2.9 | 2026-11-14 | M7 の PR-7.9（AI 解説の 3 つのタブと採用向け。11 総論 5.4・6.1、11-6 §3.4〜§3.7・§4.1）。§2.4 のエラーコードの型の写しと表から 429 `AI_DAILY_LIMIT_EXCEEDED` を消し、409 `AI_NOT_APPLICABLE`・503 `AI_KIND_DISABLED` を足した（経年比較の `LONGITUDINAL_*` は PR-7.11b）。§2.8 から AI 生成の日次上限を消した（K-25。`countAiAnalysesSince` と Q14 は残す）。§2.9 の `maxDuration` を種類ごとのルートに。§3.2 の AI 解説の 2 行を `…/ai-analysis/{kind}` に。§5.4 の読み取り（`buildAiArea`）と応答の `aiAnalysis` を `ai`（`AiAreaDto`。PR-7.9 の形）に。§5.9 を種類ごとの API に書き直した（状態遷移は種類ごと、POST の手順 1〜11（責任者の受験の 409、有効でない種類の 503、読めない出力の作り直し、`buildAiArea` で応答）、監査ログの `details.kind`、応答の `kind`・`enabled`、エラー表、GET の返し得るエラー。本文は PR-7.10・PR-7.11b から読む）。§7.1 の打ち切り対策・二重起動の手順の番号、コスト上限、`AiProvider.generate(kind, …)` と `AI_MAX_TOKENS`。§8.1 のファイル（`rate-limit.ts`・`ai-analysis.ts`・`ai-area.ts`・`dto/ai.ts`）、§8.2 の `ResultDetailDto.ai` と `dto/ai.ts` の型の写し（`AiAnalysisDto` を消した）、§8.3 の service 関数（`generateAi`・`getAiState`・`isAiKindEnabled`・`promptVersionOf`・`buildAiArea`・`visibleTabsOf`。`generateAiAnalysis`・`getAiAnalysis` の行を置き換えた）、§8.4 のリポジトリの契約の `kind` と `toAiAnalysisDto` の削除、§9.2 のシーケンス、§10 の 07・08 の行。検証のあと: §5.9 の手順 1 の判定の場所（`kind` はルート、`resultId` の形は `loadVisibleResult`）、手順 4 と GET の読めない出力の形（最新の分析の ID が無い・必須の項目が無いを足した） |
 
 以上。

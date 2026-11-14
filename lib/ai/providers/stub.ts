@@ -1,13 +1,16 @@
-// スタブ provider（07 §5.4、01 D01-07）。API キーを持たないローカル・CI の結合／E2E テスト用。本番は起動時検証で拒否（01 §4.3）
+// スタブ provider（07 §5.4、01 D01-07、11-6 §3.7.3）。API キーを持たないローカル・CI の結合／E2E テスト用。本番は起動時検証で拒否
+// （01 §4.3）。PR-7.9 は採用向けだけ（育成・定着と経年比較のスタブの出力は PR-7.10・PR-7.11b。それまでは config_error）
 import { type AiFailureReason, AiProviderError } from "@/lib/ai/errors";
 import { formatRiskForAi } from "@/lib/ai/input";
+import type { AiAnalysisKind } from "@/lib/ai/kinds";
 import { buildMessages } from "@/lib/ai/prompt-builder";
-import { getPromptDefinition } from "@/lib/ai/prompts";
+import { getPromptDefinitionForKind } from "@/lib/ai/prompts";
 import { LEVER_LABELS, parseAiOutputText } from "@/lib/ai/schema";
 import type {
   AiAnalysisInput,
   AiAnalysisOutput,
   AiGenerateResult,
+  AiInputByKind,
   AiProvider,
   GenerateOptions,
 } from "@/lib/ai/types";
@@ -113,11 +116,19 @@ export function createStubProvider(options: StubProviderOptions = {}): AiProvide
   const delayMs = options.delayMs ?? STUB_DEFAULT_DELAY_MS;
   return {
     name: "stub",
-    async generate(input: AiAnalysisInput, generateOptions: GenerateOptions) {
+    async generate<K extends AiAnalysisKind>(
+      kind: K,
+      input: AiInputByKind[K],
+      generateOptions: GenerateOptions,
+    ): Promise<AiGenerateResult<K>> {
       if (generateOptions.signal.aborted) throw abortedError();
-      const prompt = getPromptDefinition(generateOptions.promptVersion);
+      // 種類の違う版・登録されていない版は config_error（実 provider と同じ。11-6 §3.7.3）
+      const prompt = getPromptDefinitionForKind(kind, generateOptions.promptVersion);
+      if (kind !== "recruitment") {
+        throw new AiProviderError("config_error", `stub: no output for ${kind}`);
+      }
       // 実 provider と同じ組み立てを通し、プロンプト版・プレースホルダの不整合を CI でも検出する
-      buildMessages(input, generateOptions.promptVersion);
+      buildMessages(kind, input, generateOptions.promptVersion);
       await sleep(delayMs, generateOptions.signal);
 
       if (options.failWith) {
@@ -129,23 +140,24 @@ export function createStubProvider(options: StubProviderOptions = {}): AiProvide
         );
       }
 
-      const built = buildStubOutput(input);
-      if (input.respondentName.trim() === STUB_INVALID_JSON_NAME) {
+      // kind が recruitment なので入力は採用向けの形（型の引数 K は比較では絞られない）
+      const recruitmentInput = input as AiAnalysisInput;
+      const built = buildStubOutput(recruitmentInput);
+      if (recruitmentInput.respondentName.trim() === STUB_INVALID_JSON_NAME) {
         // コードフェンス付き（付録D §3「出力形式」違反）。parseAiOutputText が invalid_json を投げる
-        parseAiOutputText(`\`\`\`json\n${JSON.stringify(built)}\n\`\`\``);
+        parseAiOutputText(kind, `\`\`\`json\n${JSON.stringify(built)}\n\`\`\``);
       }
       const rawText = JSON.stringify(built);
-      const result: AiGenerateResult = {
-        output: parseAiOutputText(rawText),
+      return {
+        output: parseAiOutputText(kind, rawText),
         rawText,
         model: generateOptions.model,
         promptVersion: prompt.version,
-        analysisKind: prompt.analysisKind,
+        analysisKind: kind,
         usage: null,
         stopReason: "end_turn",
         requestId: null,
       };
-      return result;
     },
   };
 }

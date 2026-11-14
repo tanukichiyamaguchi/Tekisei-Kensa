@@ -5,13 +5,15 @@
 // 画面の形（variant="screen"）は、たたみ方と並びを result-ui-memory.ts のモジュールの変数から始め、変えるたびにそこにも書く
 // （別の人の結果に移っても保ち、ページを読み込み直すと戻る。§2.8.6・§2.16）。項目の説明・第二候補・接し方のタブは人ごとに初めから
 // （モジュールの変数に書かず、ResultDetailBody ごと key で作り直す。§2.1）。第二候補とタブは比較組織を変えても保つ（§2.13.4・§2.14.4。
-// 項目の説明は、比較の状態が変わると ResultLayout が閉じる。§2.8.4）。
+// 項目の説明は、比較の状態が変わると ResultLayout が閉じる。§2.8.4）。AI 解説の表示中のタブ（aiTab。11-6 §3.7.6）も人ごとで、
+// AI 解説の領域（AiArea）が、URL の ai から決めた初めのタブを描いた直後に書き、タブを変えるたびに書く（URL は変えない。11-6 §2.2）。
 // サーバで描く最初の HTML（すべて開く・点数の高い順・第二候補を閉じる・タブはドライビング）と、ページを読み込んだ直後の
 // 初めの状態は同じで、ハイドレーションの食い違いは起きない（画面の幅 700px 以下のたたみ方は描いた直後に ResultLayout が決める）。
 // 印刷の形（variant="print"）は initialViewState（省くと既定）で始め、モジュールの変数を読まず書かない。保存はしない（11-4 §3.1）
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 
 import { resultUiMemory } from "./result-ui-memory";
+import type { AiAnalysisKind } from "@/lib/ai/kinds";
 import type { TraitSortOrder } from "@/lib/presentation/result-detail-rules";
 import {
   DEFAULT_RESULT_VIEW_STATE,
@@ -39,6 +41,8 @@ export interface ResultViewActions {
   readonly setSecondOpen: (open: boolean) => void;
   /** 接し方のタブ（見ている人のスタイル。§2.14.4） */
   readonly setViewerStyle: (style: SocialStyleKey) => void;
+  /** AI 解説の表示中のタブ（11-6 §2.2・§3.7.6。URL は変えない。同じ値なら状態を変えない） */
+  readonly setAiTab: (tab: AiAnalysisKind) => void;
 }
 
 interface ResultViewStateValue {
@@ -57,6 +61,7 @@ const ResultViewStateContext = createContext<ResultViewStateValue>({
     setTraitHelp: noop,
     setSecondOpen: noop,
     setViewerStyle: noop,
+    setAiTab: noop,
   },
 });
 
@@ -139,6 +144,10 @@ export function ResultViewStateProvider(props: {
           setState((current) => Object.freeze({ ...current, secondOpen: open })),
         setViewerStyle: (style) =>
           setState((current) => Object.freeze({ ...current, viewerStyle: style })),
+        setAiTab: (tab) =>
+          setState((current) =>
+            current.aiTab === tab ? current : Object.freeze({ ...current, aiTab: tab }),
+          ),
       },
     };
   }, [state, screen]);

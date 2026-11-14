@@ -1,21 +1,31 @@
-// Anthropic（Claude API）provider（07 §4、§5.3）。構造化出力（output_config.format）で付録D §2 の JSON を強制する（07 D07-06）
+// Anthropic（Claude API）provider（07 §4、§5.3、11-6 §2.9・§3.7.3）。構造化出力（output_config.format）で種類の JSON を強制する
+// （07 D07-06）。出力の上限は種類ごと（AI_MAX_TOKENS。K-25）。PR-7.9 は採用向けだけ（ほかの種類は版とスキーマが無く config_error）
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 
 import { AiProviderError } from "@/lib/ai/errors";
+import { AI_ANALYSIS_KINDS, AI_MAX_TOKENS, type AiAnalysisKind } from "@/lib/ai/kinds";
 import { buildMessages } from "@/lib/ai/prompt-builder";
-import { getPromptDefinition } from "@/lib/ai/prompts";
-import { AiAnalysisOutputSchema, parseAiOutputText } from "@/lib/ai/schema";
+import { getPromptDefinitionForKind } from "@/lib/ai/prompts";
+import { AI_OUTPUT_SCHEMAS, parseAiOutputText } from "@/lib/ai/schema";
 import type {
-  AiAnalysisInput,
   AiGenerateResult,
+  AiInputByKind,
+  AiOutputByKind,
   AiProvider,
   GenerateOptions,
 } from "@/lib/ai/types";
 
-export const ANTHROPIC_MAX_TOKENS = 16000; // 07 §4.2
 export const ANTHROPIC_REQUEST_TIMEOUT_MS = 240_000; // 07 §4.2（04 D04-38）
 export const ANTHROPIC_MAX_RETRIES = 1; // 07 §4.2、§4.5
+
+/** 種類ごとの output_config.format（11-6 §3.7.3）。モジュールを読み込んだときに種類ごとに 1 回だけ作り、要求ごとに使い回す */
+const OUTPUT_FORMATS = new Map(
+  AI_ANALYSIS_KINDS.flatMap((kind) => {
+    const schema = AI_OUTPUT_SCHEMAS[kind];
+    return schema === undefined ? [] : [[kind, zodOutputFormat(schema)] as const];
+  }),
+);
 
 export interface AnthropicProviderConfig {
   readonly apiKey: string;
@@ -90,16 +100,24 @@ export function createAnthropicProvider(config: AnthropicProviderConfig): AiProv
     apiKey: config.apiKey,
     ...(config.fetch ? { fetch: config.fetch } : {}),
   });
-  const format = zodOutputFormat(AiAnalysisOutputSchema);
 
   return {
     name: "anthropic",
-    async generate(input: AiAnalysisInput, options: GenerateOptions): Promise<AiGenerateResult> {
+    async generate<K extends AiAnalysisKind>(
+      kind: K,
+      input: AiInputByKind[K],
+      options: GenerateOptions,
+    ): Promise<AiGenerateResult<K>> {
       if (options.signal.aborted) {
         throw new AiProviderError("timeout", "anthropic: request aborted", null, true);
       }
-      const prompt = getPromptDefinition(options.promptVersion);
-      const messages = buildMessages(input, options.promptVersion);
+      // 種類の違う版・登録されていない版・スキーマの無い種類は、API を呼ばずに config_error（11-6 §3.7.3）
+      const prompt = getPromptDefinitionForKind(kind, options.promptVersion);
+      const format = OUTPUT_FORMATS.get(kind);
+      if (format === undefined) {
+        throw new AiProviderError("config_error", `anthropic: no output schema for ${kind}`);
+      }
+      const messages = buildMessages(kind, input, options.promptVersion);
 
       // messages.parse() は create() の後で応答本文を解析し、失敗すると stop_reason を見る前に例外を投げる（SDK 0.128 の実装）。
       // 07 §3.4 の判定順（refusal → max_tokens → スキーマ検証）を守るため、create() に同じ format を渡し、解析は自前で行う
@@ -108,7 +126,7 @@ export function createAnthropicProvider(config: AnthropicProviderConfig): AiProv
         response = await client.messages.create(
           {
             model: options.model,
-            max_tokens: ANTHROPIC_MAX_TOKENS,
+            max_tokens: AI_MAX_TOKENS[kind],
             // 思考内容は表示・保存しない（07 §4.2）
             thinking: { type: "adaptive", display: "omitted" },
             output_config: { effort: "high", format },
@@ -138,9 +156,9 @@ export function createAnthropicProvider(config: AnthropicProviderConfig): AiProv
         .filter((b): b is Anthropic.TextBlock => b.type === "text")
         .map((b) => b.text)
         .join("");
-      let output;
+      let output: AiOutputByKind[K];
       try {
-        output = parseAiOutputText(rawText);
+        output = parseAiOutputText(kind, rawText);
       } catch (error) {
         const reason = error instanceof AiProviderError ? error.message : "invalid_json";
         throw new AiProviderError("invalid_json", `anthropic: ${reason}`, requestId, false);
@@ -151,7 +169,7 @@ export function createAnthropicProvider(config: AnthropicProviderConfig): AiProv
         rawText,
         model: response.model,
         promptVersion: prompt.version,
-        analysisKind: prompt.analysisKind,
+        analysisKind: kind,
         usage: {
           inputTokens: response.usage.input_tokens,
           outputTokens: response.usage.output_tokens,
