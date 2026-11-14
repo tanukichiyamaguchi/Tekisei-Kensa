@@ -601,11 +601,31 @@ const isContrastExempt = (node: { readonly html: string; readonly target: unknow
   node.target.some((t) => String(t).includes(".warn-i") || String(t).includes(".adm-logo"));
 
 /**
+ * 動いている有限の CSS の移り変わり（transition と、回数の決まった animation）が終わるまで待つ。タブを切り替えた直後などは、文字や地の
+ * 色が途中の値（AI 解説のタブなら白から #6B7885 へ 0.2 秒）になっていて、axe の color-contrast がその途中の色で測ってしまうため。
+ * 無限に繰り返すアニメーション（AI 解説の生成中の輪・点など）と、止めてあるものは待たない
+ */
+async function waitForFiniteAnimations(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const running = document
+      .getAnimations()
+      .filter(
+        (animation) =>
+          animation.playState === "running" &&
+          animation.effect?.getComputedTiming().endTime !== Infinity,
+      );
+    await Promise.all(running.map((animation) => animation.finished.catch(() => undefined)));
+  });
+}
+
+/**
  * axe の重大・深刻な違反が無いこと（wcag2a・wcag2aa。文字のコントラスト color-contrast も検査する）。
- * マウスの位置で地の色が変わる部品があるので、先にマウスを部品の無い場所（サイドメニューの上の余白）へ動かす
+ * マウスの位置で地の色が変わる部品があるので、先にマウスを部品の無い場所（サイドメニューの上の余白）へ動かし、色の移り変わりが終わって
+ * から測る
  */
 export async function expectAccessibleAdmin(page: Page, label: string): Promise<void> {
   await page.mouse.move(1, 1);
+  await waitForFiniteAnimations(page);
   const result = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   const serious = result.violations
     .filter((v) => v.impact === "serious" || v.impact === "critical")
