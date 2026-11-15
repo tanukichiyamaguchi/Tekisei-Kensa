@@ -111,6 +111,8 @@ export function ResultsView({
   const filterRef = useRef<ListFilterState>(DEFAULT_LIST_FILTER);
   const [searchText, setSearchText] = useState("");
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 入力から 150 ミリ秒の待ちの間の検索語（まだ絞り込みに入れていない。pagehide では保存するが、待ちは残す。待ちが無いときは null）
+  const pendingSearch = useRef<string | null>(null);
   const [limit, setLimit] = useState(LIST_PAGE_STEP);
 
   // ---- メニュー・ダイアログ
@@ -162,12 +164,26 @@ export function ResultsView({
     setSearchText(restored.q);
   }, []);
 
-  useEffect(
-    () => () => {
-      if (searchTimer.current !== null) clearTimeout(searchTimer.current);
-    },
-    [],
-  );
+  // 一覧を離れるとき、入力から 150 ミリ秒たつ前の検索語も保存する（§2.21 の 1.4 版。待ちを取り消すだけだと、開き直したときに検索語が
+  // 消える）。アプリの中の移動（結果詳細を開く・サイドメニューなど）は部品が外れるときの片付けで、ページを読み込む移動（再読み込み、
+  // ログアウトでログイン画面を開くときなど）は片付けが走らないので pagehide で保存する。pagehide では待ちを取り消さない（戻る・進むのキャッシュから戻ったときに、待ちが検索語を
+  // 一覧に当て、同じ値をもう一度保存する。取り消すと、検索欄の語が一覧に当たらないまま残る）
+  useEffect(() => {
+    const savePendingSearch = () => {
+      if (pendingSearch.current !== null) {
+        saveFilter({ ...filterRef.current, q: pendingSearch.current });
+      }
+    };
+    window.addEventListener("pagehide", savePendingSearch);
+    return () => {
+      window.removeEventListener("pagehide", savePendingSearch);
+      if (searchTimer.current === null) return;
+      clearTimeout(searchTimer.current);
+      searchTimer.current = null;
+      savePendingSearch();
+      pendingSearch.current = null;
+    };
+  }, []);
 
   // 新しい基準時刻（読み直し）が来たら、送信中でない行の上書きを捨てる（サーバの値で表示し直す）
   const generatedAt = initial?.generatedAt ?? null;
@@ -373,9 +389,11 @@ export function ResultsView({
   const onSearchInput = (text: string) => {
     setSearchText(text);
     setLimit(LIST_PAGE_STEP);
+    pendingSearch.current = text;
     if (searchTimer.current !== null) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => {
       searchTimer.current = null;
+      pendingSearch.current = null;
       applyFilter({ ...filterRef.current, q: text }, false);
     }, SEARCH_DEBOUNCE_MS);
   };
@@ -387,6 +405,7 @@ export function ResultsView({
       clearTimeout(searchTimer.current);
       searchTimer.current = null;
     }
+    pendingSearch.current = null;
     setSearchText("");
     applyFilter(clearFilters(filterRef.current), false);
   };
