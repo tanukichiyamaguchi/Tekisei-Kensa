@@ -204,18 +204,38 @@ test("M7-list-46 区分・検索・チーム・並び順は結果詳細から「
   await expect(tools.count).toHaveText("3人を表示 ・ 絞り込みを解除");
   await expect.poll(() => rowNames(page)).toEqual([1, 2, 5].map(seedName));
 
-  // 検索語を入れた直後（保存までの 150 ミリ秒がたつ前）に行を押して結果詳細を開き、「回答一覧に戻る」。一覧を離れるときに、待っていた
-  // 検索語も保存する（11-2 §2.21 の 1.4 版）。見本の氏名はすべて「テストテスト」なので、検索しても行は変わらない
+  /** 2 番目の人の結果詳細を開いてから「回答一覧に戻る」 */
+  const openSecondAndBack = async () => {
+    await rowOf(page, seedName(2)).locator(".rl-td--type").click();
+    await page.waitForURL(`**/admin/results/${seedExam(adminOrg, 2).resultId}`);
+    await page.getByRole("link", { name: /回答一覧に戻る/ }).click();
+    await page.waitForURL((url) => url.pathname === "/admin");
+  };
+  /** 区分・検索語・チーム・並び順が戻り、戻した検索語で絞り込まれている */
+  const expectRestored = async (q: string, rows: readonly number[]) => {
+    await expect(tools.tab("求職者")).toHaveAttribute("aria-selected", "true");
+    await expect(tools.search).toHaveValue(q);
+    await expect(tools.team).toHaveValue("A");
+    await expect(tools.sort).toHaveValue("old");
+    await expect.poll(() => rowNames(page)).toEqual(rows.map(seedName));
+  };
+
+  // 検索語を入れた直後（保存までの 150 ミリ秒がたつ前）に行を押す。一覧を離れるときに、待っていた検索語も保存する（11-2 §2.21 の
+  // 1.4 版）。見本の氏名はすべて「テストテスト」なので、行は変わらない（押す前に行が動かない）
   await tools.search.fill("テストテスト");
-  await rowOf(page, seedName(2)).locator(".rl-td--type").click();
-  await page.waitForURL(`**/admin/results/${seedExam(adminOrg, 2).resultId}`);
-  await page.getByRole("link", { name: /回答一覧に戻る/ }).click();
-  await page.waitForURL((url) => url.pathname === "/admin");
-  await expect(tools.tab("求職者")).toHaveAttribute("aria-selected", "true");
-  await expect(tools.search).toHaveValue("テストテスト");
-  await expect(tools.team).toHaveValue("A");
-  await expect(tools.sort).toHaveValue("old");
-  await expect.poll(() => rowNames(page)).toEqual([1, 2, 5].map(seedName));
+  await openSecondAndBack();
+  await expectRestored("テストテスト", [1, 2, 5]);
+
+  // 検索語が当たってから（入力から 150 ミリ秒たって保存したあと）行を押す。戻した検索語で絞り込まれる
+  await tools.search.fill("テストテスト 02");
+  await expect.poll(() => rowNames(page)).toEqual([seedName(2)]);
+  await openSecondAndBack();
+  await expectRestored("テストテスト 02", [2]);
+
+  // 検索語を入れた直後に再読み込みする。文書の読み直しでは部品の片付けが走らないので、pagehide で保存する（1.4 版）
+  await tools.search.fill("テストテスト 05");
+  await page.reload();
+  await expectRestored("テストテスト 05", [5]);
 
   // 105 人の組織（別のブラウザのコンテキスト）: 「さらに表示」のあと結果詳細から戻ると 100 行（上限は保存しない）
   const many = seedManyRows(105);

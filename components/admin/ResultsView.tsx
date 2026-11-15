@@ -164,20 +164,26 @@ export function ResultsView({
     setSearchText(restored.q);
   }, []);
 
-  // 一覧を離れるとき（結果詳細を開くなど）、入力から 150 ミリ秒たつ前の検索語も保存する（§2.21 の 1.4 版。待ちを取り消すだけだと、
-  // 戻ったときに検索語が消える）
-  useEffect(
-    () => () => {
+  // 一覧を離れるとき、入力から 150 ミリ秒たつ前の検索語も保存する（§2.21 の 1.4 版。待ちを取り消すだけだと、開き直したときに検索語が
+  // 消える）。アプリの中の移動（結果詳細を開く・サイドメニューなど）は部品が外れるときの片付けで、文書の読み直し（再読み込み・ログアウト）は
+  // 片付けが走らないので pagehide で保存する。pagehide では待ちを取り消さない（戻る・進むのキャッシュから戻ったときは、待ちが同じ検索語を
+  // もう一度保存するだけ）
+  useEffect(() => {
+    const savePendingSearch = () => {
+      if (pendingSearch.current !== null) {
+        saveFilter({ ...filterRef.current, q: pendingSearch.current });
+      }
+    };
+    window.addEventListener("pagehide", savePendingSearch);
+    return () => {
+      window.removeEventListener("pagehide", savePendingSearch);
       if (searchTimer.current === null) return;
       clearTimeout(searchTimer.current);
       searchTimer.current = null;
-      if (pendingSearch.current !== null) {
-        saveFilter({ ...filterRef.current, q: pendingSearch.current });
-        pendingSearch.current = null;
-      }
-    },
-    [],
-  );
+      savePendingSearch();
+      pendingSearch.current = null;
+    };
+  }, []);
 
   // 新しい基準時刻（読み直し）が来たら、送信中でない行の上書きを捨てる（サーバの値で表示し直す）
   const generatedAt = initial?.generatedAt ?? null;
