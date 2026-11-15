@@ -191,7 +191,7 @@ test("M7-list-38 105 人の組織で 100 行と「さらに表示（残り5人�
   await expect(resultRows(page)).toHaveCount(105);
 });
 
-test("M7-list-46 区分・検索・チーム・並び順は結果詳細から「回答一覧に戻る」で戻り、表示の上限は 100 に戻る", async ({
+test("M7-list-46 区分・検索・チーム・並び順は結果詳細から「回答一覧に戻る」と再読み込みで戻り（検索語は入れた直後でも）、表示の上限は 100 に戻る", async ({
   page,
   browser,
   adminOrg,
@@ -204,10 +204,10 @@ test("M7-list-46 区分・検索・チーム・並び順は結果詳細から「
   await expect(tools.count).toHaveText("3人を表示 ・ 絞り込みを解除");
   await expect.poll(() => rowNames(page)).toEqual([1, 2, 5].map(seedName));
 
-  /** 2 番目の人の結果詳細を開いてから「回答一覧に戻る」 */
-  const openSecondAndBack = async () => {
-    await rowOf(page, seedName(2)).locator(".rl-td--type").click();
-    await page.waitForURL(`**/admin/results/${seedExam(adminOrg, 2).resultId}`);
+  /** index 番目の人の結果詳細を開いてから「回答一覧に戻る」 */
+  const openAndBack = async (index: number) => {
+    await rowOf(page, seedName(index)).locator(".rl-td--type").click();
+    await page.waitForURL(`**/admin/results/${seedExam(adminOrg, index).resultId}`);
     await page.getByRole("link", { name: /回答一覧に戻る/ }).click();
     await page.waitForURL((url) => url.pathname === "/admin");
   };
@@ -220,22 +220,41 @@ test("M7-list-46 区分・検索・チーム・並び順は結果詳細から「
     await expect.poll(() => rowNames(page)).toEqual(rows.map(seedName));
   };
 
-  // 検索語を入れた直後（保存までの 150 ミリ秒がたつ前）に行を押す。一覧を離れるときに、待っていた検索語も保存する（11-2 §2.21 の
-  // 1.4 版）。見本の氏名はすべて「テストテスト」なので、行は変わらない（押す前に行が動かない）
-  await tools.search.fill("テストテスト");
-  await openSecondAndBack();
-  await expectRestored("テストテスト", [1, 2, 5]);
-
   // 検索語が当たってから（入力から 150 ミリ秒たって保存したあと）行を押す。戻した検索語で絞り込まれる
+  await tools.search.fill("テストテスト 05");
+  await expect.poll(() => rowNames(page)).toEqual([seedName(5)]);
+  await openAndBack(5);
+  await expectRestored("テストテスト 05", [5]);
+
+  // 検索語を入れた直後の pagehide（ページを読み込む移動）で、待っていた検索語を保存する（11-2 §2.21 の 1.4 版）。入力と pagehide を
+  // 同じタスクの中で続けて起こし、保存までの 150 ミリ秒の待ちが先に走る隙を作らない。pagehide に応じる Next.js と Firebase の
+  // 受け手（読み込みの途中の印・保存の接続を閉じる）を元に戻すため、すぐに pageshow も送る
+  const qSavedOnPagehide = await page.evaluate((text) => {
+    const input = document.querySelector<HTMLInputElement>(".rl-search__input");
+    if (!input) throw new Error("検索欄がありません");
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, text);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: false }));
+    const saved = window.sessionStorage.getItem("ad-filter");
+    window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: false }));
+    return saved === null ? null : (JSON.parse(saved) as { q?: unknown }).q;
+  }, "テストテスト 01");
+  expect(qSavedOnPagehide).toBe("テストテスト 01");
+  await expect.poll(() => rowNames(page)).toEqual([seedName(1)]);
+
+  // 検索語を入れた直後に再読み込みする。ページを読み込む移動では部品の片付けが走らないので、pagehide で保存したものが戻る
   await tools.search.fill("テストテスト 02");
-  await expect.poll(() => rowNames(page)).toEqual([seedName(2)]);
-  await openSecondAndBack();
+  await page.reload();
   await expectRestored("テストテスト 02", [2]);
 
-  // 検索語を入れた直後に再読み込みする。文書の読み直しでは部品の片付けが走らないので、pagehide で保存する（1.4 版）
-  await tools.search.fill("テストテスト 05");
-  await page.reload();
-  await expectRestored("テストテスト 05", [5]);
+  // 検索語を入れた直後に行を押す。時計を止めて保存までの 150 ミリ秒の待ちを走らせず、一覧の部品が外れるときの片付けで保存することを
+  // 確かめる（1.4 版）。止めている間は絞り込みも当たらないので、押す前に行は動かない
+  await page.clock.install();
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1_000));
+  await tools.search.fill("テストテスト");
+  await openAndBack(2);
+  await page.clock.resume();
+  await expectRestored("テストテスト", [1, 2, 5]);
 
   // 105 人の組織（別のブラウザのコンテキスト）: 「さらに表示」のあと結果詳細から戻ると 100 行（上限は保存しない）
   const many = seedManyRows(105);
