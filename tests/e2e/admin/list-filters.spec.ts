@@ -1,4 +1,4 @@
-// M7-list-36 検索・絞り込み・並び順、M7-list-37 受験から1年以上、M7-list-38 さらに表示、M7-list-46 状態の保存、
+// M7-list-36 検索・絞り込み・並び順、M7-list-37 受験から1年以上、M7-list-38 さらに表示、M7-list-46 状態の保存（ログイン画面で消すことを含む）、
 // M7-list-47 0 件の表示（11-2 §5.3。§2.5〜§2.8・§2.19・§2.21）。
 // 受験日を過去にするのは E2E に限った直接書き込み（M7-list-36 の並び順を分けるための受験日と、M7-list-37 の「受験から1年以上」。
 // API では受験日を変えられない）。101 行以上の組織と再受験のつながりは、seed:local と同じリポジトリの関数で作る（直接は書かない）
@@ -12,6 +12,7 @@ import {
   grantClipboard,
   listTools,
   loginViaUi,
+  logoutViaHeader,
   readClipboard,
   resultRows,
   rowNames,
@@ -268,6 +269,55 @@ test("M7-list-46 区分・検索・チーム・並び順は結果詳細から「
   await other.waitForURL((url) => url.pathname === "/admin");
   await expect(resultRows(other)).toHaveCount(100);
   await other.context().close();
+});
+
+test("M7-list-46 ログイン画面を開くと絞り込みの保存が消え、同じタブでログインし直すと既定の状態（ログアウト・セッション切れ）", async ({
+  page,
+  adminOrg,
+}) => {
+  await loginViaUi(page, adminOrg.ownerEmail);
+  const tools = listTools(page);
+  /** sessionStorage の ad-filter（11-2 §2.21）。無ければ null */
+  const storedFilter = async (): Promise<unknown> =>
+    JSON.parse((await page.evaluate(() => window.sessionStorage.getItem("ad-filter"))) ?? "null");
+  /** 区分・チーム・並び順を変えて保存させる */
+  const changeTabTeamSort = async () => {
+    await tools.tab("求職者").click();
+    await tools.team.selectOption("A");
+    await tools.sort.selectOption("old");
+    await expect.poll(storedFilter).toEqual({ seg: "cand", q: "", team: "A", sort: "old" });
+  };
+  /** 既定の状態（すべて・検索語なし・チームなし・新しい順）で全員が出る */
+  const expectDefault = async () => {
+    await expect(tools.tab("すべて")).toHaveAttribute("aria-selected", "true");
+    await expect(tools.search).toHaveValue("");
+    await expect(tools.team).toHaveValue("");
+    await expect(tools.sort).toHaveValue("new");
+    await expect(resultRows(page)).toHaveCount(10);
+  };
+
+  // ログアウト（検索語を入れた直後）: 前のページを離れるときの保存（pagehide）のあとでログイン画面が消すので、検索語も残らない
+  // （11-2 §2.21 の 1.5 版）。ログインし直すと既定の状態
+  await changeTabTeamSort();
+  await tools.search.fill("テストテスト 05");
+  await logoutViaHeader(page);
+  await expect.poll(storedFilter).toBeNull();
+  await loginViaUi(page, adminOrg.ownerEmail);
+  await expectDefault();
+
+  // セッション切れ（Cookie が無い）: 一覧を開き直すとログイン画面に移り、そこで消える
+  await changeTabTeamSort();
+  await tools.search.fill("テストテスト 02");
+  await expect.poll(() => rowNames(page)).toEqual([seedName(2)]);
+  await expect
+    .poll(storedFilter)
+    .toEqual({ seg: "cand", q: "テストテスト 02", team: "A", sort: "old" });
+  await page.context().clearCookies();
+  await page.reload();
+  await page.waitForURL((url) => url.pathname === "/admin/login");
+  await expect.poll(storedFilter).toBeNull();
+  await loginViaUi(page, adminOrg.ownerEmail);
+  await expectDefault();
 });
 
 test("M7-list-47 0 件の表示: すべて・在籍・求職者・退職のタブごとの文言とコピーのボタン、検索で 0 件は「絞り込みを解除」", async ({
