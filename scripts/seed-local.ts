@@ -84,7 +84,8 @@ export function assertEmulator(): void {
 /**
  * 登録して Step 1〜lastStep の回答をステップごとに保存する（E2E の tests/e2e/support/emulator-task.ts も使う）。
  * 利用履歴は送信のときに作られる（11-1 §2.7.4）。previousResultId は前回の候補（再受験リンクの prev。11-1 §2.2.8）で、
- * 送信のときに前回とつながる（11-7 §3.4）。再受験のつながりは E2E のタスクだけが作る（seedLocal は作らない）
+ * 送信のときに前回とつながる（11-7 §3.4）。再受験のつながりは E2E のタスクだけが作る（seedLocal は作らない）。
+ * name は氏名（省くと「テストテスト NN」。E2E のタスクだけが指定する。11-6 の M7-ai-42 はスタブの不正な JSON の氏名で送る）
  */
 export async function registerAndSave(
   organizationId: string,
@@ -93,12 +94,13 @@ export async function registerAndSave(
   answers: AnswerMap,
   lastStep: ExamStepNo,
   previousResultId: string | null = null,
+  name = `テストテスト ${String(index).padStart(2, "0")}`,
 ) {
   const token = issueRespondentToken(new Date());
   const registered = await registerRespondent({
     organizationId,
     kind,
-    name: `テストテスト ${String(index).padStart(2, "0")}`,
+    name,
     phoneNumber: `090-0000-${String(index).padStart(4, "0")}`,
     occupationCode: OCCUPATION_CODES[index % OCCUPATION_CODES.length]!, // マスタのコードを順に選ぶ（9 は欠番）
     diagnosisExperience: index % 3 === 0 ? "experienced" : "first_time",

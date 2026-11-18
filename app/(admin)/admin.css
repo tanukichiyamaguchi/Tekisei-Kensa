@@ -358,13 +358,6 @@ body {
 .data-table__nowrap {
   white-space: nowrap;
 }
-.badge {
-  display: inline-block;
-  padding: 0 8px;
-  border-radius: 999px;
-  background: var(--admin-primary-soft);
-  font-size: 12px;
-}
 
 /* ---- E-01（利用不可） */
 .admin-unavailable {
@@ -376,35 +369,17 @@ body {
   text-align: center;
 }
 
-/* ---- 結果詳細の AI 解説の領域（今の AiAnalysisSection と印刷の AI 解説の塊。.result-section と中の .panel・.ai-analysis*・.spinner。
-   PR-7.9 で作り直す）とダウンロードのポップアップ（.download-options*）、ほかの画面と共通の小さな指定（.muted・.small・.pre-line・
-   Illustration の .illustration・.visually-hidden）。結果詳細の本文は components/admin/result/result-detail.css（11-4 別表D） */
+/* ---- 結果詳細のダウンロードのポップアップ（.download-options*。作成中の表示 .ai-analysis__progress と中の .spinner。作り直しは 11-5 の
+   PR-7.12）と、ほかの画面と共通の小さな指定（.muted・.pre-line・Illustration の .illustration・.visually-hidden）。結果詳細の本文は
+   components/admin/result/result-detail.css（11-4 別表D）、AI 解説の領域は components/admin/result/ai/ai-area.css（11-6 別表C）。旧の AI 解説の
+   領域だけが使っていた .result-section（と中の h2・.panel・h3・h4）・.badge・.small・.ai-analysis__actions・.ai-analysis__failed・
+   .ai-analysis__verdict は PR-7.9 で消した。.spinner はダウンロードのポップアップの作成中の表示の中だけに当てる（AI 解説の生成中の輪
+   svg.spinner（別表C の C.3）に、枠・角丸・回転が当たらないように） */
 .muted {
   color: var(--admin-text-muted);
 }
-.small {
-  font-size: 12px;
-}
 .pre-line {
   white-space: pre-line;
-}
-.result-section {
-  margin-bottom: 32px;
-}
-.result-section > h2 {
-  padding-bottom: 8px;
-  border-bottom: 2px solid var(--admin-primary);
-}
-.result-section .panel {
-  margin-bottom: 16px;
-}
-.result-section h3 {
-  font-size: 15px;
-  margin: 0 0 12px;
-}
-.result-section h4 {
-  font-size: 14px;
-  margin: 12px 0 4px;
 }
 .illustration {
   display: block;
@@ -443,20 +418,12 @@ body {
   align-items: center;
   gap: 6px;
 }
-.ai-analysis__actions {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 8px;
-}
 .ai-analysis__progress {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.ai-analysis__failed .notice {
-  margin-bottom: 4px;
-}
-.spinner {
+.ai-analysis__progress .spinner {
   display: inline-block;
   width: 16px;
   height: 16px;
@@ -471,13 +438,9 @@ body {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .spinner {
+  .ai-analysis__progress .spinner {
     animation: none;
   }
-}
-.ai-analysis__verdict .badge {
-  font-size: 13px;
-  padding: 2px 10px;
 }
 
 /* ---- 組織内分類・在籍・退職（11-3 §2.22）。クラス名の接頭辞は ob-。参照元の ob-map の CSS を写し、セレクタを改めた（#obm → .ob-root、

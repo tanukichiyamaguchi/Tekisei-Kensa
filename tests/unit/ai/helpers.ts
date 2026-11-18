@@ -3,7 +3,12 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { buildAiAnalysisInput } from "@/lib/ai/input";
-import type { AiAnalysisInput, AiAnalysisOutput } from "@/lib/ai/types";
+import type {
+  AiAnalysisInput,
+  AiAnalysisOutput,
+  LongitudinalAiInput,
+  TrainingAiInput,
+} from "@/lib/ai/types";
 import { scoreAnswers } from "@/lib/scoring/score";
 
 import { cyclicAnswers } from "../scoring/helpers";
@@ -33,6 +38,28 @@ export function t06Input(overrides: Partial<AiAnalysisInput> = {}): AiAnalysisIn
     }),
     ...overrides,
   };
+}
+
+/** 育成・定着の入力（T-06 に 11-6 §3.4 の要求の例の 8 項目を足したもの。PR-7.9 の provider は config_error で受け付けない） */
+export function t06TrainingInput(): TrainingAiInput {
+  return {
+    ...t06Input(),
+    context: {
+      tenure: "year_2",
+      evaluation: "meets",
+      expectedRole: "trainer",
+      recentState: "low_energy",
+      relationship: "specific_mismatch",
+      wish: "skill_up",
+      changeSinceJoining: "unchanged",
+      concern: "few_reports",
+    },
+  };
+}
+
+/** 経年比較の入力（入力文は仮の値。PR-7.9 の provider は config_error で受け付けない） */
+export function longitudinalInput(): LongitudinalAiInput {
+  return { userText: "【前回→今回のスコア】（テスト用の入力文）" };
 }
 
 /** 付録D §2 の形に沿った妥当な出力 */

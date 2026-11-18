@@ -1,6 +1,7 @@
-/* PDF の印刷用ページ（07 §9.5、§9.7）。同梱フォント、A4 の用紙、管理画面の最小幅の解除と、AI 解説の印刷の塊（.result-section・.panel）の
-   指定。結果詳細の部品は画面と同じ result-detail.css（11-4 別表D。A4 の本文幅では 11-4 §2.17 の @media が効き、1〜2 列になる）で描く。
-   作り直しは 11-5 の PR-7.12 */
+/* PDF の印刷用ページ（07 §9.5、§9.7）。同梱フォント、A4 の用紙、管理画面の最小幅の解除の指定。結果詳細の部品は画面と同じ
+   result-detail.css（11-4 別表D。A4 の本文幅では 11-4 §2.17 の @media が効き、1〜2 列になる）、AI 解説の領域は画面と同じ ai-area.css
+   （11-6 別表C。印刷の形 data-variant="print" では動きを止める）で描く。旧の AI 解説の印刷の塊の指定（.result-section・.panel）は、
+   要素が無くなったので PR-7.9 で消した。作り直しは 11-5 の PR-7.12 */
 @font-face {
   font-family: "Noto Sans JP";
   font-style: normal;
@@ -44,26 +45,4 @@ body:has(.print-root),
 .print-root h1 {
   font-size: 16px;
   margin: 0 0 4px;
-}
-.print-root .result-section {
-  margin-bottom: 8px;
-  break-before: auto;
-}
-.print-root .result-section > h2 {
-  font-size: 14px;
-  break-after: avoid;
-}
-.print-root .result-section h3 {
-  font-size: 12px;
-  margin-bottom: 6px;
-  break-after: avoid;
-}
-.print-root .result-section h4 {
-  font-size: 11px;
-  break-after: avoid;
-}
-.print-root .panel {
-  padding: 8px 12px;
-  margin-bottom: 8px;
-  break-inside: avoid;
 }

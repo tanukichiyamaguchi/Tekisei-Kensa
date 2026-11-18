@@ -1,4 +1,4 @@
-// プロンプトの組み立て（07 §2.1、§2.3）。純関数（同じ入力で同じ文字列。日時・乱数を含めない。07 §4.4 のキャッシュのため）
+// プロンプトの組み立て（07 §2.1、§2.3、11-6 §3.7.3）。純関数（同じ入力で同じ文字列。日時・乱数を含めない。07 §4.4 のキャッシュのため）
 import { AiProviderError } from "@/lib/ai/errors";
 import {
   formatAptitudeForAi,
@@ -9,8 +9,9 @@ import {
   formatSocialStyleForAi,
   formatTraitForAi,
 } from "@/lib/ai/input";
-import { getPromptDefinition } from "@/lib/ai/prompts";
-import type { AiAnalysisInput } from "@/lib/ai/types";
+import type { AiAnalysisKind } from "@/lib/ai/kinds";
+import { getPromptDefinitionForKind } from "@/lib/ai/prompts";
+import type { AiAnalysisInput, AiInputByKind } from "@/lib/ai/types";
 
 export interface BuiltMessages {
   readonly system: string; // PromptDefinition.system
@@ -57,10 +58,23 @@ export function fillTemplate(template: string, values: ReadonlyMap<string, strin
   });
 }
 
-export function buildMessages(input: AiAnalysisInput, promptVersion: string): BuiltMessages {
-  const prompt = getPromptDefinition(promptVersion);
+/**
+ * 種類の版の system と user（11-6 §3.7.3）。版は getPromptDefinitionForKind で引く（登録されていない版・種類の違う版は
+ * config_error）。PR-7.9 は採用向けだけで、ほかの種類は config_error（育成・定着の 8 項目の差し込みは PR-7.10、経年比較の
+ * {{prompt}} は PR-7.11b が足す）
+ */
+export function buildMessages<K extends AiAnalysisKind>(
+  kind: K,
+  input: AiInputByKind[K],
+  promptVersion: string,
+): BuiltMessages {
+  const prompt = getPromptDefinitionForKind(kind, promptVersion);
+  if (kind !== "recruitment") {
+    throw new AiProviderError("config_error", `no prompt builder for ${kind}`);
+  }
   return {
     system: prompt.system,
-    user: fillTemplate(prompt.userTemplate, placeholderValues(input)),
+    // kind が recruitment なので入力は採用向けの形（型の引数 K は比較では絞られない）
+    user: fillTemplate(prompt.userTemplate, placeholderValues(input as AiAnalysisInput)),
   };
 }

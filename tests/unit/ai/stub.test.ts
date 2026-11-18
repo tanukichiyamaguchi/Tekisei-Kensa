@@ -1,4 +1,4 @@
-// U-12（08 §3.2.2）: lib/ai/providers/stub.ts（07 §5.4、D07-24）
+// U-12（08 §3.2.2）: lib/ai/providers/stub.ts（07 §5.4、D07-24、11-6 §3.7.3。PR-7.9 のスタブの出力は採用向けだけ）
 import { describe, expect, it } from "vitest";
 
 import { AI_FAILURE_REASONS, AiProviderError } from "@/lib/ai/errors";
@@ -11,7 +11,7 @@ import {
 import { AiAnalysisOutputSchema } from "@/lib/ai/schema";
 import type { GenerateOptions } from "@/lib/ai/types";
 
-import { t06Input } from "./helpers";
+import { longitudinalInput, t06Input, t06TrainingInput } from "./helpers";
 
 const options = (signal: AbortSignal = new AbortController().signal): GenerateOptions => ({
   model: "claude-opus-5",
@@ -32,8 +32,8 @@ async function caught(promise: Promise<unknown>): Promise<AiProviderError> {
 describe("U-12 stub provider", () => {
   it("決定的な出力を返し、U-10 のスキーマを通る", async () => {
     const provider = createStubProvider({ delayMs: 0 });
-    const a = await provider.generate(t06Input(), options());
-    const b = await provider.generate(t06Input(), options());
+    const a = await provider.generate("recruitment", t06Input(), options());
+    const b = await provider.generate("recruitment", t06Input(), options());
     expect(a).toEqual(b);
     expect(AiAnalysisOutputSchema.safeParse(a.output).success).toBe(true);
     expect(provider.name).toBe("stub");
@@ -52,7 +52,10 @@ describe("U-12 stub provider", () => {
 
   it("rawText は出力の JSON.stringify、model は options.model、usage は null、stopReason は end_turn", async () => {
     const provider = createStubProvider({ delayMs: 0 });
-    const result = await provider.generate(t06Input(), { ...options(), model: "claude-sonnet-5" });
+    const result = await provider.generate("recruitment", t06Input(), {
+      ...options(),
+      model: "claude-sonnet-5",
+    });
     expect(result.rawText).toBe(JSON.stringify(result.output));
     expect(result.model).toBe("claude-sonnet-5");
     expect(result.usage).toBeNull();
@@ -65,13 +68,17 @@ describe("U-12 stub provider", () => {
   it("delayMs で遅延が変わる（既定 500 ms）", async () => {
     expect(STUB_DEFAULT_DELAY_MS).toBe(500);
     const started = Date.now();
-    await createStubProvider({ delayMs: 120 }).generate(t06Input(), options());
+    await createStubProvider({ delayMs: 120 }).generate("recruitment", t06Input(), options());
     expect(Date.now() - started).toBeGreaterThanOrEqual(100);
   });
 
   it.each(AI_FAILURE_REASONS)("failWith: %s の AiProviderError を投げる", async (reason) => {
     const error = await caught(
-      createStubProvider({ delayMs: 0, failWith: reason }).generate(t06Input(), options()),
+      createStubProvider({ delayMs: 0, failWith: reason }).generate(
+        "recruitment",
+        t06Input(),
+        options(),
+      ),
     );
     expect(error.reason).toBe(reason);
   });
@@ -80,6 +87,7 @@ describe("U-12 stub provider", () => {
     expect(STUB_INVALID_JSON_NAME).toBe("__INVALID_JSON__");
     const error = await caught(
       createStubProvider({ delayMs: 0 }).generate(
+        "recruitment",
         t06Input({ respondentName: "  __INVALID_JSON__ " }),
         options(),
       ),
@@ -93,13 +101,18 @@ describe("U-12 stub provider", () => {
     expect(
       (
         await caught(
-          createStubProvider({ delayMs: 0 }).generate(t06Input(), options(aborted.signal)),
+          createStubProvider({ delayMs: 0 }).generate(
+            "recruitment",
+            t06Input(),
+            options(aborted.signal),
+          ),
         )
       ).reason,
     ).toBe("timeout");
 
     const controller = new AbortController();
     const pending = createStubProvider({ delayMs: 10_000 }).generate(
+      "recruitment",
       t06Input(),
       options(controller.signal),
     );
@@ -109,9 +122,24 @@ describe("U-12 stub provider", () => {
     expect(error.retryable).toBe(true);
   });
 
+  it("育成・定着と経年比較は config_error（スタブの出力は PR-7.10・PR-7.11b）。種類の違う版も同じ", async () => {
+    const stub = createStubProvider({ delayMs: 0 });
+    expect((await caught(stub.generate("training", t06TrainingInput(), options()))).reason).toBe(
+      "config_error",
+    );
+    expect(
+      (await caught(stub.generate("longitudinal", longitudinalInput(), options()))).reason,
+    ).toBe("config_error");
+    // failWith があっても、受け付けない種類は config_error のまま（failWith は採用向けの生成の失敗だけを作る）
+    const failing = createStubProvider({ delayMs: 0, failWith: "timeout" });
+    expect((await caught(failing.generate("training", t06TrainingInput(), options()))).reason).toBe(
+      "config_error",
+    );
+  });
+
   it("未知のプロンプト版は config_error", async () => {
     const error = await caught(
-      createStubProvider({ delayMs: 0 }).generate(t06Input(), {
+      createStubProvider({ delayMs: 0 }).generate("recruitment", t06Input(), {
         ...options(),
         promptVersion: "unknown",
       }),

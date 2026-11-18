@@ -1,13 +1,15 @@
 // lib/utils/admin-api.ts の adminFetch（06 §10.4）: 401 → ログイン、403（停止・未登録）→ 再読み込み、その他 → AdminApiError。
-// 回答一覧の updatePerson・fetchUsageLogs（11-2 §3.6・§3.8・§5.5）
+// 回答一覧の updatePerson・fetchUsageLogs（11-2 §3.6・§3.8・§5.5）。AI 解説の requestAiKind・fetchAiKind（11-6 §3.4）
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   AdminApiError,
   adminFetch,
   downloadPdf,
+  fetchAiKind,
   fetchUsageLogs,
   filenameFromDisposition,
+  requestAiKind,
   updatePerson,
 } from "@/lib/utils/admin-api";
 
@@ -212,5 +214,81 @@ describe("updatePerson・fetchUsageLogs（11-2 §3.6・§3.8）", () => {
     expect(url).toBe("/api/v1/admin/usage-logs");
     expect(init).toMatchObject({ method: "GET" });
     expect(init).not.toHaveProperty("body");
+  });
+});
+
+describe("requestAiKind・fetchAiKind（11-6 §3.4）", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function stubFetch(res: () => Response) {
+    const fetchMock = vi.fn<(input: string, init: RequestInit) => Promise<Response>>(async () =>
+      res(),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  const recruitment = {
+    resultId: "R/1",
+    kind: "recruitment",
+    status: "completed",
+    startedAt: null,
+    error: null,
+    enabled: true,
+    latest: null,
+  };
+
+  it("POST・GET を種類のパス …/ai-analysis/{kind} に送り、ID はエンコードする。POST に本文は無い", async () => {
+    const fetchMock = stubFetch(() => jsonResponse(200, recruitment));
+    await expect(requestAiKind("R/1", "recruitment")).resolves.toEqual(recruitment);
+    await expect(fetchAiKind("R/1", "recruitment")).resolves.toEqual(recruitment);
+    await requestAiKind("R1", "training");
+    await fetchAiKind("R1", "training");
+    await fetchAiKind("R1", "longitudinal");
+    expect(fetchMock.mock.calls.map(([url, init]) => [url, init.method])).toEqual([
+      ["/api/v1/admin/results/R%2F1/ai-analysis/recruitment", "POST"],
+      ["/api/v1/admin/results/R%2F1/ai-analysis/recruitment", "GET"],
+      ["/api/v1/admin/results/R1/ai-analysis/training", "POST"],
+      ["/api/v1/admin/results/R1/ai-analysis/training", "GET"],
+      ["/api/v1/admin/results/R1/ai-analysis/longitudinal", "GET"],
+    ]);
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(init).not.toHaveProperty("body");
+      expect(init).not.toHaveProperty("headers");
+    }
+  });
+
+  it("GET は中断の signal を渡す", async () => {
+    const fetchMock = stubFetch(() => jsonResponse(200, recruitment));
+    const controller = new AbortController();
+    await fetchAiKind("R1", "recruitment", controller.signal);
+    expect(fetchMock.mock.calls[0]![1].signal).toBe(controller.signal);
+  });
+
+  it("2xx 以外は AdminApiError（status・code・message・details を保つ）", async () => {
+    stubFetch(() =>
+      jsonResponse(
+        502,
+        errorBody("AI_GENERATION_FAILED", "AI 解説の生成に失敗しました。再度お試しください", {
+          reason: "invalid_json",
+        }),
+      ),
+    );
+    const error = await requestAiKind("R1", "recruitment").catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(AdminApiError);
+    expect(error).toMatchObject({
+      status: 502,
+      code: "AI_GENERATION_FAILED",
+      message: "AI 解説の生成に失敗しました。再度お試しください",
+      details: { reason: "invalid_json" },
+    });
+    stubFetch(() => jsonResponse(503, errorBody("AI_KIND_DISABLED", "この AI 解説は準備中です")));
+    await expect(requestAiKind("R1", "training")).rejects.toMatchObject({
+      status: 503,
+      code: "AI_KIND_DISABLED",
+      message: "この AI 解説は準備中です",
+    });
   });
 });

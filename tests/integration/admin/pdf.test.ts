@@ -1,18 +1,23 @@
-// I-45〜I-47、I-49 PDF 出力（04 §5.10、§7.2、07 §9）。
+// I-45〜I-47、I-49 PDF 出力（04 §5.10、§7.2、07 §9）。AI 解説は PR-7.12 まで、全画面の PDF に生成済みの採用向けだけを載せる
+// （印刷用ページのデータの recruitmentAi。11-6 §2.12・§3.7.8 の作り直しは PR-7.12）。
 // 結合テストには Next のサーバが無く、Chromium が印刷用ページを開けないため、I-45 は renderResultPdf を差し替えて
 // API の契約（ヘッダー・ファイル名・トークン・監査ログ）を確かめる。実際の PDF のバイト列と日本語は E2E（E-21）で確かめる。
 // PDF_CHROMIUM_EXECUTABLE_PATH は結合テストの環境変数に無い（I-49 の前提）
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GET as getPdfRoute } from "@/app/api/v1/admin/results/[resultId]/pdf/route";
-import { POST as postAiRoute } from "@/app/api/v1/admin/results/[resultId]/ai-analysis/route";
+import { POST as postAiRoute } from "@/app/api/v1/admin/results/[resultId]/ai-analysis/[kind]/route";
 import { GET as getComparisonRoute } from "@/app/api/v1/admin/results/[resultId]/comparison/route";
 import { GET as getResultRoute } from "@/app/api/v1/admin/results/[resultId]/route";
+import { buildAiAnalysisInput } from "@/lib/ai/input";
+import { buildStubOutput } from "@/lib/ai/providers/stub";
 import { issuePdfToken, verifyPdfToken } from "@/lib/auth/pdf-token";
 import { COLLECTIONS } from "@/lib/db/collections";
+import * as aiAnalysesRepository from "@/lib/db/repositories/ai-analyses-repository";
 import * as browserModule from "@/lib/pdf/browser";
 import * as renderModule from "@/lib/pdf/render-result-pdf";
 import type { RenderResultPdfArgs } from "@/lib/pdf/types";
+import { scoreAnswers } from "@/lib/scoring/score";
 import type { ComparisonScope } from "@/lib/scoring/types";
 import { loadPrintData, type PrintQuery } from "@/lib/services/print-data";
 
@@ -36,6 +41,11 @@ vi.mock("@/lib/pdf/browser", async (importOriginal) => {
   const mod = await importOriginal<typeof browserModule>();
   return { ...mod, launchBrowser: vi.fn(mod.launchBrowser) };
 });
+// AI 解説の文書を読むかを数える（restricted と責任者の受験では読まない）
+vi.mock("@/lib/db/repositories/ai-analyses-repository", async (importOriginal) => {
+  const mod = await importOriginal<typeof aiAnalysesRepository>();
+  return { ...mod, getAiAnalysis: vi.fn(mod.getAiAnalysis) };
+});
 
 /** 1 KB を超える最小構成の PDF（I-45 の差し替え用） */
 const FAKE_PDF = new Uint8Array(
@@ -47,6 +57,7 @@ let owner: TestAdmin;
 let admin: TestAdmin;
 let applicant: Awaited<ReturnType<typeof submitAnswerSet>>;
 let executive: Awaited<ReturnType<typeof submitAnswerSet>>;
+let manager: Awaited<ReturnType<typeof submitAnswerSet>>;
 let otherOrgResult: Awaited<ReturnType<typeof submitAnswerSet>>;
 
 const NAME = "印刷 花子";
@@ -64,16 +75,48 @@ beforeAll(async () => {
   // AI 解説を completed にしておく（full の印刷データに載る）
   const ai = await callRoute(postAiRoute, {
     method: "POST",
-    url: `/api/v1/admin/results/${applicant.resultId}/ai-analysis`,
-    params: { resultId: applicant.resultId },
+    url: `/api/v1/admin/results/${applicant.resultId}/ai-analysis/recruitment`,
+    params: { resultId: applicant.resultId, kind: "recruitment" },
     cookieHeader: owner.cookieHeader,
   });
   expect(ai.status).toBe(200);
+  // 責任者の受験（職業コード 10・役職は未設定）。採用向けの API は 409 で作れないので、生成済みの分析を保存用のリポジトリ関数
+  // （02 §8.6）で作る（PDF に載せないことを確かめる）
+  manager = await submitAnswerSet(org, cyclicAnswers(), {
+    name: "テストテスト 責任者",
+    occupationCode: 10,
+  });
+  const output = buildStubOutput(
+    buildAiAnalysisInput({
+      respondentName: "テストテスト 責任者",
+      occupationCode: 10,
+      score: scoreAnswers(cyclicAnswers()),
+    }),
+  );
+  await aiAnalysesRepository.saveAiAnalysis({
+    resultId: manager.resultId,
+    viewer: { uid: owner.uid, organizationId: org.organizationId, role: "owner" },
+    kind: "recruitment",
+    generated: {
+      output,
+      rawText: JSON.stringify(output),
+      model: "claude-opus-5",
+      promptVersion: "recruitment-v1",
+      analysisKind: "recruitment",
+      usage: null,
+      stopReason: "end_turn",
+      requestId: null,
+    },
+    provider: "stub",
+    reliability: 80,
+    meta: { ipAddress: null, userAgent: "vitest" },
+  });
 });
 
 beforeEach(() => {
   vi.mocked(renderModule.renderResultPdf).mockClear();
   vi.mocked(browserModule.launchBrowser).mockClear();
+  vi.mocked(aiAnalysesRepository.getAiAnalysis).mockClear();
 });
 
 const getPdf = (who: TestAdmin, resultId: string, query: string) =>
@@ -223,7 +266,7 @@ describe("I-47 印刷用ページの認可（loadPrintData）", () => {
     token,
   });
 
-  it("有効なトークン: 結果・比較・AI 解説（full）を返す", async () => {
+  it("有効なトークン: 結果・比較・AI 解説（full。採用向けの最新の分析だけを読む）を返す", async () => {
     const data = await load(applicant.resultId, validQuery(tokenFor()));
     expect(data).not.toBeNull();
     expect(data?.detail.respondent.name).toBe(NAME);
@@ -235,7 +278,13 @@ describe("I-47 印刷用ページの認可（loadPrintData）", () => {
       showPosition: true,
       showAiAnalysis: true,
     });
-    expect(data?.detail.aiAnalysis.latest).not.toBeNull();
+    expect(data?.recruitmentAi).toMatchObject({ status: "completed", error: null });
+    expect(data?.recruitmentAi?.latest).not.toBeNull();
+    expect(data?.detail).not.toHaveProperty("ai");
+    expect(vi.mocked(aiAnalysesRepository.getAiAnalysis)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(aiAnalysesRepository.getAiAnalysis)).toHaveBeenCalledWith(
+      expect.objectContaining({ resultId: applicant.resultId, kind: "recruitment" }),
+    );
   });
 
   it("restricted: 評価・合致度・リスク・AI 解説を非表示にし、AI 解説を読まない", async () => {
@@ -248,8 +297,18 @@ describe("I-47 印刷用ページの認可（loadPrintData）", () => {
       showPosition: true,
       showAiAnalysis: false,
     });
-    expect(data?.detail.aiAnalysis.latest).toBeNull();
+    expect(data?.recruitmentAi).toBeNull();
+    expect(vi.mocked(aiAnalysesRepository.getAiAnalysis)).not.toHaveBeenCalled();
     expect(data?.comparison).toBeNull();
+  });
+
+  it("責任者の受験（職業コード 10）: 生成済みの分析があっても、full で AI 解説を載せず、AI 解説を読まない（K-21）", async () => {
+    const data = await load(manager.resultId, validQuery(tokenFor({ resultId: manager.resultId })));
+    expect(data).not.toBeNull();
+    expect(data?.visibility.showAiAnalysis).toBe(false);
+    expect(data?.visibility.showGrade).toBe(true);
+    expect(data?.recruitmentAi).toBeNull();
+    expect(vi.mocked(aiAnalysesRepository.getAiAnalysis)).not.toHaveBeenCalled();
   });
 
   it("(a)〜(h) はすべて null（ページは 404）", async () => {

@@ -1,0 +1,729 @@
+/* components/admin/result/ai/ai-area.css（11-6 別表C）
+AI 解説の領域 #ai（結果詳細の目次と新しいレイアウトの間。11-4 §2.1）の見た目。参照元定義の Bubble の要素の値（C.1）と、HTML D・E（C.2。生成前の案内）・
+HTML 生成中（C.3）・HTML A（C.4。採用向けの表示）の CSS を、別表C の並びと値のまま写した。参照元の根の要素の id は #ai の下のクラス（.ai-rec など）に
+置き換え、@keyframes の名前は ai-rot・ai-pulse・ai-blink にした（§3.10）。#ai の中だけに効く。
+「K-49」「K-50」と書いた指定は、文字のコントラストと部品の見分けやすさのために参照元の色を変えた値で、注記に参照元の値を残した（§2.17）。「アプリ」と書いた
+焦点の枠は、管理画面に共通の焦点の枠（11-8 §2.2.6。.admin-root の指定）と同じ値を、#ai の中の指定だけで見た目が決まるようにここにも書いたもの（11 総論 8.3 の 19。
+共通の枠の値を変えるときは、ここも直す）。
+C.1 のうち 8 項目の入力欄（.ai-ctx で始まる規則と、その @media）と C.5（育成・定着の表示）は PR-7.10、C.6（経年比較）は PR-7.11a が足す。C.1 の
+育成・定着と経年比較の分（.ai-panel--longitudinal・.ai-start--training・.ai-ik を含む規則）と、C.2 の育成・定着の案内の規則は、別表C のまま置く
+（育成・定着のタブの案内は PR-7.9 から出る）。.ai-sr は PR-7.9 では使わない。印刷の形（data-variant="print"）では動きを止める */
+
+/* ---- C.1 領域・タブ・生成ボタン・失敗の枠など（参照元定義の Bubble の要素の値と、アプリだけの部品） ---- */
+#ai {
+  --ai-2-strong: #278379; /* --ai-2-strong は K-49（白い文字の地のグラデーションの終わり。参照元 #2E9B8F） */
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 15px;
+  border-radius: 5px;
+}
+#ai .ai-ico {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  flex: none;
+}
+#ai .ai-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+#ai .ai-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+}
+#ai .ai-tab,
+#ai .ai-gen-btn {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 60px;
+  min-height: 44px;
+  padding: 8px 24px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  /* K-49（グラデーションの終わり。参照元 #2E9B8F） */
+  background: linear-gradient(90deg, #4b6fb5, var(--ai-2-strong));
+  color: #ffffff;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease;
+}
+#ai .ai-tab .ai-ico,
+#ai .ai-gen-btn .ai-ico {
+  font-size: 21px;
+}
+#ai .ai-tab[aria-selected="false"] {
+  background: #ffffff;
+  border-color: #dde4ec;
+  color: #6b7885; /* K-49（文字。参照元 #7A8794） */
+}
+#ai .ai-tab[aria-selected="false"]:hover {
+  background: #f5f8fb;
+  border-color: #c9d6e2;
+  color: #4b6fb5;
+}
+#ai .ai-gen-btn:hover {
+  background: #347e78;
+}
+#ai .ai-gen-btn:active {
+  background: #2c6e69;
+}
+#ai .ai-gen-btn:disabled {
+  background: #c5cfd9;
+  cursor: default;
+}
+#ai .ai-tab:focus-visible,
+#ai .ai-gen-btn:focus-visible {
+  outline: 2px solid #3f8da5;
+  outline-offset: 2px; /* アプリ（管理画面に共通の焦点の枠と同じ指定。参照元は Bubble の要素で焦点の見た目の定めが無い。§2.17） */
+}
+#ai .ai-panel {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+  width: 100%;
+  padding: 15px;
+  margin-bottom: 30px;
+  border-radius: 5px;
+}
+#ai .ai-panel[hidden] {
+  display: none;
+}
+#ai .ai-panel--longitudinal {
+  align-items: stretch;
+  gap: 0;
+}
+#ai .ai-start {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 100%;
+}
+#ai .ai-start--training {
+  align-self: stretch;
+}
+#ai .ai-intro,
+#ai .ai-fail {
+  width: 700px;
+  max-width: 100%;
+}
+#ai .ai-loading,
+#ai .ai-rec,
+#ai .ai-ik {
+  align-self: stretch;
+  min-width: 280px;
+}
+#ai .ai-note {
+  font-size: 12.5px;
+  color: #6b7785;
+  text-align: center;
+}
+#ai .ai-fail {
+  box-sizing: border-box;
+  padding: 20px;
+  border: 1px solid #f1e1d7;
+  background: #fcf6f3;
+  border-radius: 12px;
+  color: #b15936; /* K-49（文字。参照元 #C9714E） */
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+#ai .ai-rec .ai-caution {
+  display: block;
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: #e6f2f5;
+  border-left: 5px solid #2e7a90;
+  color: #14202b;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.7;
+}
+#ai .ai-rec .ai-head .spark,
+#ai .ai-ik .head .sp {
+  display: inline-flex;
+}
+#ai .ai-loading .spark .ai-ico {
+  display: block;
+}
+#ai[data-variant="print"] * {
+  animation: none !important;
+}
+
+/* ---- C.2 生成前の案内（参照元定義の HTML D・HTML E。育成・定着の案内の根には ai-intro ai-intro--training を付ける） ---- */
+#ai .ai-intro * {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+#ai .ai-intro {
+  font-family: "Noto Sans JP", "Hiragino Sans", system-ui, sans-serif;
+  color: #2c3540;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  background: #ffffff;
+  border: 1px solid #dde4ec;
+  border-radius: 14px;
+  padding: 22px 24px 20px;
+}
+#ai .ai-intro .ih {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  margin-bottom: 18px;
+}
+#ai .ai-intro .ih-sp {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(102deg, #4b6fb5, #2e9b8f);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px;
+}
+#ai .ai-intro .ih-t {
+  font-size: 16px;
+  font-weight: 900;
+  color: #1f3a57;
+}
+#ai .ai-intro .ih-s {
+  font-size: 12.5px;
+  color: #6b7785;
+  margin-top: 2px;
+}
+#ai .ai-intro .feats {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+#ai .ai-intro--training .feats {
+  margin-bottom: 18px;
+}
+#ai .ai-intro .feat {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+#ai .ai-intro .fi {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #f0f5fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+#ai .ai-intro .fi-t {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #2c3540;
+}
+#ai .ai-intro .fi-d {
+  font-size: 12px;
+  color: #6b7885; /* K-49（参照元 #7A8794） */
+  margin-top: 1px;
+  line-height: 1.7;
+}
+#ai .ai-intro .need {
+  font-size: 12.5px;
+  color: #48535f;
+  background: #f5f8fb;
+  border: 1px solid #e3ebf2;
+  border-radius: 10px;
+  padding: 11px 14px;
+  line-height: 1.8;
+}
+#ai .ai-intro .need b {
+  color: #1f3a57;
+  font-weight: 800;
+}
+#ai .ai-intro .warn {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: #7a5a1e;
+  background: #fff7e6;
+  border: 1px solid #f2d9a6;
+  border-radius: 10px;
+  padding: 11px 14px;
+  line-height: 1.8;
+}
+#ai .ai-intro .warn-i {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 3px;
+  border-radius: 50%;
+  background: #e8a93a;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#ai .ai-intro .warn b {
+  color: #8a4b12;
+  font-weight: 800;
+}
+#ai .ai-intro .fi .ai-ico {
+  color: #4b6fb5;
+}
+#ai .ai-intro .fi .ai-ico--zap {
+  color: #e8a93a;
+}
+#ai .ai-intro .fi .ai-ico--sprout {
+  color: #2e9b6f;
+}
+
+/* ---- C.3 生成中（参照元定義の HTML 生成中） ---- */
+#ai .ai-loading {
+  --ai-1: #4b6fb5;
+  --ai-2: #2e9b8f;
+  --ink: #1f3a57;
+  --muted: #6b7885; /* --muted は K-49（参照元 #7A8794） */
+  font-family: "Noto Sans JP", "Hiragino Sans", system-ui, sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 34px 24px;
+  -webkit-font-smoothing: antialiased;
+}
+#ai .ai-loading .ai-load-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 14px;
+}
+#ai .ai-loading .ring {
+  position: relative;
+  width: 66px;
+  height: 66px;
+  margin-bottom: 4px;
+}
+#ai .ai-loading .spinner {
+  width: 66px;
+  height: 66px;
+  transform: rotate(-90deg);
+}
+#ai .ai-loading .track {
+  stroke: #e4ecea;
+}
+#ai .ai-loading .arc {
+  stroke-linecap: round;
+  stroke-dasharray: 90 200;
+  animation: ai-rot 1.1s linear infinite;
+  transform-origin: center;
+}
+#ai .ai-loading .arc {
+  stroke: var(--ai-2);
+}
+#ai .ai-loading .spark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 22px;
+  color: var(--ai-1);
+  animation: ai-pulse 1.4s ease-in-out infinite;
+}
+@keyframes ai-rot {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes ai-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.08);
+  }
+}
+#ai .ai-loading .ttl {
+  font-size: 16px;
+  font-weight: 900;
+  color: var(--ink);
+}
+#ai .ai-loading .sub {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.75;
+}
+#ai .ai-loading .dots {
+  display: flex;
+  gap: 7px;
+  margin-top: 4px;
+}
+#ai .ai-loading .dots span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ai-2);
+  opacity: 0.3;
+  animation: ai-blink 1.2s infinite;
+}
+#ai .ai-loading .dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+#ai .ai-loading .dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes ai-blink {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+/* ---- C.4 採用向けの表示（参照元定義の HTML A） ---- */
+#ai .ai-rec * {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+#ai .ai-rec {
+  --line: #e6ebf1;
+  --ink: #2c3540;
+  --muted: #6a7684;
+  --muted-2: #697888;
+  --muted-chip: #697482; /* K-49（--muted は参照元 #6B7785、--muted-2 は参照元 #94A0AC、--muted-chip は判定チップのラベル。参照元は --muted） */
+  --green: #7fb95e;
+  --risk-mid: #e0a04a;
+  --ai-1: #4b6fb5;
+  --ai-2: #2e9b8f;
+  --ai-ink: #1f3a57;
+  font-family: "Noto Sans JP", "Hiragino Sans", system-ui, sans-serif;
+  color: var(--ink);
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+#ai .ai-rec .card {
+  background: #fff;
+  border: 1px solid #d5e0e4;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 8px 30px rgba(43, 90, 120, 0.1);
+}
+#ai .ai-rec .ai-head {
+  /* K-49（グラデーションの終わり。参照元 var(--ai-2)） */
+  background: linear-gradient(102deg, var(--ai-1), var(--ai-2-strong));
+  color: #fff;
+  padding: 18px 26px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+#ai .ai-rec .ai-head .spark {
+  font-size: 20px;
+}
+#ai .ai-rec .ai-head h2 {
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+}
+#ai .ai-rec .ai-body {
+  padding: 24px 26px 28px;
+}
+#ai .ai-rec .verdict {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+#ai .ai-rec .vchip {
+  flex: 1;
+  min-width: 150px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 15px;
+  background: #fafbfd;
+}
+#ai .ai-rec .vchip .vk {
+  font-size: 11.5px;
+  color: var(--muted-chip); /* K-49（参照元 var(--muted)） */
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+#ai .ai-rec .vchip .vv {
+  font-size: 16px;
+  font-weight: 900;
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+#ai .ai-rec .vchip.good .vv {
+  color: #27835e; /* K-49（参照元 #2E9B6F） */
+}
+#ai .ai-rec .vchip.warn .vv {
+  color: #9b6927; /* K-49（参照元 #CC8A33） */
+}
+#ai .ai-rec .vchip.mid .vv {
+  color: var(--ai-1);
+}
+#ai .ai-rec .vchip.bad .vv {
+  color: #c64b44; /* K-49（参照元 #C9544E） */
+}
+#ai .ai-rec .vdot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+#ai .ai-rec .good .vdot {
+  background: #2e9b6f;
+}
+#ai .ai-rec .warn .vdot {
+  background: #cc8a33;
+}
+#ai .ai-rec .mid .vdot {
+  background: var(--ai-1);
+}
+#ai .ai-rec .bad .vdot {
+  background: #c9544e;
+}
+#ai .ai-rec .ai-sec {
+  margin-bottom: 24px;
+}
+#ai .ai-rec .ai-sec:last-child {
+  margin-bottom: 0;
+}
+#ai .ai-rec .ai-label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 14.5px;
+  font-weight: 900;
+  color: var(--ai-ink);
+  margin-bottom: 11px;
+}
+#ai .ai-rec .ai-label .bar {
+  width: 4px;
+  height: 17px;
+  border-radius: 3px;
+  background: linear-gradient(var(--ai-1), var(--ai-2));
+}
+#ai .ai-rec .ai-p {
+  font-size: 14.5px;
+  color: #39434e;
+  line-height: 1.85;
+}
+#ai .ai-rec .two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+#ai .ai-rec .mini {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 15px 17px;
+}
+#ai .ai-rec .mini.strength {
+  background: #f4faf7;
+  border-color: #dbefe5;
+}
+#ai .ai-rec .mini.caution {
+  background: #fcf6f3;
+  border-color: #f1e1d7;
+}
+#ai .ai-rec .mini h4 {
+  font-size: 13.5px;
+  font-weight: 900;
+  margin-bottom: 11px;
+}
+#ai .ai-rec .mini.strength h4 {
+  color: #26815d; /* K-49（参照元 #2E9B6F） */
+}
+#ai .ai-rec .mini.caution h4 {
+  color: #b15936; /* K-49（参照元 #C9714E） */
+}
+#ai .ai-rec .ilist {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+#ai .ai-rec .ilist li {
+  font-size: 13.5px;
+  color: #3c4651;
+  line-height: 1.7;
+  padding-left: 18px;
+  position: relative;
+}
+#ai .ai-rec .ilist li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 9px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+#ai .ai-rec .strength .ilist li::before {
+  background: var(--green);
+}
+#ai .ai-rec .caution .ilist li::before {
+  background: var(--risk-mid);
+}
+#ai .ai-rec .qlist {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+#ai .ai-rec .q {
+  display: flex;
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: #fbfcfe;
+}
+#ai .ai-rec .qn {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  /* K-49（グラデーションの終わり。参照元 var(--ai-2)） */
+  background: linear-gradient(var(--ai-1), var(--ai-2-strong));
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#ai .ai-rec .qtext {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.6;
+  margin-bottom: 5px;
+}
+#ai .ai-rec .qintent {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+#ai .ai-rec .qintent .e {
+  color: #268177; /* K-49（参照元 var(--ai-2)） */
+  font-weight: 700;
+}
+#ai .ai-rec .alist {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+#ai .ai-rec .a {
+  display: flex;
+  gap: 13px;
+  align-items: flex-start;
+}
+#ai .ai-rec .ahead {
+  flex: none;
+  background: #eaf2f0;
+  color: #247a70; /* K-49（文字。参照元 var(--ai-2)） */
+  font-size: 12px;
+  font-weight: 900;
+  border-radius: 7px;
+  padding: 3px 11px;
+  white-space: nowrap;
+  line-height: 1.7;
+  margin-top: 0;
+}
+#ai .ai-rec .atext {
+  font-size: 13.5px;
+  color: #3c4651;
+  line-height: 1.7;
+  padding-top: 1px;
+}
+#ai .ai-rec .retain-alert {
+  margin-top: 16px;
+  border: 1px solid #f0dbc9;
+  background: #fcf5ee;
+  border-radius: 12px;
+  padding: 15px 17px;
+}
+#ai .ai-rec .ra-head {
+  font-size: 13.5px;
+  font-weight: 900;
+  color: #97662e; /* K-49（参照元 #C0823A） */
+  margin-bottom: 11px;
+}
+#ai .ai-rec .ra-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 9px;
+  align-items: flex-start;
+}
+#ai .ai-rec .ra-row:last-child {
+  margin-bottom: 0;
+}
+#ai .ai-rec .ra-k {
+  flex: none;
+  background: #efe0cf;
+  color: #875a25; /* K-49（文字。参照元 #A9712E） */
+  font-size: 11.5px;
+  font-weight: 900;
+  border-radius: 6px;
+  padding: 3px 11px;
+  white-space: nowrap;
+  line-height: 1.7;
+  margin-top: 0;
+}
+#ai .ai-rec .ra-v {
+  font-size: 13.5px;
+  color: #5a4b3a;
+  line-height: 1.7;
+  padding-top: 1px;
+}
+#ai .ai-rec .ai-foot {
+  margin-top: 22px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--line);
+  font-size: 11.5px;
+  color: var(--muted-2);
+  line-height: 1.6;
+}
+@media (max-width: 680px) {
+  #ai .ai-rec .two {
+    grid-template-columns: 1fr;
+  }
+}

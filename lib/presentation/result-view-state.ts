@@ -1,9 +1,11 @@
 // 結果詳細の画面の状態（11-4 §2.18・§3.5 の result-view-state.ts）。たたんでいるセクション・16の特性の並び・開いている項目の説明・
-// 第二候補を出しているか・接し方のタブの 5 項目と、PDF（11-5）の要求と印刷トークンに載せるクエリの形。純関数で、React・window・
-// Next.js に触れない。画面の状態は保存しない（部品の Context とモジュールの変数だけ。11-4 §3.1）。
-// 第二候補（secondOpen）は育て方、タブ（viewerStyle）は接し方の部品が使う（§2.13.4・§2.14.4）。AI 解説の表示中のタブ（11-6）は
-// 同じ形で後の PR が足す。セクションの id は印刷用ページの改ページの規則（11-5 の PDF_SECTION_IDS）と同じ
+// 第二候補を出しているか・接し方のタブ・AI 解説の表示中のタブの 6 項目と、PDF（11-5）の要求と印刷トークンに載せるクエリの形。
+// 純関数で、React・window・Next.js に触れない。画面の状態は保存しない（部品の Context とモジュールの変数だけ。11-4 §3.1）。
+// 第二候補（secondOpen）は育て方、タブ（viewerStyle）は接し方の部品が使う（§2.13.4・§2.14.4）。AI 解説の表示中のタブ（aiTab。
+// クエリの ai）は 11-6 §3.7.6 で、結果詳細のページが URL の ai を初めのタブに使う（経年比較のスコア比較の aiKeinenFlat（kflat）は
+// PR-7.11b が同じ形で足す）。セクションの id は印刷用ページの改ページの規則（11-5 の PDF_SECTION_IDS）と同じ
 import { DEFAULT_VIEWER_STYLE, type TraitSortOrder } from "./result-detail-rules";
+import { isAiAnalysisKind, type AiAnalysisKind } from "@/lib/ai/kinds";
 import {
   SOCIAL_STYLE_KEYS,
   TRAIT_KEYS,
@@ -29,6 +31,7 @@ export interface ResultViewState {
   readonly traitHelp: TraitKey | null; // 開いている項目の説明
   readonly secondOpen: boolean; // 第二候補を出しているか
   readonly viewerStyle: SocialStyleKey; // 接し方のタブ（見ている人のスタイル）
+  readonly aiTab: AiAnalysisKind; // AI 解説の表示中のタブ（11-6 §3.7.6）
 }
 
 export const DEFAULT_RESULT_VIEW_STATE: ResultViewState = Object.freeze({
@@ -37,6 +40,7 @@ export const DEFAULT_RESULT_VIEW_STATE: ResultViewState = Object.freeze({
   traitHelp: null,
   secondOpen: false,
   viewerStyle: DEFAULT_VIEWER_STYLE,
+  aiTab: "recruitment",
 });
 
 const TRAIT_SORT_ORDERS: readonly TraitSortOrder[] = ["score", "diff", "def"];
@@ -53,7 +57,8 @@ function inSectionOrder(ids: Iterable<string>): readonly ResultSectionId[] {
 
 /**
  * 画面の状態 → クエリ（§2.18）。既定と同じ項目は省く: fold=rs-tr,rs-rk（RESULT_SECTION_IDS の順にカンマで）、sort=diff・def、
- * help={特性の識別子}、second=1、viewer={スタイルの識別子}。既定だけなら空（toString() が ""）
+ * help={特性の識別子}、second=1、viewer={スタイルの識別子}、ai=training・longitudinal（11-6 §3.7.6）。既定だけなら空
+ * （toString() が ""）
  */
 export function encodeResultViewState(state: ResultViewState): URLSearchParams {
   const params = new URLSearchParams();
@@ -65,12 +70,13 @@ export function encodeResultViewState(state: ResultViewState): URLSearchParams {
   if (state.viewerStyle !== DEFAULT_RESULT_VIEW_STATE.viewerStyle) {
     params.set("viewer", state.viewerStyle);
   }
+  if (state.aiTab !== DEFAULT_RESULT_VIEW_STATE.aiTab) params.set("ai", state.aiTab);
   return params;
 }
 
 /**
  * クエリ → 画面の状態。寛容に読む（§2.18）: 配列は最初の値、たたみ方は知らない id と重複を捨てて RESULT_SECTION_IDS の順に
- * 並べ直し、決まった値以外は既定（sort は score、help は null、second は "1" だけ真、viewer は driving）
+ * 並べ直し、決まった値以外は既定（sort は score、help は null、second は "1" だけ真、viewer は driving、ai は recruitment）
  */
 export function decodeResultViewState(
   query: URLSearchParams | Readonly<Record<string, string | string[] | undefined>>,
@@ -84,6 +90,7 @@ export function decodeResultViewState(
   const sort = first("sort");
   const help = first("help");
   const viewer = first("viewer");
+  const ai = first("ai");
   return Object.freeze({
     folded: fold === undefined ? DEFAULT_RESULT_VIEW_STATE.folded : inSectionOrder(fold.split(",")),
     traitSort: isOneOf(TRAIT_SORT_ORDERS, sort) ? sort : DEFAULT_RESULT_VIEW_STATE.traitSort,
@@ -92,5 +99,6 @@ export function decodeResultViewState(
     viewerStyle: isOneOf(SOCIAL_STYLE_KEYS, viewer)
       ? viewer
       : DEFAULT_RESULT_VIEW_STATE.viewerStyle,
+    aiTab: isAiAnalysisKind(ai) ? ai : DEFAULT_RESULT_VIEW_STATE.aiTab,
   });
 }

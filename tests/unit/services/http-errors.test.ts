@@ -9,7 +9,6 @@ import { validateForWrite } from "@/lib/db/schemas/validate";
 import { API_ERRORS, ApiError } from "@/lib/services/errors";
 import { firebaseErrorCode, translateFirebaseError } from "@/lib/services/firebase-errors";
 import { formatIssuePath, handle, json, readJson } from "@/lib/services/http";
-import { startOfTokyoDay } from "@/lib/services/rate-limit";
 import { acceptInviteInputSchema, createSessionInputSchema } from "@/lib/services/schemas/auth";
 import {
   comparisonScopeQuerySchema,
@@ -305,13 +304,5 @@ describe("リクエスト付帯情報・Cookie・ログ", () => {
       errorCode: "auth/x",
     });
     expect(errorFields("oops")).toEqual({ errorType: "string" });
-  });
-  it("startOfTokyoDay は Asia/Tokyo の当日 0 時（UTC 15:00 前日）", () => {
-    expect(startOfTokyoDay(new Date("2026-09-23T14:59:59Z")).toISOString()).toBe(
-      "2026-09-22T15:00:00.000Z",
-    );
-    expect(startOfTokyoDay(new Date("2026-09-23T15:00:00Z")).toISOString()).toBe(
-      "2026-09-23T15:00:00.000Z",
-    );
   });
 });

@@ -1,24 +1,7 @@
-// 結果詳細・比較・AI 解説の応答 Dto（04 §8.2）。指標キーは TraitKey 等の識別子のまま（04 D04-28）
-import type { AiAnalysisOutput, AiGenerationStatus } from "@/lib/ai/types";
+// 結果詳細・比較の応答 Dto（04 §8.2）。指標キーは TraitKey 等の識別子のまま（04 D04-28）。AI 解説の Dto は dto/ai.ts（11-6 §3.6）
+import type { AiAreaDto } from "./ai";
 import type { DiagnosisExperience, RespondentKind } from "@/lib/db/types";
 import type { ComparisonResult, ScoreResult, TeamCode } from "@/lib/scoring/types";
-
-/** GET/POST …/ai-analysis（04 §5.9）。結果詳細にも resultId を除いた形で含める */
-export interface AiAnalysisDto {
-  readonly resultId: string;
-  readonly status: AiGenerationStatus;
-  readonly startedAt: string | null;
-  readonly error: string | null;
-  readonly latest: {
-    readonly aiAnalysisId: string;
-    readonly provider: string;
-    readonly model: string;
-    readonly promptVersion: string;
-    readonly generatedAt: string;
-    readonly reliability: number;
-    readonly output: AiAnalysisOutput;
-  } | null;
-}
 
 /** GET /api/v1/admin/results/{resultId}（04 §5.4）。比較を除く全セクションをこの 1 応答で描画する */
 export interface ResultDetailDto {
@@ -35,7 +18,8 @@ export interface ResultDetailDto {
   readonly submittedAt: string;
   readonly scoringVersion: string;
   readonly scores: ScoreResult;
-  readonly aiAnalysis: Omit<AiAnalysisDto, "resultId">;
+  /** AI 解説の領域（11-6 §3.6） */
+  readonly ai: AiAreaDto;
 }
 
 /** GET /api/v1/admin/results/{resultId}/comparison（04 §5.5）。保存せず呼び出しごとに計算する */

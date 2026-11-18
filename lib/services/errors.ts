@@ -22,7 +22,8 @@ export type ApiErrorCode =
   | "POPULATION_EMPTY"
   | "AI_ALREADY_GENERATING"
   | "AI_GENERATION_FAILED"
-  | "AI_DAILY_LIMIT_EXCEEDED"
+  | "AI_NOT_APPLICABLE"
+  | "AI_KIND_DISABLED"
   | "PDF_GENERATION_FAILED"
   | "INVITE_TOKEN_INVALID"
   | "EMAIL_ALREADY_REGISTERED"
@@ -77,6 +78,11 @@ export const API_ERRORS = {
   /** PATCH /api/v1/admin/respondents/{id} の employment で、退職日が入社日より前（11-2 §3.9） */
   leftBeforeHired: () =>
     new ApiError(422, "LEFT_BEFORE_HIRED", "退職日が入社日より前になっています"),
+  /** 採用向け・育成・定着の AI 解説で、表示上の役職が責任者の受験（K-21。11-6 §3.4） */
+  aiNotApplicable: () =>
+    new ApiError(409, "AI_NOT_APPLICABLE", "この受験では、この AI 解説は使えません"),
+  /** 有効でない種類の AI 解説で、生成済みでない（11-6 §2.7.4・§3.4） */
+  aiKindDisabled: () => new ApiError(503, "AI_KIND_DISABLED", "この AI 解説は準備中です"),
   rateLimited: (retryAfterSeconds?: number) =>
     new ApiError(
       429,

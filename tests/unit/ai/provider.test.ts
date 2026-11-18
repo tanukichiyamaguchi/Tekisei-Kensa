@@ -88,7 +88,7 @@ describe("U-13 中断済みの signal", () => {
     const started = Date.now();
     let caught: unknown;
     try {
-      await create().generate(t06Input(), {
+      await create().generate("recruitment", t06Input(), {
         model: "claude-opus-5",
         promptVersion: "recruitment-v1",
         signal: aborted(),

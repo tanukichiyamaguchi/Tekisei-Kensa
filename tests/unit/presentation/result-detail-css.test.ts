@@ -1108,22 +1108,13 @@ describe("（ID なし）旧のセクションと前回のグラフの CSS の�
     }
   });
 
-  it("admin.css に、使う部品が残る指定（旧の AI 解説の領域の .result-section・.panel と、.muted・.small・.pre-line・.illustration）は残る", () => {
-    for (const selector of [
-      ".result-section",
-      ".result-section > h2",
-      ".result-section .panel",
-      ".panel",
-      ".muted",
-      ".small",
-      ".pre-line",
-      ".illustration",
-    ]) {
+  it("admin.css に、使う部品が残る指定（アカウント画面の .panel と、.muted・.pre-line・.illustration）は残る（旧の AI 解説の領域だけが使っていた .result-section・.small は PR-7.9 で消した。ai-area-css.test.ts）", () => {
+    for (const selector of [".panel", ".muted", ".pre-line", ".illustration"]) {
       expect(selectorsOf(admin), selector).toContain(selector);
     }
   });
 
-  it("print.css に前回のグラフの指定と、要素の無くなった旧のセクションの指定が無い（AI 解説の印刷の塊の .result-section・.panel は残る）", () => {
+  it("print.css に前回のグラフの指定と、要素の無くなった旧のセクションと旧の AI 解説の印刷の塊（.result-section・.panel。PR-7.9）の指定が無い", () => {
     for (const name of [
       ".apexcharts-",
       ".radar-chart",
@@ -1135,6 +1126,8 @@ describe("（ID なし）旧のセクションと前回のグラフの CSS の�
       ".guide-list",
       ".trait-summary",
       ".donut-gauge",
+      ".result-section",
+      ".panel",
     ]) {
       expect(
         selectorsOf(print).filter((selector) => selector.includes(name)),
@@ -1142,13 +1135,7 @@ describe("（ID なし）旧のセクションと前回のグラフの CSS の�
       ).toEqual([]);
       expect(printText.includes(name), name).toBe(false);
     }
-    for (const selector of [
-      ".print-root",
-      ".print-root h1",
-      ".print-root .result-section",
-      ".print-root .result-section > h2",
-      ".print-root .panel",
-    ]) {
+    for (const selector of [".print-root", ".print-root h1"]) {
       expect(selectorsOf(print), selector).toContain(selector);
     }
   });

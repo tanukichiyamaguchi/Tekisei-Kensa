@@ -1,9 +1,11 @@
-// AI 出力の検証スキーマ（07 §3.2）。付録D §2 と 00 §3.6 の AiAnalysisOutput に 1 対 1。
-// 定義はこの 1 箇所だけにし、Anthropic provider の zodOutputFormat() と parseAiOutputText() の両方が使う（08 D08-10）
+// AI 出力の検証スキーマ（07 §3.2、11-6 §2.8・§3.7.3）。採用向けは付録D §2 と 00 §3.6 の AiAnalysisOutput に 1 対 1。
+// 定義はこの 1 箇所だけにし、種類ごとの表 AI_OUTPUT_SCHEMAS を、Anthropic provider の zodOutputFormat() と parseAiOutputText()・
+// parseStoredAiOutput() が使う（08 D08-10）
 import { z } from "zod";
 
 import { AiProviderError } from "@/lib/ai/errors";
-import type { AiAnalysisOutput } from "@/lib/ai/types";
+import type { AiAnalysisKind } from "@/lib/ai/kinds";
+import type { AiAnalysisOutput, AiOutputByKind } from "@/lib/ai/types";
 
 export const LEVER_LABELS = ["関わり方", "任せ方", "認め方", "伸ばし方"] as const;
 
@@ -72,11 +74,28 @@ const _outputCompatible: (v: AiAnalysisOutputParsed) => AiAnalysisOutput = (v) =
 void _outputCompatible;
 
 /**
- * 応答テキストを検証する（構造化出力を持たない provider、stub の不正 JSON モード、Anthropic provider の応答本文。07 §3.2）。
- * 付録D §3「出力形式（厳守）」のとおり、先頭が { で始まり末尾が } で終わる純粋な JSON だけを受理する。
- * 失敗はすべて AiProviderError("invalid_json")。例外メッセージに入力テキストを含めない（氏名が含まれ得る。07 §4.8）
+ * 種類ごとの出力のスキーマ（11-6 §3.7.3）。PR-7.9 は採用向けだけ（育成・定着の TrainingAiOutputSchema は PR-7.10、経年比較の
+ * LongitudinalAiOutputSchema は PR-7.11b が足す）
  */
-export function parseAiOutputText(text: string): AiAnalysisOutput {
+export const AI_OUTPUT_SCHEMAS: { readonly [K in AiAnalysisKind]?: z.ZodType<AiOutputByKind[K]> } =
+  {
+    recruitment: AiAnalysisOutputSchema,
+  };
+
+/**
+ * 応答テキストを種類のスキーマで検証する（構造化出力を持たない provider、stub の不正 JSON モード、Anthropic provider の応答本文。
+ * 07 §3.2）。付録D §3「出力形式（厳守）」のとおり、先頭が { で始まり末尾が } で終わる純粋な JSON だけを受理する。
+ * スキーマの無い種類は AiProviderError("config_error")。検証の失敗はすべて AiProviderError("invalid_json")。
+ * 例外メッセージに入力テキストを含めない（氏名が含まれ得る。07 §4.8）
+ */
+export function parseAiOutputText<K extends AiAnalysisKind>(
+  kind: K,
+  text: string,
+): AiOutputByKind[K] {
+  const schema = AI_OUTPUT_SCHEMAS[kind];
+  if (schema === undefined) {
+    throw new AiProviderError("config_error", `no output schema for ${kind}`);
+  }
   const trimmed = text.trim();
   if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
     throw new AiProviderError("invalid_json", "response text is not a bare JSON object");
@@ -87,7 +106,7 @@ export function parseAiOutputText(text: string): AiAnalysisOutput {
   } catch {
     throw new AiProviderError("invalid_json", "response text is not valid JSON");
   }
-  const result = AiAnalysisOutputSchema.safeParse(json);
+  const result = schema.safeParse(json);
   if (!result.success) {
     // issue.message は値やキー名を含み得るため使わない。パスとコードだけを出す
     const where = result.error.issues
@@ -96,4 +115,18 @@ export function parseAiOutputText(text: string): AiAnalysisOutput {
     throw new AiProviderError("invalid_json", `schema validation failed: ${where}`);
   }
   return result.data;
+}
+
+/**
+ * 保存した出力（aiAnalyses.output）を今の種類のスキーマで確かめる（11-6 §2.3.4・§3.7.3）。合わないとき・その種類のスキーマが
+ * 無いときは null（例外を投げない。読めない出力は呼び出し側が failed・internal_error として扱い、作り直せるようにする）
+ */
+export function parseStoredAiOutput<K extends AiAnalysisKind>(
+  kind: K,
+  output: unknown,
+): AiOutputByKind[K] | null {
+  const schema = AI_OUTPUT_SCHEMAS[kind];
+  if (schema === undefined) return null;
+  const result = schema.safeParse(output);
+  return result.success ? result.data : null;
 }

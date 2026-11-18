@@ -13,6 +13,7 @@ import type { Locator, Page } from "@playwright/test";
 
 import { emulatorTask } from "../support/admin";
 import {
+  aiArea,
   alertToast,
   E2E_ADMIN_PASSWORD,
   expect,
@@ -214,6 +215,32 @@ async function expectLandedBelowToc(page: Page, id: string): Promise<void> {
     .toBe(true);
 }
 
+/**
+ * 要素をスクロールで見える所へ出し、領域のスクロールが落ち着くまで待つ。目次が留まった（.stuck）直後の描き直しで目次の高さがわずかに
+ * 変わり、ブラウザのスクロールの固定（scroll anchoring）が領域を 1px 動かすことがある（AI 解説の領域の高さが小数のとき）。吹き出しは
+ * スクロールで消える（11-4 §2.8.3）ので、動きが止まる（5 フレーム続けて scrollTop が変わらない）のを待ってからマウスを載せる
+ */
+async function scrollIntoViewAndSettle(page: Page, target: Locator): Promise<void> {
+  await target.scrollIntoViewIfNeeded();
+  await resultDetail(page).scroll.evaluate(
+    (el) =>
+      new Promise<void>((resolve) => {
+        let last = el.scrollTop;
+        let still = 0;
+        const tick = () => {
+          if (el.scrollTop === last) still += 1;
+          else {
+            last = el.scrollTop;
+            still = 0;
+          }
+          if (still >= 5) resolve();
+          else requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }),
+  );
+}
+
 /** 回答一覧に戻り、別の人の「結果を見る」で結果詳細を開く（同じページのまま移る。11-4 §2.1） */
 async function moveToAnotherPerson(page: Page, name: string, resultId: string): Promise<void> {
   await resultDetail(page).back.click();
@@ -260,7 +287,9 @@ test("M7-result-21 構成: サイドメニューと共通ヘッダーの無い�
     .locator("#rd .rd-body > *")
     .evaluateAll((els) => els.map((el) => el.id || el.tagName.toLowerCase()));
   expect(order).toEqual(["rd-head", "rsn-wrap", "ai", "rs2", "dialog", "dialog"]);
-  await expect(page.locator("#ai").getByTestId("ai-analysis-section")).toBeVisible();
+  // AI 解説の領域は 11-6 の AiArea（タブの行と採用向けのパネル。見本は求職者で責任者でない）
+  await expect(aiArea(page).tablist).toBeVisible();
+  await expect(aiArea(page).panel("recruitment")).toBeVisible();
 
   // 目次（§2.5。AI解説と 7 つのセクション）
   await expect(rd.toc).toBeVisible();
@@ -330,10 +359,10 @@ test("M7-result-21 構成: サイドメニューと共通ヘッダーの無い�
   }
 
   // 見出しに「AI解説を表示」が無い（11-6 の ai-04・ai-05）。旧の見出し（サマリー・個人特性・組織との相性・比較対象内での
-  // 立ち位置・リスク・育成方法・ソーシャルスタイル）が無く、.result-section の見出しは AI 解説の領域だけ。グラフは自作の SVG で、
-  // ApexCharts の要素は無い（K-23）
+  // 立ち位置・リスク・育成方法・ソーシャルスタイル）と、旧のセクションの .result-section が無い（PR-7.9 で AI 解説の領域も 11-6 の
+  // AiArea に置き換わった）。グラフは自作の SVG で、ApexCharts の要素は無い（K-23）
   await expect(rd.head.getByRole("button", { name: "AI解説を表示" })).toHaveCount(0);
-  await expect(page.locator(".result-section > h2")).toHaveText(["AI 解説"]);
+  await expect(page.locator(".result-section")).toHaveCount(0);
   await expect(page.locator(".apexcharts-canvas")).toHaveCount(0);
 
   // 「回答一覧に戻る」で /admin へ（§2.3.1）
@@ -698,7 +727,7 @@ test("M7-result-28 吹き出し: 軸に載せると特性名・本人・サロ�
   await expect(svg.locator("line.rd-hit")).toHaveCount(16);
 
   // 協力性（真上の軸）の中心から 120 の位置にマウスを載せる（viewBox 560×460 を描いた大きさに直す）
-  await svg.scrollIntoViewIfNeeded();
+  await scrollIntoViewAndSettle(page, svg);
   const axisPoint = async () => {
     const box = await rectOf(svg);
     const scale = (box.right - box.left) / 560;
@@ -734,7 +763,7 @@ test("M7-result-28 吹き出し: 軸に載せると特性名・本人・サロ�
   // 画面の右端の近くでは、マウスの左 14px に出る（反省力の軸に、右端から 10px の位置のマウスの動きを送る。マウスは先に
   // 部品の無い枠の余白へ外しておく）
   await page.mouse.move(5, 5);
-  await svg.scrollIntoViewIfNeeded();
+  await scrollIntoViewAndSettle(page, svg);
   const width = page.viewportSize()?.width ?? 1440;
   const y = (await axisPoint()).y;
   await svg

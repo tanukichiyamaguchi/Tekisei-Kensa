@@ -12,7 +12,7 @@ export type { EmploymentStatus, StaffRole };
 const CALENDAR_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const MIN_CALENDAR_DATE = "1900-01-01";
 const MAX_CALENDAR_DATE = "2100-12-31";
-/** Asia/Tokyo は UTC+9 で固定（夏時間が無い。lib/utils/tokyo-time.ts・lib/services/rate-limit.ts と同じ扱い） */
+/** Asia/Tokyo は UTC+9 で固定（夏時間が無い。lib/utils/tokyo-time.ts と同じ扱い） */
 const TOKYO_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 /** 区分の表示名（11-2 §2.3）。区分タブ・区分チップ・メニュー・通知で使う */

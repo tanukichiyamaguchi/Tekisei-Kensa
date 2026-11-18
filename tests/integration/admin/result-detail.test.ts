@@ -1,4 +1,5 @@
-// I-35 結果詳細（04 §5.4）: results 1 + respondents 1 + 最新 aiAnalyses 1 の 3 文書から作られ、指標キーが識別子のまま
+// I-35 結果詳細（04 §5.4）: results 1 + respondents 1 + 最新 aiAnalyses（採用向け・育成・定着の生成済みの分。11-6 §3.5）から作られ、
+// 指標キーが識別子のまま。AI 解説の領域は ai（AiAreaDto。11-6 §3.6）
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GET as getResultRoute } from "@/app/api/v1/admin/results/[resultId]/route";
@@ -51,6 +52,7 @@ vi.mock("@/lib/db/repositories/ai-analyses-repository", async (importOriginal) =
   return { ...mod, getAiAnalysis: vi.fn(mod.getAiAnalysis) };
 });
 
+/** 付録D §2 のスキーマに合う出力（保存した出力は読むときにスキーマで確かめる。11-6 §2.3.4） */
 const output: AiAnalysisOutput = {
   summary: "テスト用の要約",
   verdict: { sokusenryoku: "高い", teichaku_risk: "低い", sougou: "推奨" },
@@ -58,7 +60,12 @@ const output: AiAnalysisOutput = {
   cautions: ["注意点 1"],
   questions: [{ q: "質問 1", intent: "意図 1" }],
   retention: {
-    levers: [{ label: "関わり方", text: "関わり方の文" }],
+    levers: [
+      { label: "関わり方", text: "関わり方の文" },
+      { label: "任せ方", text: "任せ方の文" },
+      { label: "認め方", text: "認め方の文" },
+      { label: "伸ばし方", text: "伸ばし方の文" },
+    ],
     sign: "兆候",
     action: "対応",
   },
@@ -87,6 +94,7 @@ beforeAll(async () => {
   ({ aiAnalysisId } = await aiAnalysesRepository.saveAiAnalysis({
     resultId: withAi.resultId,
     viewer: { uid: owner.uid, organizationId: org.organizationId, role: "owner" },
+    kind: "recruitment",
     generated: {
       output,
       rawText: JSON.stringify(output),
@@ -108,7 +116,7 @@ beforeEach(() => {
 });
 
 describe("I-35 GET /admin/results/{resultId}", () => {
-  it("results・respondents・最新 aiAnalyses を 1 回ずつ読み、ResultDetailDto の形で返す", async () => {
+  it("results・respondents・採用向けの最新 aiAnalyses を 1 回ずつ読み、ResultDetailDto の形で返す", async () => {
     const res = await getDetail(owner, withAi.resultId);
     expect(res.status).toBe(200);
     const body = (await res.json()) as ResultDetailDto;
@@ -117,14 +125,14 @@ describe("I-35 GET /admin/results/{resultId}", () => {
     expect(vi.mocked(respondentsRepository.getRespondent)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(aiAnalysesRepository.getAiAnalysis)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(aiAnalysesRepository.getAiAnalysis)).toHaveBeenCalledWith(
-      expect.objectContaining({ aiAnalysisId, resultId: withAi.resultId }),
+      expect.objectContaining({ aiAnalysisId, resultId: withAi.resultId, kind: "recruitment" }),
     );
     expect(vi.mocked(resultsRepository.listResults)).not.toHaveBeenCalled();
     expect(vi.mocked(resultsRepository.fetchPopulation)).not.toHaveBeenCalled();
     expect(vi.mocked(respondentsRepository.getRespondentsByIds)).not.toHaveBeenCalled();
 
     expect(Object.keys(body).sort()).toEqual(
-      ["aiAnalysis", "respondent", "resultId", "scores", "scoringVersion", "submittedAt"].sort(),
+      ["ai", "respondent", "resultId", "scores", "scoringVersion", "submittedAt"].sort(),
     );
     expect(body.resultId).toBe(withAi.resultId);
     expect(body.scoringVersion).toBe(SCORING_VERSION);
@@ -155,9 +163,12 @@ describe("I-35 GET /admin/results/{resultId}", () => {
     );
     expect(body.scores.traits).toEqual(stored!.traits);
 
-    expect(body.aiAnalysis.status).toBe("completed");
-    expect(body.aiAnalysis.error).toBeNull();
-    expect(body.aiAnalysis.latest).toMatchObject({
+    expect(Object.keys(body.ai).sort()).toEqual(
+      ["longitudinal", "recruitment", "training", "visibleTabs"].sort(),
+    );
+    expect(body.ai.visibleTabs).toEqual(["recruitment", "training"]);
+    expect(body.ai.recruitment).toMatchObject({ status: "completed", error: null, enabled: true });
+    expect(body.ai.recruitment?.latest).toMatchObject({
       aiAnalysisId,
       provider: "stub",
       model: "stub-model",
@@ -165,7 +176,21 @@ describe("I-35 GET /admin/results/{resultId}", () => {
       reliability: 80,
       output,
     });
-    expect(Object.keys(body.aiAnalysis)).not.toContain("resultId");
+    expect(Object.keys(body.ai.recruitment ?? {})).not.toContain("resultId");
+    expect(body.ai.training).toEqual({
+      status: "not_generated",
+      startedAt: null,
+      error: null,
+      enabled: false,
+      context: null,
+      latest: null,
+    });
+    expect(body.ai.longitudinal).toEqual({
+      status: "not_generated",
+      startedAt: null,
+      error: null,
+      enabled: false,
+    });
   });
 
   it("AI 解説が未生成なら aiAnalyses を読まず latest = null", async () => {
@@ -173,11 +198,24 @@ describe("I-35 GET /admin/results/{resultId}", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as ResultDetailDto;
     expect(vi.mocked(aiAnalysesRepository.getAiAnalysis)).not.toHaveBeenCalled();
-    expect(body.aiAnalysis).toEqual({
-      status: "not_generated",
-      startedAt: null,
-      error: null,
-      latest: null,
+    expect(body.ai).toEqual({
+      visibleTabs: ["recruitment", "training"],
+      recruitment: {
+        status: "not_generated",
+        startedAt: null,
+        error: null,
+        enabled: true,
+        latest: null,
+      },
+      training: {
+        status: "not_generated",
+        startedAt: null,
+        error: null,
+        enabled: false,
+        context: null,
+        latest: null,
+      },
+      longitudinal: { status: "not_generated", startedAt: null, error: null, enabled: false },
     });
   });
 

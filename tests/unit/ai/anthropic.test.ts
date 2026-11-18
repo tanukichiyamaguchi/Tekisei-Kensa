@@ -1,17 +1,15 @@
-// U-16（08 §3.2.2）: lib/ai/providers/anthropic.ts。SDK の fetch をモックする（07 §4.2、§4.6、§5.3）
+// U-16（08 §3.2.2）・M7-ai-18（11-6 §5.1。PR-7.9 は採用向けの分）: lib/ai/providers/anthropic.ts。SDK の fetch をモックする
+// （07 §4.2、§4.6、§5.3、11-6 §2.9・§3.7.3）
 import Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
 
 import { type AiFailureReason, AiProviderError } from "@/lib/ai/errors";
+import { AI_MAX_TOKENS } from "@/lib/ai/kinds";
 import { buildMessages } from "@/lib/ai/prompt-builder";
-import {
-  ANTHROPIC_MAX_TOKENS,
-  createAnthropicProvider,
-  toAiProviderError,
-} from "@/lib/ai/providers/anthropic";
+import { createAnthropicProvider, toAiProviderError } from "@/lib/ai/providers/anthropic";
 import type { GenerateOptions } from "@/lib/ai/types";
 
-import { t06Input, validOutput } from "./helpers";
+import { longitudinalInput, t06Input, t06TrainingInput, validOutput } from "./helpers";
 
 interface Captured {
   url: string;
@@ -94,7 +92,7 @@ describe("U-16 Anthropic provider: 成功", () => {
   it("構造化出力の応答から AiGenerateResult を組み立てる", async () => {
     const { fetch, calls } = mockFetch(() => jsonResponse(200, messageBody()));
     const provider = createAnthropicProvider({ apiKey: "sk-test-dummy", fetch });
-    const result = await provider.generate(t06Input(), options());
+    const result = await provider.generate("recruitment", t06Input(), options());
 
     expect(provider.name).toBe("anthropic");
     expect(result.output).toEqual(validOutput());
@@ -133,6 +131,7 @@ describe("U-16 Anthropic provider: 成功", () => {
       ),
     );
     const result = await createAnthropicProvider({ apiKey: "k", fetch }).generate(
+      "recruitment",
       t06Input(),
       options(),
     );
@@ -141,9 +140,10 @@ describe("U-16 Anthropic provider: 成功", () => {
     expect(result.usage?.cacheCreationInputTokens).toBe(0);
   });
 
-  it("リクエスト: 07 §4.2 のパラメータ。temperature 等を送らず、system に cache_control が付く", async () => {
+  it("リクエスト: 07 §4.2 のパラメータ。max_tokens は採用向けの上限 16000（AI_MAX_TOKENS）。temperature 等を送らず、system に cache_control が付く", async () => {
     const { fetch, calls } = mockFetch(() => jsonResponse(200, messageBody()));
     await createAnthropicProvider({ apiKey: "sk-test-dummy", fetch }).generate(
+      "recruitment",
       t06Input(),
       options(),
     );
@@ -151,10 +151,10 @@ describe("U-16 Anthropic provider: 成功", () => {
     expect(call.url).toMatch(/\/v1\/messages$/);
     expect(call.headers.get("x-api-key")).toBe("sk-test-dummy");
     const body = call.body;
-    const expected = buildMessages(t06Input(), "recruitment-v1");
+    const expected = buildMessages("recruitment", t06Input(), "recruitment-v1");
 
     expect(body.model).toBe("claude-opus-5");
-    expect(body.max_tokens).toBe(ANTHROPIC_MAX_TOKENS);
+    expect(body.max_tokens).toBe(AI_MAX_TOKENS.recruitment);
     expect(body.max_tokens).toBe(16000);
     expect(body.thinking).toEqual({ type: "adaptive", display: "omitted" });
     const outputConfig = body.output_config as { effort: string; format: Record<string, unknown> };
@@ -180,7 +180,13 @@ describe("U-16 Anthropic provider: 成功", () => {
 describe("U-16 Anthropic provider: 応答の検証（07 §3.4）", () => {
   const run = async (overrides: Record<string, unknown>) => {
     const { fetch } = mockFetch(() => jsonResponse(200, messageBody(overrides)));
-    return failure(createAnthropicProvider({ apiKey: "k", fetch }).generate(t06Input(), options()));
+    return failure(
+      createAnthropicProvider({ apiKey: "k", fetch }).generate(
+        "recruitment",
+        t06Input(),
+        options(),
+      ),
+    );
   };
 
   it("stop_reason = refusal → refusal（本文の検証より先に判定）", async () => {
@@ -206,6 +212,55 @@ describe("U-16 Anthropic provider: 応答の検証（07 §3.4）", () => {
   });
 });
 
+describe("M7-ai-18 Anthropic provider: 種類と版（11-6 §3.7.3。育成・定着・経年比較の要求の確かめは PR-7.10・PR-7.11b）", () => {
+  it("種類の違う版・版とスキーマの無い種類は config_error で、API（fetch）を呼ばない", async () => {
+    const { fetch, calls } = mockFetch(() => jsonResponse(200, messageBody()));
+    const provider = createAnthropicProvider({ apiKey: "k", fetch });
+    const training = await failure(
+      provider.generate("training", t06TrainingInput(), {
+        ...options(),
+        promptVersion: "recruitment-v2",
+      }),
+    );
+    expect(training.reason).toBe("config_error");
+    const longitudinal = await failure(
+      provider.generate("longitudinal", longitudinalInput(), options()),
+    );
+    expect(longitudinal.reason).toBe("config_error");
+    const unknown = await failure(
+      provider.generate("recruitment", t06Input(), {
+        ...options(),
+        promptVersion: "recruitment-v9",
+      }),
+    );
+    expect(unknown.reason).toBe("config_error");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("採用向けの版 recruitment-v2 でも同じ要求の形（max_tokens 16000・effort high・思考の表示なし・採用向けのスキーマ）", async () => {
+    const { fetch, calls } = mockFetch(() => jsonResponse(200, messageBody()));
+    const result = await createAnthropicProvider({ apiKey: "k", fetch }).generate(
+      "recruitment",
+      t06Input(),
+      { ...options(), promptVersion: "recruitment-v2" },
+    );
+    expect(result.promptVersion).toBe("recruitment-v2");
+    expect(result.analysisKind).toBe("recruitment");
+    const body = calls[0]!.body;
+    expect(body.max_tokens).toBe(16000);
+    expect(body.thinking).toEqual({ type: "adaptive", display: "omitted" });
+    const outputConfig = body.output_config as { effort: string; format: Record<string, unknown> };
+    expect(outputConfig.effort).toBe("high");
+    expect(
+      Object.keys((outputConfig.format.schema as { properties: object }).properties).sort(),
+    ).toEqual(["cautions", "questions", "retention", "strengths", "summary", "verdict"].sort());
+    const expected = buildMessages("recruitment", t06Input(), "recruitment-v2");
+    expect(body.system).toEqual([
+      { type: "text", text: expected.system, cache_control: { type: "ephemeral" } },
+    ]);
+  });
+});
+
 describe("U-16 Anthropic provider: SDK 例外の分類（07 §4.6 の表）", () => {
   const cases: [number, string, AiFailureReason, boolean][] = [
     [429, "rate_limit_error", "rate_limited", true],
@@ -222,7 +277,11 @@ describe("U-16 Anthropic provider: SDK 例外の分類（07 §4.6 の表）", ()
   it.each(cases)("HTTP %i（%s）→ %s（retryable: %s）", async (status, type, reason, retryable) => {
     const { fetch, calls } = mockFetch(() => jsonResponse(status, errorBody(type)));
     const error = await failure(
-      createAnthropicProvider({ apiKey: "k", fetch }).generate(t06Input(), options()),
+      createAnthropicProvider({ apiKey: "k", fetch }).generate(
+        "recruitment",
+        t06Input(),
+        options(),
+      ),
     );
     expect(error.reason).toBe(reason);
     expect(error.retryable).toBe(retryable);
@@ -235,7 +294,11 @@ describe("U-16 Anthropic provider: SDK 例外の分類（07 §4.6 の表）", ()
     const body = { type: "error", error: { type: "not_found_error", message: "model: claude-x" } };
     const { fetch } = mockFetch(() => jsonResponse(404, body));
     const error = await failure(
-      createAnthropicProvider({ apiKey: "k", fetch }).generate(t06Input(), options()),
+      createAnthropicProvider({ apiKey: "k", fetch }).generate(
+        "recruitment",
+        t06Input(),
+        options(),
+      ),
     );
     expect(error.message).toContain("status=404");
     expect(error.message).toContain("message=model: claude-x");
@@ -246,7 +309,11 @@ describe("U-16 Anthropic provider: SDK 例外の分類（07 §4.6 の表）", ()
       throw new TypeError("fetch failed");
     });
     const error = await failure(
-      createAnthropicProvider({ apiKey: "k", fetch }).generate(t06Input(), options()),
+      createAnthropicProvider({ apiKey: "k", fetch }).generate(
+        "recruitment",
+        t06Input(),
+        options(),
+      ),
     );
     expect(error.reason).toBe("provider_error");
     expect(error.retryable).toBe(true);
@@ -266,6 +333,7 @@ describe("U-16 Anthropic provider: SDK 例外の分類（07 §4.6 の表）", ()
     );
     const error = await failure(
       createAnthropicProvider({ apiKey: "k", fetch }).generate(
+        "recruitment",
         t06Input(),
         options(controller.signal),
       ),
