@@ -1,11 +1,12 @@
 // AI 解説の領域（結果詳細の #ai。11-6）の画面の文言（11-6 §2.15 が正。領域とタブの行の読み上げの名前は §2.1）。JSX に直書きせず、
 // この定数を使う（06 §10.5）。T-09（採用向けの末尾）・T-18・T-29・T-30 群（AI_FAILURE_TEXTS・aiFailureText）は admin-texts.ts から
 // 移した文言で、文は今のまま。T-17 は生成中の文（generating）に置き換わる（§2.3.3）。K-19 で置き換えた文言は、参照元の原文を
-// コメントに残す（11-6 §0.5）。「~」は半角（§2.3.3）、「…」は U+2026 で、「◎」「△」「⚠」「＆」「！」は文字のまま書く（アイコンに
-// しない。§2.14）。育成・定着の表示と 8 項目の文言（trainingView・trainingContext）は PR-7.10、経年比較の文言（longitudinal）は
-// PR-7.11a・PR-7.11b が足す。画面の部品（Client Component）が読む純粋なモジュール。
+// コメントに残す（11-6 §0.5。育成・定着の表示と 8 項目の文言には、置き換えた文言が無い）。「~」は半角（§2.3.3）、「…」は U+2026 で、
+// 「◎」「△」「⚠」「＆」「！」「○」「×」は文字のまま書く（アイコンにしない。§2.14）。育成・定着の 8 項目のラベルと選択肢は
+// lib/masters/training-context.ts にある。経年比較の文言（longitudinal）は PR-7.11a・PR-7.11b が足す。画面の部品（Client
+// Component）が読む純粋なモジュール。
 // 依頼主の確認が要る文言（11-6 7 章の 5。11 総論 7 章の 21）は、確認まで仕様書の案のまま: 準備中の注記（AI_TEXTS.notReady）
-import type { AiStartKind, RecruitmentChipKind } from "./ai-area";
+import type { AiStartKind, RecruitmentChipKind, TrainingChipKind } from "./ai-area";
 import type { AiFailureReason } from "@/lib/ai/errors";
 import type { AiAnalysisKind } from "@/lib/ai/kinds";
 
@@ -115,6 +116,38 @@ export const AI_TEXTS = {
     footer:
       "※ 診断スコア（16特性・ソーシャルスタイル・リスク指標）をもとにAIが自動生成しています。生成結果は責任者が内容をご確認のうえご活用ください。",
     empty: "-", // 値が空の文字のとき（判定チップの値を含む。§2.4.3・§2.4.4）
+  },
+  // 育成・定着の表示（§2.5.5。行末のコメントの括弧の数字は §2.5.5 の表の順）。判定チップの値が空の文字のときの「-」は
+  // recruitmentView.empty を使う（採用向けと同じ。§2.5.5）
+  trainingView: {
+    band: "AI 育成・定着アドバイザー", // 見出し帯（1）
+    tag: "在籍スタッフ向け", // 見出し帯の札（1）
+    // 判定チップのラベル（2。並びは ai-area.ts の TRAINING_CHIP_ORDER）
+    chips: {
+      match: "期待役割へのマッチ度",
+      risk: "離職リスク",
+      support: "サポートの必要度",
+    } satisfies Readonly<Record<TrainingChipKind, string>>,
+    urgent: "1. すぐに手を打つべき理由と、その一手", // 節の見出し（3）
+    hypotheses: "考えられる原因と、その確からしさ", // 原因の枠の見出し（3）
+    possibility: "可能性 ", // 原因の札の前置き（3。札は「可能性 」+ level。ai-area.ts の hypothesisBadge）
+    outOfDiagnosis: "診断外", // 原因の札（3。level が「診断外」のときは前置きを付けない）
+    role: "2. 期待役割に向けて", // 節の見出し（4）
+    have: "◎ 足りている", // 箱の見出し（4。role.have）
+    lack: "△ 欠けている", // 箱の見出し（4。role.lack）
+    steps: "このように進めてください", // ステップの見出し（4。role.steps）
+    daily: "3. 日常の接し方（○と×）", // 節の見出し（5）
+    okMark: "○ ", // すべき行動（ok）の前（5。「○ 」+ ok。記号と本文の全体を太字にする）
+    ngMark: "× ", // 避けるべき行動（ng）の前（5。「× 」+ ng。同上）
+    oneonone: "4. 次回の1on1で聞くこと", // 節の見出し（6。採用向けの「見極め：」の前置きは無い）
+    // 末尾（7）
+    footer:
+      "※ 診断スコア（16特性・ソーシャルスタイル・資質タイプ）と、ご入力いただいた勤務状況をもとにAIが自動生成しています。",
+  },
+  // 育成・定着の 8 項目の入力欄（§2.5.3）。8 項目のラベルと選択肢は lib/masters/training-context.ts を使う（ここには写さない）
+  trainingContext: {
+    heading: "現場の状況を入力（8項目）", // 入力欄の見出し
+    placeholder: "選択してください", // 先頭の選択肢（値は空。未選択の表示）
   },
 } as const;
 

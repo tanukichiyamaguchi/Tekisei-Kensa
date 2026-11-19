@@ -1,5 +1,5 @@
 // I-45〜I-47、I-49 PDF 出力（04 §5.10、§7.2、07 §9）。AI 解説は PR-7.12 まで、全画面の PDF に生成済みの採用向けだけを載せる
-// （印刷用ページのデータの recruitmentAi。11-6 §2.12・§3.7.8 の作り直しは PR-7.12）。
+// （印刷用ページのデータの recruitmentAi。育成・定着が生成済みでも載せない。11-6 §2.12・§3.7.8 の作り直しは PR-7.12）。
 // 結合テストには Next のサーバが無く、Chromium が印刷用ページを開けないため、I-45 は renderResultPdf を差し替えて
 // API の契約（ヘッダー・ファイル名・トークン・監査ログ）を確かめる。実際の PDF のバイト列と日本語は E2E（E-21）で確かめる。
 // PDF_CHROMIUM_EXECUTABLE_PATH は結合テストの環境変数に無い（I-49 の前提）
@@ -284,6 +284,50 @@ describe("I-47 印刷用ページの認可（loadPrintData）", () => {
     expect(vi.mocked(aiAnalysesRepository.getAiAnalysis)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(aiAnalysesRepository.getAiAnalysis)).toHaveBeenCalledWith(
       expect.objectContaining({ resultId: applicant.resultId, kind: "recruitment" }),
+    );
+  });
+
+  it("育成・定着も生成済みの受験でも、full の印刷は採用向けの最新の分析だけを読み（getAiAnalysis は採用向けで 1 回）、育成・定着を載せない（PR-7.12 まで）", async () => {
+    const both = await submitAnswerSet(org, cyclicAnswers(), { name: "テストテスト 印刷育成" });
+    for (const [kind, body] of [
+      ["recruitment", undefined],
+      [
+        "training",
+        {
+          context: {
+            tenure: "year_2",
+            evaluation: "meets",
+            expectedRole: "trainer",
+            recentState: "stable",
+            relationship: "good",
+            wish: "skill_up",
+            changeSinceJoining: "growing",
+            concern: "none",
+          },
+        },
+      ],
+    ] as const) {
+      const res = await callRoute(postAiRoute, {
+        method: "POST",
+        url: `/api/v1/admin/results/${both.resultId}/ai-analysis/${kind}`,
+        params: { resultId: both.resultId, kind },
+        cookieHeader: owner.cookieHeader,
+        ...(body === undefined ? {} : { body }),
+      });
+      expect(res.status, kind).toBe(200);
+    }
+    vi.mocked(aiAnalysesRepository.getAiAnalysis).mockClear();
+
+    const data = await load(both.resultId, validQuery(tokenFor({ resultId: both.resultId })));
+    expect(data?.visibility.showAiAnalysis).toBe(true);
+    expect(data?.recruitmentAi).toMatchObject({ status: "completed" });
+    expect(data?.recruitmentAi?.latest).not.toBeNull();
+    expect(Object.keys(data ?? {}).sort()).toEqual(
+      ["comparison", "detail", "mode", "recruitmentAi", "visibility"].sort(),
+    );
+    expect(vi.mocked(aiAnalysesRepository.getAiAnalysis)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(aiAnalysesRepository.getAiAnalysis)).toHaveBeenCalledWith(
+      expect.objectContaining({ resultId: both.resultId, kind: "recruitment" }),
     );
   });
 

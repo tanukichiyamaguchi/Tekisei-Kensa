@@ -44,4 +44,5 @@ export const RECRUITMENT_V2: PromptDefinition = {
   analysisKind: "recruitment",
   system: applyReplacements(RECRUITMENT_V1_SYSTEM, RECRUITMENT_V2_REPLACEMENTS),
   userTemplate: RECRUITMENT_V1_USER_TEMPLATE,
+  approvedForProduction: true,
 };

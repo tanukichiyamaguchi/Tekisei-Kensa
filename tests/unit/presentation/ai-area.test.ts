@@ -1,23 +1,45 @@
 // AI 解説の領域の表示の規則（11-6 §3.7.10 の lib/presentation/ai-area.ts）。M7-ai-02（initialAiTab。11-6 §2.2。PR-7.9 の形: 出せる
 // タブは責任者の受験で []、ほかは採用向けと育成・定着の 2 つ。責任者の受験で経年比較を選ぶ観点は PR-7.11a で足す）、M7-ai-04（採用向けの
-// recruitmentChipTone。§2.4.4 の表を読んで比べる。育成・定着の trainingChipTone は PR-7.10）、panelParts（§2.3.5 の表。4 つの状態 ×
-// この画面の要求・読み直しの最中か × 読み直しが 10 分を過ぎたか を、採用向けと育成・定着で）
+// recruitmentChipTone は §2.4.4 の表、育成・定着の trainingChipTone は §2.5.5 の表を読んで比べる）、育成・定着の原因の札
+// （hypothesisBadge。§2.5.5 の 3 の文言と、札の色を別表C の C.5 の規則で）、panelParts（§2.3.5 の表。4 つの状態 × この画面の要求・
+// 読み直しの最中か × 読み直しが 10 分を過ぎたか を、採用向けと育成・定着で）、育成・定着の 8 項目の下書きと未選択の確かめ（§2.5.3・
+// §2.5.4。M7-ai-39 の規則の部分。サーバの検証 trainingContextSchema と同じ規則であること）
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
 import type { AiAnalysisKind } from "@/lib/ai/kinds";
-import { AiAnalysisOutputSchema } from "@/lib/ai/schema";
+import { AiAnalysisOutputSchema, HYPOTHESIS_LEVELS, TrainingAiOutputSchema } from "@/lib/ai/schema";
 import { AI_GENERATION_STATUSES, type AiGenerationStatus } from "@/lib/ai/types";
+import { trainingContextSchema } from "@/lib/db/schemas/training-context";
 import {
+  TRAINING_CONTEXT_ITEMS,
+  TRAINING_CONTEXT_KEYS,
+  type TrainingContext,
+  type TrainingContextKey,
+} from "@/lib/masters/training-context";
+import {
+  EMPTY_TRAINING_CONTEXT_DRAFT,
+  hypothesisBadge,
   initialAiTab,
+  isTrainingContextCode,
   panelParts,
   RECRUITMENT_CHIP_ORDER,
   recruitmentChipTone,
+  TRAINING_CHIP_ORDER,
+  trainingChipTone,
+  trainingContextDraftOf,
+  trainingContextFromDraft,
+  TRAINING_CONTEXT_ROWS,
+  unselectedTrainingContextKeys,
   type AiPanelParts,
   type ChipTone,
+  type HypothesisTone,
   type RecruitmentChipKind,
+  type TrainingChipKind,
+  type TrainingChipTone,
+  type TrainingContextDraft,
 } from "@/lib/presentation/ai-area";
 import { AI_TEXTS } from "@/lib/presentation/ai-texts";
 import {
@@ -37,6 +59,10 @@ function between(text: string, start: string, end: string): string {
   if (from < 0 || to < 0) throw new Error(`見つからない: ${start}`);
   return text.slice(from, to);
 }
+
+/** 育成・定着の表示（§2.5.5）と、その CSS（別表C の C.5） */
+const SECTION_2_5_5 = between(SPEC, "#### 2.5.5 ", "### 2.6 ");
+const SECTION_C_5 = between(SPEC, "### C.5 ", "### C.6 ");
 
 /** PR-7.9 の出せるタブ（11-6 §4.4。lib/services/ai-area.ts の visibleTabsOf と同じ。経年比較のタブは PR-7.11a から） */
 const TABS_FOR_OTHERS: readonly AiAnalysisKind[] = ["recruitment", "training"];
@@ -188,6 +214,208 @@ describe("M7-ai-04 recruitmentChipTone（11-6 §2.4.4。採用向けの分）", 
   });
 });
 
+/** §2.5.5 の判定チップの色の表（チップ → 段階ごとの値。mid の列は「それ以外」で、値を書かない） */
+function trainingChipTableOfSpec(): Map<TrainingChipKind, Map<TrainingChipTone, string[]>> {
+  const lines = SECTION_2_5_5.split("\n");
+  const header = lines.find((l) => l.startsWith("| チップ |"));
+  if (header === undefined) throw new Error("§2.5.5 の判定チップの表の見出しが無い");
+  // 見出しは「good #2E9B6F」の形（段階と点の色）
+  const tones = header
+    .split("|")
+    .slice(2, -1)
+    .map((c) => c.trim().split(" ")[0]) as TrainingChipTone[];
+  expect(tones).toEqual(["good", "warn", "mid"]);
+  const kindOfLabel = new Map(
+    TRAINING_CHIP_ORDER.map((kind) => [AI_TEXTS.trainingView.chips[kind], kind]),
+  );
+  const table = new Map<TrainingChipKind, Map<TrainingChipTone, string[]>>();
+  for (const line of lines) {
+    const cells = line
+      .split("|")
+      .slice(1, -1)
+      .map((c) => c.trim());
+    // 1 列目は「期待役割へのマッチ度（`clsMatch`）」の形（ラベルと参照元の関数の名前）
+    const kind = kindOfLabel.get((cells[0] ?? "").replace(/（`\w+`）$/, ""));
+    if (kind === undefined) continue;
+    const row = new Map<TrainingChipTone, string[]>();
+    tones.forEach((tone, i) => {
+      const cell = cells[i + 1]!;
+      if (tone === "mid") {
+        if (cell !== "それ以外") throw new Error(`mid の列の形が違う: ${cell}`);
+        row.set(tone, []); // good・warn の列に無い値
+      } else {
+        row.set(tone, cell.split("・"));
+      }
+    });
+    table.set(kind, row);
+  }
+  return table;
+}
+
+describe("M7-ai-04 trainingChipTone（11-6 §2.5.5。育成・定着の分）", () => {
+  /** 出力のスキーマの判定の 5 段階（§2.8.2 の LEVEL5。3 つのチップで同じ） */
+  const verdict = TrainingAiOutputSchema.shape.verdict.shape;
+
+  it("チップの順は §2.5.5 の 2 の期待役割へのマッチ度 → 離職リスク → サポートの必要度（verdict のキー）", () => {
+    expect(TRAINING_CHIP_ORDER).toEqual(["match", "risk", "support"]);
+    expect(Object.isFrozen(TRAINING_CHIP_ORDER)).toBe(true);
+    expect(Object.keys(verdict)).toEqual([...TRAINING_CHIP_ORDER]);
+  });
+
+  it("§2.5.5 の表のすべての値（表を仕様書から読む。good・warn の列の値と、それ以外の列に当たるスキーマの値「中」は mid）", () => {
+    const table = trainingChipTableOfSpec();
+    expect([...table.keys()]).toEqual([...TRAINING_CHIP_ORDER]);
+    for (const [kind, row] of table) {
+      const listed = [...row.values()].flat();
+      expect(listed, kind).toHaveLength(4);
+      for (const [tone, values] of row) {
+        for (const value of values) {
+          expect(trainingChipTone(kind, value), `${kind} ${value}`).toBe(tone);
+        }
+      }
+      const others = verdict[kind].options.filter((value) => !listed.includes(value));
+      expect(others, kind).toEqual(["中"]);
+      for (const value of others) {
+        expect(trainingChipTone(kind, value), `${kind} ${value}`).toBe("mid");
+      }
+    }
+  });
+
+  it("3 つのチップ × 5 段: マッチ度は高いほど good、離職リスクとサポートの必要度は低いほど good（bad は使わない）", () => {
+    const expected: Readonly<Record<TrainingChipKind, Readonly<Record<string, TrainingChipTone>>>> =
+      {
+        match: { 非常に高い: "good", 高い: "good", 中: "mid", 低い: "warn", 非常に低い: "warn" },
+        risk: { 非常に高い: "warn", 高い: "warn", 中: "mid", 低い: "good", 非常に低い: "good" },
+        support: { 非常に高い: "warn", 高い: "warn", 中: "mid", 低い: "good", 非常に低い: "good" },
+      };
+    for (const kind of TRAINING_CHIP_ORDER) {
+      expect(Object.keys(expected[kind]).sort(), kind).toEqual([...verdict[kind].options].sort());
+      for (const [value, tone] of Object.entries(expected[kind])) {
+        expect(trainingChipTone(kind, value), `${kind} ${value}`).toBe(tone);
+      }
+    }
+  });
+
+  it("「やや高い」は育成・定着の表に無いので mid（採用向けの離職リスクの warn は今のまま）", () => {
+    for (const kind of TRAINING_CHIP_ORDER) {
+      expect(trainingChipTone(kind, "やや高い"), kind).toBe("mid");
+    }
+    expect(recruitmentChipTone("teichaku_risk", "やや高い")).toBe("warn");
+  });
+
+  it("値の空白（半角・全角・改行）を除いてから比べる", () => {
+    expect(trainingChipTone("match", "高 い")).toBe("good");
+    expect(trainingChipTone("risk", " 高い\n")).toBe("warn");
+    expect(trainingChipTone("support", "非常に　低い")).toBe("good");
+    expect(trainingChipTone("match", "低\r\nい")).toBe("warn");
+    expect(trainingChipTone("support", "\t非常に高い ")).toBe("warn");
+    expect(trainingChipTone("risk", "　中　")).toBe("mid");
+  });
+
+  it("空（表示は「-」）と表に無い値は mid（採用向けの総合判定の値・オブジェクトの持ち物の名前を含む）", () => {
+    for (const kind of TRAINING_CHIP_ORDER) {
+      for (const value of [
+        "",
+        " ",
+        "　\n",
+        "-",
+        "推奨",
+        "要検討",
+        "非推奨",
+        "toString",
+        "constructor",
+        "__proto__",
+      ]) {
+        expect(trainingChipTone(kind, value), `${kind} ${JSON.stringify(value)}`).toBe("mid");
+      }
+    }
+  });
+
+  it("段階は別表C の C.5 にある色のクラス（good・warn・mid。bad の規則は無い）で、各段階の点の色は §2.5.5 の表の見出しの色", () => {
+    const header = SECTION_2_5_5.split("\n").find((l) => l.startsWith("| チップ |"))!;
+    const dotOfTone = new Map(
+      header
+        .split("|")
+        .slice(2, -1)
+        .map((c) => c.trim().split(" ") as [string, string]),
+    );
+    // C.5 の根の変数（.mid .dot の地は var(--ai-1)）
+    const variables = new Map(
+      [...SECTION_C_5.matchAll(/--([\w-]+):(#[0-9A-Fa-f]{6})/g)].map((m) => [
+        `var(--${m[1]})`,
+        m[2]!,
+      ]),
+    );
+    for (const tone of ["good", "warn", "mid"] as const) {
+      const dot = new RegExp(`#ai \\.ai-ik \\.${tone} \\.dot\\{background:([^;}]+)\\}`).exec(
+        SECTION_C_5,
+      )?.[1];
+      expect(dot, tone).toBeDefined();
+      expect(variables.get(dot!) ?? dot, tone).toBe(dotOfTone.get(tone));
+      expect(SECTION_C_5, tone).toContain(`#ai .ai-ik .${tone} .v{color:`);
+    }
+    expect(SECTION_C_5).not.toMatch(/\.bad\b/);
+  });
+});
+
+describe("hypothesisBadge（11-6 §2.5.5 の 3。育成・定着の原因の札）", () => {
+  /** §2.5.5 の表の 3 の行（1. すぐに手を打つべき理由と、その一手） */
+  const row3 = SECTION_2_5_5.split("\n").find((l) => l.startsWith("| 3 | "))!;
+
+  /** C.5 の .hk の段階の規則の地と文字の色 */
+  function badgeColorsOf(tone: HypothesisTone): [string, string] | null {
+    const rule = new RegExp(
+      `#ai \\.ai-ik \\.hk\\.${tone}\\{background:(#\\w{6});color:(#\\w{6})\\}`,
+    ).exec(SECTION_C_5);
+    return rule === null ? null : [rule[1]!, rule[2]!];
+  }
+
+  it("文言は level が「診断外」なら「診断外」、それ以外は「可能性 」+ level（§2.5.5 の例「可能性 高」）", () => {
+    const example = /（例「([^「」]+)」）/.exec(row3)?.[1];
+    expect(example).toBe("可能性 高");
+    expect(hypothesisBadge("高").text).toBe(example);
+    expect(hypothesisBadge("中").text).toBe("可能性 中");
+    expect(hypothesisBadge("診断外").text).toBe("診断外");
+  });
+
+  it("色は「高」が hi、「中」が mi、それ以外が lo で、各段階の C.5 の .hk の地と文字は §2.5.5 の札の色", () => {
+    const colors =
+      /札の色: 「(.)」= 地 (#\w{6})・文字 (#\w{6})、「(.)」= 地 (#\w{6})・文字 (#\w{6})、それ以外 = 地 (#\w{6})・文字 (#\w{6})/.exec(
+        row3,
+      );
+    expect(colors).not.toBeNull();
+    const [, highLevel, highBg, highFg, midLevel, midBg, midFg, otherBg, otherFg] = colors!;
+    expect([highLevel, midLevel]).toEqual(["高", "中"]);
+    expect(badgeColorsOf(hypothesisBadge(highLevel!).tone)).toEqual([highBg, highFg]);
+    expect(badgeColorsOf(hypothesisBadge(midLevel!).tone)).toEqual([midBg, midFg]);
+    for (const level of ["診断外", "低", "高い", ""]) {
+      expect(badgeColorsOf(hypothesisBadge(level).tone), level).toEqual([otherBg, otherFg]);
+    }
+    // 出力のスキーマの 3 つの値（§2.8.2 の HYPOTHESIS_LEVELS）
+    expect(HYPOTHESIS_LEVELS.map((level) => hypothesisBadge(level).tone)).toEqual([
+      "hi",
+      "mi",
+      "lo",
+    ]);
+  });
+
+  it("出力のスキーマに無い値は「可能性 」+ level で lo（オブジェクトの持ち物の名前を含む。level の空白は除かない）", () => {
+    expect(hypothesisBadge("低")).toEqual({ text: "可能性 低", tone: "lo" });
+    expect(hypothesisBadge("")).toEqual({ text: "可能性 ", tone: "lo" });
+    for (const level of ["toString", "constructor", "__proto__", "hasOwnProperty"]) {
+      expect(hypothesisBadge(level), level).toEqual({ text: `可能性 ${level}`, tone: "lo" });
+    }
+    expect(hypothesisBadge("高 ")).toEqual({ text: "可能性 高 ", tone: "lo" });
+    expect(hypothesisBadge(" 診断外")).toEqual({ text: "可能性  診断外", tone: "lo" });
+  });
+
+  it("返す値は凍結", () => {
+    for (const level of [...HYPOTHESIS_LEVELS, "低"]) {
+      expect(Object.isFrozen(hypothesisBadge(level)), level).toBe(true);
+    }
+  });
+});
+
 type PartsRow = readonly [
   status: AiGenerationStatus,
   busy: boolean,
@@ -293,5 +521,163 @@ describe("panelParts（11-6 §2.3.5 の状態と表示の対応）", () => {
         expect(Object.isFrozen(parts)).toBe(true);
       }
     }
+  });
+});
+
+describe("育成・定着の 8 項目の入力欄の並びと選択肢（11-6 §2.5.3 の表。TRAINING_CONTEXT_ROWS）", () => {
+  it("2 行 × 4 列で、各項目のラベル・コード・選択肢（先頭は値が空の「選択してください」、続けて表の上からの表示名）は §2.5.3 の表のとおり", () => {
+    const section = between(SPEC, "#### 2.5.3 ", "#### 2.5.4 ");
+    const rows = [...section.matchAll(/^\| (\d) \| (\d) \| ([^|]+) \| `(\w+)` \| (.+) \|$/gm)];
+    expect(rows).toHaveLength(8);
+    expect(TRAINING_CONTEXT_ROWS.map((row) => row.length)).toEqual([4, 4]);
+    for (const [, row, column, label, key, cell] of rows) {
+      const field = TRAINING_CONTEXT_ROWS[Number(row) - 1]![Number(column) - 1]!;
+      expect(field.key, `${row}-${column}`).toBe(key);
+      expect(field.label, key).toBe(label);
+      expect(field.choices, key).toEqual([
+        { value: "", label: AI_TEXTS.trainingContext.placeholder },
+        ...[...cell!.matchAll(/`(\w+)`「([^「」]+)」/g)].map((m) => ({ value: m[1], label: m[2] })),
+      ]);
+    }
+    expect(TRAINING_CONTEXT_ROWS.flat().map((field) => field.key)).toEqual([
+      ...TRAINING_CONTEXT_KEYS,
+    ]);
+  });
+
+  it("選択肢の値は、先頭の空の文字（未選択）のほかはその項目の選択肢のコード。凍結", () => {
+    for (const field of TRAINING_CONTEXT_ROWS.flat()) {
+      const [first, ...rest] = field.choices;
+      expect(first, field.key).toEqual({ value: "", label: "選択してください" });
+      expect(isTrainingContextCode(field.key, first!.value), field.key).toBe(false);
+      for (const choice of rest) {
+        expect(isTrainingContextCode(field.key, choice.value), choice.value).toBe(true);
+      }
+      expect(Object.isFrozen(field) && Object.isFrozen(field.choices), field.key).toBe(true);
+    }
+    expect(TRAINING_CONTEXT_ROWS.every((row) => Object.isFrozen(row))).toBe(true);
+    expect(Object.isFrozen(TRAINING_CONTEXT_ROWS)).toBe(true);
+  });
+});
+
+/** 11-6 §3.4 の要求の例の 8 項目（POST …/ai-analysis/training の本文の context。仕様書から読む） */
+function contextExampleOfSpec(): TrainingContext {
+  const row = between(SPEC, "### 3.4 ", "### 3.5 ")
+    .split("\n")
+    .find((l) => l.startsWith("| 要求（POST） |"));
+  const json = row === undefined ? undefined : /`training`: `([^`]+)`/.exec(row)?.[1];
+  if (json === undefined) throw new Error("§3.4 の育成・定着の要求の例が無い");
+  return (JSON.parse(json) as { readonly context: TrainingContext }).context;
+}
+
+/** 1 つの欄の値を変えた下書き（選択欄で選んだときと同じく、もとの下書きは変えない） */
+function withValue(
+  draft: TrainingContextDraft,
+  key: TrainingContextKey,
+  code: string,
+): TrainingContextDraft {
+  return { ...draft, [key]: code };
+}
+
+describe("育成・定着の 8 項目の下書きと未選択の確かめ（11-6 §2.5.3・§2.5.4。M7-ai-39 の規則の部分）", () => {
+  const EXAMPLE = contextExampleOfSpec();
+  const FILLED: TrainingContextDraft = { ...EMPTY_TRAINING_CONTEXT_DRAFT, ...EXAMPLE };
+
+  it("§3.4 の要求の例は 8 項目のすべてで、サーバの検証（trainingContextSchema）を通る", () => {
+    expect(Object.keys(EXAMPLE)).toEqual([...TRAINING_CONTEXT_KEYS]);
+    expect(trainingContextSchema.parse(EXAMPLE)).toEqual(EXAMPLE);
+  });
+
+  it("空の下書きは 8 項目とも未選択（値は空の文字。キーは画面の並び）で、凍結。生成の本文は作らない", () => {
+    expect(Object.keys(EMPTY_TRAINING_CONTEXT_DRAFT)).toEqual([...TRAINING_CONTEXT_KEYS]);
+    expect(Object.values(EMPTY_TRAINING_CONTEXT_DRAFT)).toEqual(
+      TRAINING_CONTEXT_KEYS.map(() => ""),
+    );
+    expect(Object.isFrozen(EMPTY_TRAINING_CONTEXT_DRAFT)).toBe(true);
+    expect(unselectedTrainingContextKeys(EMPTY_TRAINING_CONTEXT_DRAFT)).toEqual([
+      ...TRAINING_CONTEXT_KEYS,
+    ]);
+    expect(trainingContextFromDraft(EMPTY_TRAINING_CONTEXT_DRAFT)).toBeNull();
+  });
+
+  it("3 つだけ選ぶと、未選択の 5 つを画面の並び（1 行目 → 2 行目）で返し、生成の本文は作らない。1 つ選び直すとその欄が外れる", () => {
+    let draft = EMPTY_TRAINING_CONTEXT_DRAFT;
+    draft = withValue(draft, "concern", EXAMPLE.concern);
+    draft = withValue(draft, "tenure", EXAMPLE.tenure);
+    draft = withValue(draft, "recentState", EXAMPLE.recentState);
+    // 先頭（evaluation）が、押したときに焦点を移す欄（§2.5.4 の 1。焦点を移すのは部品）
+    expect(unselectedTrainingContextKeys(draft)).toEqual([
+      "evaluation",
+      "expectedRole",
+      "relationship",
+      "wish",
+      "changeSinceJoining",
+    ]);
+    expect(trainingContextFromDraft(draft)).toBeNull();
+    expect(
+      unselectedTrainingContextKeys(withValue(draft, "relationship", EXAMPLE.relationship)),
+    ).toEqual(["evaluation", "expectedRole", "wish", "changeSinceJoining"]);
+    // 選んだ欄を「選択してください」（値は空）に戻すと、また未選択になる
+    expect(unselectedTrainingContextKeys(withValue(draft, "tenure", ""))[0]).toBe("tenure");
+    // もとの下書きは変わらない
+    expect(EMPTY_TRAINING_CONTEXT_DRAFT.concern).toBe("");
+  });
+
+  it("8 つそろえば、生成の要求の本文の context を 8 つのキーだけで返し（下書きの余分な持ち物は入れない）、サーバの検証を通る", () => {
+    expect(unselectedTrainingContextKeys(FILLED)).toEqual([]);
+    const context = trainingContextFromDraft(FILLED);
+    expect(context).toEqual(EXAMPLE);
+    expect(Object.keys(context!)).toEqual([...TRAINING_CONTEXT_KEYS]);
+    expect(trainingContextSchema.parse(context)).toEqual(EXAMPLE);
+    // サーバは context の中の余分なキーを 422 で拒むので、本文には 8 つのキーだけを入れる
+    const extra = { ...FILLED, note: "x" } as TrainingContextDraft;
+    expect(Object.keys(trainingContextFromDraft(extra)!)).toEqual([...TRAINING_CONTEXT_KEYS]);
+    expect(trainingContextSchema.safeParse(trainingContextFromDraft(extra)).success).toBe(true);
+  });
+
+  it("その項目の選択肢に無いコード（ほかの項目のコード・空白の付いたコード・オブジェクトの持ち物の名前）は未選択として扱う", () => {
+    for (const [key, code] of [
+      ["tenure", "year_7"],
+      ["evaluation", "good"], // 他スタッフとの関係のコード
+      ["wish", "growing"], // 現在の評価・入職時と比べた変化のコード
+      ["concern", " few_reports"],
+      ["expectedRole", "toString"],
+      ["relationship", "__proto__"],
+    ] as const) {
+      const draft = withValue(FILLED, key, code);
+      expect(unselectedTrainingContextKeys(draft), `${key}=${code}`).toEqual([key]);
+      expect(trainingContextFromDraft(draft), `${key}=${code}`).toBeNull();
+    }
+  });
+
+  it("isTrainingContextCode はサーバの検証（trainingContextSchema の各項目の列挙）と同じ規則（8 項目 × どの項目のコードと空）", () => {
+    const allCodes = new Set(
+      TRAINING_CONTEXT_KEYS.flatMap((key) =>
+        TRAINING_CONTEXT_ITEMS[key].options.map((o) => o.code),
+      ),
+    );
+    for (const key of TRAINING_CONTEXT_KEYS) {
+      for (const option of TRAINING_CONTEXT_ITEMS[key].options) {
+        expect(isTrainingContextCode(key, option.code), `${key}=${option.code}`).toBe(true);
+      }
+      for (const code of [...allCodes, "", "toString", "constructor"]) {
+        expect(isTrainingContextCode(key, code), `${key}=${code}`).toBe(
+          trainingContextSchema.shape[key].safeParse(code).success,
+        );
+      }
+    }
+  });
+
+  it("保存した 8 項目から下書きを作る（null は空の下書き、選択肢に無いコードの項目は未選択）。入力は変えない", () => {
+    expect(trainingContextDraftOf(null)).toEqual(EMPTY_TRAINING_CONTEXT_DRAFT);
+    const saved = Object.freeze({ ...EXAMPLE });
+    const draft = trainingContextDraftOf(saved);
+    expect(draft).toEqual(EXAMPLE);
+    expect(draft).not.toBe(saved);
+    expect(Object.isFrozen(draft)).toBe(true);
+    expect(trainingContextFromDraft(draft)).toEqual(EXAMPLE);
+    const broken = trainingContextDraftOf({ ...EXAMPLE, wish: "unknown_code" });
+    expect(broken).toEqual({ ...EXAMPLE, wish: "" });
+    expect(unselectedTrainingContextKeys(broken)).toEqual(["wish"]);
+    expect(saved).toEqual(EXAMPLE);
   });
 });

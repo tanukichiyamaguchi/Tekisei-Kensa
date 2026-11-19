@@ -1,5 +1,5 @@
-// U-16（08 §3.2.2）・M7-ai-18（11-6 §5.1。PR-7.9 は採用向けの分）: lib/ai/providers/anthropic.ts。SDK の fetch をモックする
-// （07 §4.2、§4.6、§5.3、11-6 §2.9・§3.7.3）
+// U-16（08 §3.2.2）・M7-ai-18（11-6 §5.1。採用向けと育成・定着の分。経年比較は PR-7.11b）: lib/ai/providers/anthropic.ts。
+// SDK の fetch をモックする（07 §4.2、§4.6、§5.3、11-6 §2.9・§3.7.3）
 import Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
 
@@ -9,7 +9,13 @@ import { buildMessages } from "@/lib/ai/prompt-builder";
 import { createAnthropicProvider, toAiProviderError } from "@/lib/ai/providers/anthropic";
 import type { GenerateOptions } from "@/lib/ai/types";
 
-import { longitudinalInput, t06Input, t06TrainingInput, validOutput } from "./helpers";
+import {
+  longitudinalInput,
+  t06Input,
+  t06TrainingInput,
+  validOutput,
+  validTrainingOutput,
+} from "./helpers";
 
 interface Captured {
   url: string;
@@ -212,8 +218,8 @@ describe("U-16 Anthropic provider: 応答の検証（07 §3.4）", () => {
   });
 });
 
-describe("M7-ai-18 Anthropic provider: 種類と版（11-6 §3.7.3。育成・定着・経年比較の要求の確かめは PR-7.10・PR-7.11b）", () => {
-  it("種類の違う版・版とスキーマの無い種類は config_error で、API（fetch）を呼ばない", async () => {
+describe("M7-ai-18 Anthropic provider: 種類と版（11-6 §3.7.3。経年比較の要求の確かめは PR-7.11b）", () => {
+  it("種類の違う版（training に recruitment-v2、recruitment に training-v1）・版とスキーマの無い種類は config_error で、API（fetch）を呼ばない", async () => {
     const { fetch, calls } = mockFetch(() => jsonResponse(200, messageBody()));
     const provider = createAnthropicProvider({ apiKey: "k", fetch });
     const training = await failure(
@@ -223,6 +229,10 @@ describe("M7-ai-18 Anthropic provider: 種類と版（11-6 §3.7.3。育成・�
       }),
     );
     expect(training.reason).toBe("config_error");
+    const recruitment = await failure(
+      provider.generate("recruitment", t06Input(), { ...options(), promptVersion: "training-v1" }),
+    );
+    expect(recruitment.reason).toBe("config_error");
     const longitudinal = await failure(
       provider.generate("longitudinal", longitudinalInput(), options()),
     );
@@ -357,5 +367,96 @@ describe("U-16 Anthropic provider: SDK 例外の分類（07 §4.6 の表）", ()
     const other = toAiProviderError(new Error("山田 太郎"));
     expect(other.reason).toBe("provider_error");
     expect(other.message).not.toContain("山田");
+  });
+});
+
+describe("M7-ai-18 Anthropic provider: 育成・定着（11-6 §2.9・§3.7.3）", () => {
+  const trainingOptions = (): GenerateOptions => ({ ...options(), promptVersion: "training-v1" });
+  const trainingBody = (overrides: Record<string, unknown> = {}) =>
+    messageBody({
+      content: [
+        { type: "thinking", thinking: "", signature: "sig" },
+        { type: "text", text: JSON.stringify(validTrainingOutput()) },
+      ],
+      ...overrides,
+    });
+
+  it("要求: max_tokens 16000・effort high・思考は適応で表示なし・育成・定着のスキーマの format・system の cache_control・user に 8 項目の表示名", async () => {
+    const { fetch, calls } = mockFetch(() => jsonResponse(200, trainingBody()));
+    await createAnthropicProvider({ apiKey: "k", fetch }).generate(
+      "training",
+      t06TrainingInput(),
+      trainingOptions(),
+    );
+    expect(calls).toHaveLength(1);
+    const body = calls[0]!.body;
+    expect(body.max_tokens).toBe(AI_MAX_TOKENS.training);
+    expect(body.max_tokens).toBe(16000);
+    expect(body.thinking).toEqual({ type: "adaptive", display: "omitted" });
+    const outputConfig = body.output_config as { effort: string; format: Record<string, unknown> };
+    expect(outputConfig.effort).toBe("high");
+    expect(outputConfig.format.type).toBe("json_schema");
+    const schema = outputConfig.format.schema as Record<string, unknown>;
+    expect(schema.type).toBe("object");
+    expect(schema.additionalProperties).toBe(false);
+    expect(Object.keys(schema.properties as object).sort()).toEqual(
+      ["daily", "oneonone", "role", "urgent", "verdict"].sort(),
+    );
+    const expected = buildMessages("training", t06TrainingInput(), "training-v1");
+    expect(body.system).toEqual([
+      { type: "text", text: expected.system, cache_control: { type: "ephemeral" } },
+    ]);
+    expect(body.messages).toEqual([{ role: "user", content: expected.user }]);
+    const user = (body.messages as { content: string }[])[0]!.content;
+    expect(user).toContain("【責任者・幹部の入力】\n勤続年数:2年目\n現在の評価:期待どおり\n");
+    expect(user).toContain("気になっていること:報告が少ない\n");
+    for (const key of ["temperature", "top_p", "top_k", "tools", "tool_choice", "stream"]) {
+      expect(body).not.toHaveProperty(key);
+    }
+  });
+
+  it("応答から AiGenerateResult<'training'> を組み立てる", async () => {
+    const { fetch } = mockFetch(() => jsonResponse(200, trainingBody()));
+    const result = await createAnthropicProvider({ apiKey: "k", fetch }).generate(
+      "training",
+      t06TrainingInput(),
+      trainingOptions(),
+    );
+    expect(result.output).toEqual(validTrainingOutput());
+    expect(result.rawText).toBe(JSON.stringify(validTrainingOutput()));
+    expect(result.promptVersion).toBe("training-v1");
+    expect(result.analysisKind).toBe("training");
+    expect(result.usage?.outputTokens).toBe(2345);
+    expect(result.requestId).toBe("req_test_123");
+  });
+
+  it("確かめの順: refusal → refusal、stop_reason max_tokens → truncated、形の違う出力 → invalid_json", async () => {
+    const run = async (overrides: Record<string, unknown>) => {
+      const { fetch } = mockFetch(() => jsonResponse(200, trainingBody(overrides)));
+      return failure(
+        createAnthropicProvider({ apiKey: "k", fetch }).generate(
+          "training",
+          t06TrainingInput(),
+          trainingOptions(),
+        ),
+      );
+    };
+    expect(
+      (await run({ stop_reason: "refusal", content: [{ type: "text", text: "" }] })).reason,
+    ).toBe("refusal");
+    const cut = JSON.stringify(validTrainingOutput()).slice(0, 40);
+    expect(
+      (await run({ stop_reason: "max_tokens", content: [{ type: "text", text: cut }] })).reason,
+    ).toBe("truncated");
+    // 採用向けの形の出力、数の上限を超える出力
+    const recruitmentShape = await run({
+      content: [{ type: "text", text: JSON.stringify(validOutput()) }],
+    });
+    expect(recruitmentShape.reason).toBe("invalid_json");
+    expect(recruitmentShape.message).not.toContain("山田");
+    const tooMany = { ...validTrainingOutput(), oneonone: Array(6).fill({ q: "q", intent: "i" }) };
+    expect((await run({ content: [{ type: "text", text: JSON.stringify(tooMany) }] })).reason).toBe(
+      "invalid_json",
+    );
   });
 });

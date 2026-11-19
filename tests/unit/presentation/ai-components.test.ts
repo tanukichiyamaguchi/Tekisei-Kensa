@@ -1,13 +1,17 @@
-// 11-6 §2.1〜§2.4・§2.11・§2.14・別表D（M7-ai-38 の描画の分と K-31 ⑤）。AI 解説の部品のうち、通知（Toast）と画面の状態の Context が要らない
-// 部品（アイコン・タブの行・生成前の案内・生成ボタン・生成中・失敗の枠・判定チップ・採用向けの表示）を renderToStaticMarkup で静的な HTML に
-// 描いて確かめる（DOM のライブラリは足さない。chart-components.test.ts と同じ作り）。アイコンの形は 11-6 の別表D の表を読んで比べる。
-// パネル・領域（AiArea。生成・読み直し・焦点・画面の状態）は E2E（M7-ai-38・42 と D の段の a11y）で確かめる。見本の出力は架空の文
+// 11-6 §2.1〜§2.5・§2.11・§2.14・別表D（M7-ai-38・39 の描画の分と K-31 ⑤）。AI 解説の部品のうち、画面の状態の Context が要らない部品
+// （アイコン・タブの行・生成前の案内・生成ボタン・生成中・失敗の枠・判定チップ・採用向けの表示・育成・定着の 8 項目の入力欄と表示）を
+// renderToStaticMarkup で静的な HTML に描いて確かめる（DOM のライブラリは足さない。chart-components.test.ts と同じ作り）。アイコンの形は
+// 11-6 の別表D の表を読んで比べる。育成・定着のパネル（TrainingPanel）は通知（ToastProvider）で包み、状態ごとに出す部品と並び（§2.3.5 の
+// 表）を描いて確かめる。押したときの動き（未選択の確かめ・生成・読み直し・焦点）と領域（AiArea。画面の状態）は E2E（M7-ai-38・39・42 と
+// D の段の a11y）で確かめる。見本の出力は架空の文
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { createElement, type ComponentType } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+
+import { validTrainingOutput } from "../ai/helpers";
 
 import { AiFailureNotice } from "@/components/admin/result/ai/AiFailureNotice";
 import { AiGenerateButton } from "@/components/admin/result/ai/AiGenerateButton";
@@ -25,10 +29,26 @@ import {
 import { AiIntro } from "@/components/admin/result/ai/AiIntro";
 import { AiTabs } from "@/components/admin/result/ai/AiTabs";
 import { RecruitmentView } from "@/components/admin/result/ai/RecruitmentView";
+import { TrainingContextForm } from "@/components/admin/result/ai/TrainingContextForm";
+import { TrainingPanel } from "@/components/admin/result/ai/TrainingPanel";
+import { TrainingView } from "@/components/admin/result/ai/TrainingView";
 import { VerdictChips } from "@/components/admin/result/ai/VerdictChips";
+import { ToastProvider } from "@/components/ui/Toast";
 import type { AiAnalysisKind } from "@/lib/ai/kinds";
-import type { AiAnalysisOutput } from "@/lib/ai/types";
+import type { AiAnalysisOutput, TrainingAiOutput } from "@/lib/ai/types";
+import {
+  TRAINING_CONTEXT_ITEMS,
+  TRAINING_CONTEXT_KEYS,
+  type TrainingContext,
+  type TrainingContextKey,
+} from "@/lib/masters/training-context";
+import {
+  EMPTY_TRAINING_CONTEXT_DRAFT,
+  type TrainingContextDraft,
+  type TrainingContextMode,
+} from "@/lib/presentation/ai-area";
 import { AI_TEXTS, aiFailureText } from "@/lib/presentation/ai-texts";
+import type { TrainingAiDto } from "@/lib/services/dto/ai";
 
 const SPEC = readFileSync(
   fileURLToPath(new URL("../../../docs/基本設計/11_参照元の更新/11-6_AI解説.md", import.meta.url)),
@@ -71,8 +91,8 @@ const textOf = (fragment: string): string =>
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&amp;/g, "&");
-/** 子の要素の開きタグの class を上から（直下だけ） */
-function childClasses(element: string): string[] {
+/** 子の要素を上から（直下だけ） */
+function childElements(element: string): string[] {
   const inner = element.slice(element.indexOf(">") + 1, element.lastIndexOf("<"));
   const out: string[] = [];
   let pos = 0;
@@ -80,11 +100,16 @@ function childClasses(element: string): string[] {
     const lt = inner.indexOf("<", pos);
     if (lt < 0) break;
     const child = elementOf(inner, inner.slice(lt, inner.indexOf(">", lt) + 1), lt);
-    out.push(attr(openTag(child), "class") ?? `<${/^<([a-z0-9]+)/i.exec(child)?.[1] ?? ""}>`);
+    out.push(child);
     pos = lt + child.length;
   }
   return out;
 }
+/** 要素の名前 */
+const tagName = (element: string): string => /^<([a-z0-9]+)/i.exec(element)?.[1] ?? "";
+/** 子の要素の開きタグの class を上から（直下だけ。class の無い要素は <要素の名前>） */
+const childClasses = (element: string): string[] =>
+  childElements(element).map((child) => attr(openTag(child), "class") ?? `<${tagName(child)}>`);
 
 const render = <P extends object>(component: ComponentType<P>, props: P): string =>
   renderToStaticMarkup(createElement(component, props));
@@ -151,7 +176,12 @@ describe("（ID なし）アイコン（11-6 §2.14・別表D。K-05）", () => 
     expect(ICON_ROWS.map((row) => row.name)).toEqual(Object.keys(ICONS));
   });
 
-  it("どれも viewBox 0 0 24 24・幅と高さ 1em・aria-hidden・クラス ai-ico（稲妻と芽は ai-ico--zap・ai-ico--sprout も）。線は currentColor の線（端と角は丸）、塗りは currentColor の塗り。path の d と線の幅は別表D のまま。style の属性は無い", () => {
+  it("どれも viewBox 0 0 24 24・幅と高さ 1em・aria-hidden・クラス ai-ico（稲妻と芽は ai-ico--zap・ai-ico--sprout も、山形は svg 自身に ai-chev も）。線は currentColor の線（端と角は丸）、塗りは currentColor の塗り。path の d と線の幅は別表D のまま。style の属性は無い", () => {
+    const extraClass: Readonly<Record<string, string>> = {
+      ZapIcon: "ai-ico--zap",
+      SproutIcon: "ai-ico--sprout",
+      ChevronDownIcon: "ai-chev",
+    };
     for (const row of ICON_ROWS) {
       const html = renderPlain(ICONS[row.name]!);
       const svg = tagsOf(html, "svg")[0]!;
@@ -159,12 +189,8 @@ describe("（ID なし）アイコン（11-6 §2.14・別表D。K-05）", () => 
       expect(attr(svg, "width"), row.name).toBe("1em");
       expect(attr(svg, "height"), row.name).toBe("1em");
       expect(attr(svg, "aria-hidden"), row.name).toBe("true");
-      const className =
-        row.name === "ZapIcon"
-          ? "ai-ico ai-ico--zap"
-          : row.name === "SproutIcon"
-            ? "ai-ico ai-ico--sprout"
-            : "ai-ico";
+      const extra = extraClass[row.name];
+      const className = extra === undefined ? "ai-ico" : `ai-ico ${extra}`;
       expect(attr(svg, "class"), row.name).toBe(className);
       if (row.fill) {
         expect(attr(svg, "fill"), row.name).toBe("currentColor");
@@ -563,5 +589,516 @@ describe("M7-ai-38 の描画の分 RecruitmentView（採用向けの表示。§2
     expect(textOf(elementOf(unsafe, 'class="ai-p"'))).toBe(
       "<b>x</b> & <img src=x onerror=alert(1)>",
     );
+  });
+});
+
+// ---- 育成・定着（§2.5）
+
+/** 8 項目の見本（架空。マスタのコード） */
+const CONTEXT: TrainingContext = {
+  tenure: "year_2",
+  evaluation: "meets",
+  expectedRole: "trainer",
+  recentState: "low_energy",
+  relationship: "specific_mismatch",
+  wish: "skill_up",
+  changeSinceJoining: "unchanged",
+  concern: "few_reports",
+};
+
+/** 選択欄（id ai-ctx-{キー}）の開きタグと、選ばれている選択肢の値 */
+function selectOf(html: string, key: TrainingContextKey): { tag: string; selected: string[] } {
+  const select = elementOf(html, `id="ai-ctx-${key}"`);
+  return {
+    tag: openTag(select),
+    selected: tagsOf(select, "option")
+      .filter((tag) => attr(tag, "selected") !== undefined)
+      .map((tag) => attr(tag, "value") ?? ""),
+  };
+}
+
+const contextForm = (props: {
+  readonly values?: TrainingContextDraft;
+  readonly invalid?: readonly TrainingContextKey[];
+  readonly mode?: TrainingContextMode;
+}) =>
+  render(TrainingContextForm, {
+    values: props.values ?? EMPTY_TRAINING_CONTEXT_DRAFT,
+    invalid: new Set(props.invalid ?? []),
+    mode: props.mode ?? "editable",
+    onChange: () => undefined,
+    selectRefs: { current: {} },
+  });
+
+describe("M7-ai-39 の描画の分 TrainingContextForm（8 項目の入力欄。§2.5.3）", () => {
+  it("箱 .ai-ctx に h2.ai-ctx-h「現場の状況を入力（8項目）」と 2 行 × 4 項目。項目は label.ai-ctx-label（for）と .ai-ctx-sel（select#ai-ctx-{キー} と山形 svg.ai-ico.ai-chev）", () => {
+    const html = contextForm({});
+    expect(openTag(html)).toBe('<div class="ai-ctx">');
+    expect(childClasses(html)).toEqual(["ai-ctx-h", "ai-ctx-row", "ai-ctx-row"]);
+    const heading = elementOf(html, 'class="ai-ctx-h"');
+    expect(openTag(heading)).toBe('<h2 class="ai-ctx-h">');
+    expect(textOf(heading)).toBe("現場の状況を入力（8項目）");
+    const rows = [...html.matchAll(/<div class="ai-ctx-row">/g)].map((m) =>
+      elementOf(html, m[0], m.index),
+    );
+    expect(rows.map(childClasses)).toEqual([
+      ["ai-ctx-item", "ai-ctx-item", "ai-ctx-item", "ai-ctx-item"],
+      ["ai-ctx-item", "ai-ctx-item", "ai-ctx-item", "ai-ctx-item"],
+    ]);
+    // 行と列は TRAINING_CONTEXT_KEYS の並び（1 行目は勤続年数〜最近の様子）
+    const ids = rows.map((row) => tagsOf(row, "select").map((tag) => attr(tag, "id")));
+    expect(ids).toEqual([
+      TRAINING_CONTEXT_KEYS.slice(0, 4).map((key) => `ai-ctx-${key}`),
+      TRAINING_CONTEXT_KEYS.slice(4).map((key) => `ai-ctx-${key}`),
+    ]);
+    // 項目: ラベル（for で選択欄に結び付く）→ 選択欄の箱（選択欄 → 山形）
+    const items = rows.flatMap((row) => childElements(row));
+    items.forEach((item, i) => {
+      const key = TRAINING_CONTEXT_KEYS[i]!;
+      const [label, sel] = childElements(item);
+      expect(openTag(label!), key).toBe(`<label class="ai-ctx-label" for="ai-ctx-${key}">`);
+      expect(textOf(label!), key).toBe(TRAINING_CONTEXT_ITEMS[key].label);
+      expect(openTag(sel!), key).toBe('<div class="ai-ctx-sel">');
+      const [select, chevron] = childElements(sel!);
+      expect([tagName(select!), attr(openTag(select!), "id")], key).toEqual([
+        "select",
+        `ai-ctx-${key}`,
+      ]);
+      expect(chevron, key).toBe(renderPlain(ChevronDownIcon));
+      expect(attr(openTag(chevron!), "class"), key).toBe("ai-ico ai-chev");
+      expect(childElements(item), key).toHaveLength(2);
+      expect(childElements(sel!), key).toHaveLength(2);
+    });
+    expect(items).toHaveLength(8);
+    // 必須の属性は付けない（仕様に無い。未選択は押したときに確かめる。§2.5.4）
+    expect(tagsOf(html, "select").some((tag) => attr(tag, "required") !== undefined)).toBe(false);
+  });
+
+  it("選択肢は §2.5.3 の表の並び（マスタの表示名とコード）で、先頭は値が空の「選択してください」（disabled でない）", () => {
+    const html = contextForm({});
+    for (const key of TRAINING_CONTEXT_KEYS) {
+      const options = tagsOf(elementOf(html, `id="ai-ctx-${key}"`), "option");
+      expect(
+        options.map((tag) => attr(tag, "value")),
+        key,
+      ).toEqual(["", ...TRAINING_CONTEXT_ITEMS[key].options.map((o) => o.code)]);
+      const texts = [
+        ...elementOf(html, `id="ai-ctx-${key}"`).matchAll(/<option[^>]*>([^<]*)<\/option>/g),
+      ].map((m) => textOf(m[1]!));
+      expect(texts, key).toEqual([
+        "選択してください",
+        ...TRAINING_CONTEXT_ITEMS[key].options.map((o) => o.label),
+      ]);
+      expect(
+        options.some((tag) => attr(tag, "disabled") !== undefined),
+        key,
+      ).toBe(false);
+    }
+    // 見本: 勤続年数の 3 つ目は「3年~5年」（「~」は半角）
+    expect(textOf(elementOf(html, 'value="years_3_5"'))).toBe("3年~5年");
+  });
+
+  it("値が空の欄だけ class に is-placeholder（選んだ欄は class が無い）。選んだ値の選択肢が選ばれている", () => {
+    const values: TrainingContextDraft = {
+      ...EMPTY_TRAINING_CONTEXT_DRAFT,
+      tenure: "year_2",
+      wish: "unknown",
+    };
+    const html = contextForm({ values });
+    for (const key of TRAINING_CONTEXT_KEYS) {
+      const { tag, selected } = selectOf(html, key);
+      const chosen = values[key];
+      expect(attr(tag, "class"), key).toBe(chosen === "" ? "is-placeholder" : undefined);
+      expect(selected, key).toEqual([chosen]);
+    }
+  });
+
+  it('aria-invalid="true" は invalid のキーの欄だけ（ほかの欄には属性が無い）', () => {
+    const invalid: TrainingContextKey[] = ["evaluation", "relationship", "concern"];
+    const html = contextForm({ invalid });
+    for (const key of TRAINING_CONTEXT_KEYS) {
+      expect(attr(selectOf(html, key).tag, "aria-invalid"), key).toBe(
+        invalid.includes(key) ? "true" : undefined,
+      );
+    }
+    expect(tagsOf(contextForm({}), "select").some((tag) => tag.includes("aria-invalid"))).toBe(
+      false,
+    );
+  });
+
+  it("mode: editable は選べる。locked（生成中）・saved（生成済み）は disabled で、値は出したまま", () => {
+    for (const mode of ["editable", "locked", "saved"] as const) {
+      const html = contextForm({ values: CONTEXT, mode });
+      for (const key of TRAINING_CONTEXT_KEYS) {
+        const { tag, selected } = selectOf(html, key);
+        expect(attr(tag, "disabled"), `${mode} ${key}`).toBe(mode === "editable" ? undefined : "");
+        expect(selected, `${mode} ${key}`).toEqual([CONTEXT[key]]);
+      }
+    }
+  });
+});
+
+describe("M7-ai-39 の描画の分 TrainingView（育成・定着の表示。§2.5.5）", () => {
+  const OUTPUT_T = validTrainingOutput();
+  const html = render(TrainingView, { output: OUTPUT_T });
+  const body = elementOf(html, 'class="body"');
+  /** 節を包む要素（クラスなし。本文の 2 つ目の子） */
+  const sectionsOf = (fragment: string) => elementOf(fragment, "<div>");
+  /** 節（section.sec）を上から */
+  const sectionList = (fragment: string) =>
+    [...fragment.matchAll(/<section class="sec">/g)].map((m) => elementOf(fragment, m[0], m.index));
+  const chipsOf = (output: TrainingAiOutput) => {
+    const rendered = render(TrainingView, { output });
+    return [...rendered.matchAll(/<div class="chip ([a-z]+)">/g)].map((m) => {
+      const chip = elementOf(rendered, m[0], m.index);
+      return {
+        tone: m[1],
+        label: textOf(elementOf(chip, 'class="k"')),
+        value: textOf(elementOf(chip, 'class="v"')),
+        dot: openTag(elementOf(chip, 'class="dot"')),
+      };
+    });
+  };
+  /** 出力の一部を変えた形（スキーマに無い値・空の配列も入れる） */
+  const withOutput = (patch: (o: TrainingAiOutput) => object): TrainingAiOutput =>
+    patch(validTrainingOutput()) as unknown as TrainingAiOutput;
+
+  it("カードの見出し帯: 「✦」（aria-hidden）・h2「AI 育成・定着アドバイザー」・札「在籍スタッフ向け」の順", () => {
+    expect(openTag(html)).toBe('<div class="ai-ik">');
+    expect(childClasses(elementOf(html, 'class="card"'))).toEqual(["head", "body"]);
+    const head = elementOf(html, 'class="head"');
+    expect(childClasses(head)).toEqual(["sp", "<h2>", "tag"]);
+    expect(attr(openTag(elementOf(head, 'class="sp"')), "aria-hidden")).toBe("true");
+    expect(elementOf(head, 'class="sp"')).toContain(renderPlain(SparkIcon));
+    expect(textOf(elementOf(head, "<h2>"))).toBe("AI 育成・定着アドバイザー");
+    expect(textOf(elementOf(head, 'class="tag"'))).toBe("在籍スタッフ向け");
+  });
+
+  it("本文の並び: 判定チップ → 節を包む要素 → 末尾。チップは期待役割へのマッチ度 → 離職リスク → サポートの必要度で、見本（高い・中・低い）は good・mid・good。点は aria-hidden", () => {
+    expect(childClasses(body)).toEqual(["chips", "<div>", "foot"]);
+    expect(chipsOf(OUTPUT_T)).toEqual([
+      {
+        tone: "good",
+        label: "期待役割へのマッチ度",
+        value: "高い",
+        dot: '<span class="dot" aria-hidden="true">',
+      },
+      {
+        tone: "mid",
+        label: "離職リスク",
+        value: "中",
+        dot: '<span class="dot" aria-hidden="true">',
+      },
+      {
+        tone: "good",
+        label: "サポートの必要度",
+        value: "低い",
+        dot: '<span class="dot" aria-hidden="true">',
+      },
+    ]);
+    expect(textOf(elementOf(body, 'class="foot"'))).toBe(
+      "※ 診断スコア（16特性・ソーシャルスタイル・資質タイプ）と、ご入力いただいた勤務状況をもとにAIが自動生成しています。",
+    );
+    expect(openTag(elementOf(body, 'class="foot"'))).toBe('<p class="foot">');
+  });
+
+  it("判定チップ: 値を変えた出力（低い → warn、非常に高い → warn、「やや高い」→ mid）と、空の値は「-」で mid（bad は使わない）", () => {
+    const changed = withOutput((o) => ({
+      ...o,
+      verdict: { match: "低い", risk: "非常に高い", support: "やや高い" },
+    }));
+    expect(chipsOf(changed).map((chip) => [chip.tone, chip.value])).toEqual([
+      ["warn", "低い"],
+      ["warn", "非常に高い"],
+      ["mid", "やや高い"],
+    ]);
+    const empty = withOutput((o) => ({ ...o, verdict: { match: "", risk: "", support: "" } }));
+    expect(chipsOf(empty).map((chip) => [chip.tone, chip.value])).toEqual([
+      ["mid", "-"],
+      ["mid", "-"],
+      ["mid", "-"],
+    ]);
+  });
+
+  it("節の並びと見出しの段: 1.〜4. の節の見出しが h3（.lab。棒は aria-hidden）、原因の枠・箱・ステップの見出しは h4、帯は h2。最後の節が包む要素の最後の子（下の余白 0）", () => {
+    const sections = sectionsOf(body);
+    expect(childClasses(sections)).toEqual(["sec", "sec", "sec", "sec"]);
+    const labels = [...sections.matchAll(/<h3 class="lab">/g)].map((m) =>
+      textOf(elementOf(sections, m[0], m.index)),
+    );
+    expect(labels).toEqual([
+      "1. すぐに手を打つべき理由と、その一手",
+      "2. 期待役割に向けて",
+      "3. 日常の接し方（○と×）",
+      "4. 次回の1on1で聞くこと",
+    ]);
+    expect(elementOf(sections, '<h3 class="lab">')).toContain(
+      '<span class="bar" aria-hidden="true"></span>',
+    );
+    expect(tagsOf(html, "h2")).toHaveLength(1);
+    expect(tagsOf(html, "h3")).toHaveLength(4);
+    expect(tagsOf(html, "h4")).toEqual([
+      '<h4 class="hyp-h">',
+      "<h4>",
+      "<h4>",
+      '<h4 class="fill-h">',
+    ]);
+    expect(sections.endsWith("</section></div>")).toBe(true);
+    expect(html).not.toContain("生成日時");
+  });
+
+  it("1. 理由の枠 → 原因の枠（見出しと、札「可能性 高」hi・「可能性 中」mi・「診断外」lo と本文）→ 一手の箱（札 label と本文）", () => {
+    const [urgent] = sectionList(sectionsOf(body));
+    expect(childClasses(urgent!)).toEqual(["lab", "why", "hyp", "gap"]);
+    expect(openTag(elementOf(urgent!, 'class="why"'))).toBe('<p class="why">');
+    expect(textOf(elementOf(urgent!, 'class="why"'))).toBe(OUTPUT_T.urgent.why);
+    const hyp = elementOf(urgent!, 'class="hyp"');
+    expect(textOf(elementOf(hyp, 'class="hyp-h"'))).toBe("考えられる原因と、その確からしさ");
+    const rows = [...hyp.matchAll(/<div class="hy">/g)].map((m) => {
+      const row = elementOf(hyp, m[0], m.index);
+      return [
+        attr(openTag(elementOf(row, 'class="hk')), "class"),
+        textOf(elementOf(row, 'class="hk')),
+        textOf(elementOf(row, 'class="hv"')),
+      ];
+    });
+    expect(rows).toEqual([
+      ["hk hi", "可能性 高", OUTPUT_T.urgent.hypotheses[0]!.text],
+      ["hk mi", "可能性 中", OUTPUT_T.urgent.hypotheses[1]!.text],
+      ["hk lo", "診断外", OUTPUT_T.urgent.hypotheses[2]!.text],
+    ]);
+    const gap = elementOf(urgent!, 'class="gap"');
+    expect(
+      [...gap.matchAll(/<div class="gr">/g)].map((m) => {
+        const row = elementOf(gap, m[0], m.index);
+        return [textOf(elementOf(row, 'class="gk"')), textOf(elementOf(row, 'class="gv"'))];
+      }),
+    ).toEqual(OUTPUT_T.urgent.actions.map((a) => [a.label, a.text]));
+    // 札の文字が空の一手も、札（空）と本文を出す（§2.5.5 の表に条件が無い）
+    expect(gap).toContain('<span class="gk"></span>');
+  });
+
+  it("2. 理由の枠 → 足りている・欠けている（h4 と箇条書き）→ ステップの見出しとステップ（札 badge・title・target は空でなければ札・本文・say と note は空でなければ）→ 前提の確認", () => {
+    const [, role] = sectionList(sectionsOf(body));
+    expect(childClasses(role!)).toEqual(["lab", "why", "two", "fill-h", "scenes", "cond"]);
+    expect(textOf(elementOf(role!, 'class="why"'))).toBe(OUTPUT_T.role.why);
+    const have = elementOf(role!, 'class="mini a"');
+    expect(textOf(elementOf(have, "<h4>"))).toBe("◎ 足りている");
+    expect(tagsOf(have, "li")).toHaveLength(OUTPUT_T.role.have.length);
+    expect(textOf(elementOf(have, 'class="ilist"'))).toBe(OUTPUT_T.role.have.join(""));
+    const lack = elementOf(role!, 'class="mini b"');
+    expect(textOf(elementOf(lack, "<h4>"))).toBe("△ 欠けている");
+    expect(textOf(elementOf(lack, 'class="ilist"'))).toBe(OUTPUT_T.role.lack.join(""));
+    expect(textOf(elementOf(role!, 'class="fill-h"'))).toBe("このように進めてください");
+    const scenes = elementOf(role!, 'class="scenes"');
+    const steps = [...scenes.matchAll(/<div class="scene">/g)].map((m) =>
+      elementOf(scenes, m[0], m.index),
+    );
+    expect(steps).toHaveLength(2);
+    // STEP 1: target・say・note あり
+    const [first, second] = OUTPUT_T.role.steps;
+    expect(childClasses(steps[0]!)).toEqual(["scene-t", "scene-b", "say", "chk"]);
+    const title1 = elementOf(steps[0]!, 'class="scene-t"');
+    expect(title1).toBe(
+      `<div class="scene-t"><span class="sn">${first!.badge}</span>${first!.title}<span class="tgt">${first!.target}</span></div>`,
+    );
+    expect(textOf(elementOf(steps[0]!, 'class="scene-b"'))).toBe(first!.body);
+    expect(textOf(elementOf(steps[0]!, 'class="say"'))).toBe(first!.say);
+    expect(textOf(elementOf(steps[0]!, 'class="chk"'))).toBe(first!.note);
+    // STEP 2: target・say・note が空なら出さない
+    expect(childClasses(steps[1]!)).toEqual(["scene-t", "scene-b"]);
+    expect(elementOf(steps[1]!, 'class="scene-t"')).toBe(
+      `<div class="scene-t"><span class="sn">${second!.badge}</span>${second!.title}</div>`,
+    );
+    expect(textOf(elementOf(role!, 'class="cond"'))).toBe(OUTPUT_T.role.cond);
+  });
+
+  it("3. 日常の接し方: 札 scene と、「○ 」+ ok と「× 」+ ng（記号と本文の全体が b。間は改行）、say は空でなければ緑の引用。4. 1on1: 番号 1 から・q・intent（「見極め：」は無い）", () => {
+    const [, , daily, oneonone] = sectionList(sectionsOf(body));
+    const rows = [...daily!.matchAll(/<div class="f">/g)].map((m) =>
+      elementOf(daily!, m[0], m.index),
+    );
+    expect(rows).toHaveLength(OUTPUT_T.daily.length);
+    OUTPUT_T.daily.forEach((item, i) => {
+      const row = rows[i]!;
+      expect(childClasses(row)).toEqual(["fh", "ft"]);
+      expect(textOf(elementOf(row, 'class="fh"'))).toBe(item.scene);
+      const ft = elementOf(row, 'class="ft"');
+      const say = item.say === "" ? "" : `<p class="say">${item.say}</p>`;
+      expect(ft).toBe(`<div class="ft"><b>○ ${item.ok}</b><br/><b>× ${item.ng}</b>${say}</div>`);
+    });
+    const questions = elementOf(oneonone!, 'class="qlist"');
+    expect([...questions.matchAll(/<span class="qn">(\d+)<\/span>/g)].map((m) => m[1])).toEqual([
+      "1",
+      "2",
+      "3",
+    ]);
+    expect(
+      [...questions.matchAll(/<p class="qt">([^<]*)<\/p><p class="qi">([^<]*)<\/p>/g)].map((m) => [
+        m[1],
+        m[2],
+      ]),
+    ).toEqual(OUTPUT_T.oneonone.map((item) => [item.q, item.intent]));
+    expect(oneonone).not.toContain("見極め");
+  });
+
+  it("空の値: 理由・前提が空なら枠が無く、原因・一手・ステップが 0 なら無く、daily・oneonone が 0 なら 3.・4. の節が無い。1.・2. の節の見出しと足りている・欠けている の箱はいつも出る", () => {
+    const empty = withOutput((o) => ({
+      ...o,
+      urgent: { why: "", hypotheses: [], actions: [] },
+      role: { ...o.role, why: "", have: [], lack: [], steps: [], cond: "" },
+      daily: [],
+      oneonone: [],
+    }));
+    const rendered = render(TrainingView, { output: empty });
+    const sections = sectionList(sectionsOf(elementOf(rendered, 'class="body"')));
+    expect(sections).toHaveLength(2);
+    expect(childClasses(sections[0]!)).toEqual(["lab"]);
+    expect(childClasses(sections[1]!)).toEqual(["lab", "two"]);
+    expect(childClasses(elementOf(sections[1]!, 'class="two"'))).toEqual(["mini a", "mini b"]);
+    expect(rendered).not.toContain("考えられる原因と、その確からしさ");
+    expect(rendered).not.toContain("このように進めてください");
+    expect(rendered).not.toContain("3. 日常の接し方");
+    expect(rendered).not.toContain("4. 次回の1on1で聞くこと");
+    // 末尾はいつも出る
+    expect(childClasses(elementOf(rendered, 'class="body"'))).toEqual(["chips", "<div>", "foot"]);
+  });
+
+  it("K-31 ⑤: 出力の文（say を含む）のタグや & は文字として逃がして描く（タグにならない）", () => {
+    const unsafe = withOutput((o) => ({
+      ...o,
+      urgent: { ...o.urgent, why: "<b>x</b> & <img src=x onerror=alert(1)>" },
+      role: {
+        ...o.role,
+        steps: [{ ...o.role.steps[0]!, say: "<script>alert(1)</script>" }],
+      },
+      daily: [{ ...o.daily[0]!, ok: "<i>ok</i>", say: "<a href=x>say</a>" }],
+    }));
+    const rendered = render(TrainingView, { output: unsafe });
+    expect(rendered).not.toContain("<b>x</b>");
+    expect(rendered).not.toContain("<img");
+    expect(rendered).not.toContain("<script>");
+    expect(rendered).not.toContain("<i>");
+    expect(rendered).not.toContain("<a ");
+    expect(rendered).toContain("&lt;b&gt;x&lt;/b&gt; &amp; &lt;img src=x onerror=alert(1)&gt;");
+    expect(textOf(elementOf(rendered, 'class="why"'))).toBe(
+      "<b>x</b> & <img src=x onerror=alert(1)>",
+    );
+    expect(textOf(elementOf(rendered, 'class="say"'))).toBe("<script>alert(1)</script>");
+  });
+});
+
+describe("M7-ai-38・39 の描画の分 TrainingPanel（育成・定着のパネル。§2.3.5 の表。通知の Provider で包む）", () => {
+  const dto = (overrides: Partial<TrainingAiDto>): TrainingAiDto => ({
+    status: "not_generated",
+    startedAt: null,
+    error: null,
+    enabled: true,
+    context: null,
+    latest: null,
+    ...overrides,
+  });
+  const panel = (initial: TrainingAiDto, selected = true): string => {
+    const html = renderToStaticMarkup(
+      createElement(ToastProvider, {
+        children: createElement(TrainingPanel, {
+          resultId: "result-1",
+          initial,
+          selected,
+          focusTab: () => undefined,
+        }),
+      }),
+    );
+    return elementOf(html, 'id="ai-panel-training"');
+  };
+  /** 8 項目の選択欄がすべて選べるか（disabled が無い）・すべて選べないか */
+  const selectsDisabled = (html: string): boolean[] =>
+    tagsOf(html, "select").map((tag) => attr(tag, "disabled") !== undefined);
+
+  it("パネル: role=tabpanel・aria-labelledby=ai-tab-training・data-status。選んでいないときは hidden", () => {
+    const tag = openTag(panel(dto({})));
+    expect(attr(tag, "class")).toBe("ai-panel");
+    expect(attr(tag, "role")).toBe("tabpanel");
+    expect(attr(tag, "aria-labelledby")).toBe("ai-tab-training");
+    expect(attr(tag, "data-status")).toBe("not_generated");
+    expect(attr(tag, "hidden")).toBeUndefined();
+    expect(attr(openTag(panel(dto({}), false)), "hidden")).toBe("");
+  });
+
+  it("not_generated で有効でない（本番で確認の前。§2.7.4）: 案内 → 8 項目（選べる）→ 押せない生成ボタン → 「この AI 解説は準備中です。」。生成中・失敗の枠・表示は無い", () => {
+    const html = panel(dto({ enabled: false }));
+    const start = elementOf(html, 'class="ai-start ai-start--training"');
+    expect(childClasses(start)).toEqual([
+      "ai-intro ai-intro--training",
+      "ai-ctx",
+      "ai-gen-btn",
+      "ai-note",
+    ]);
+    expect(selectsDisabled(start)).toEqual(Array(8).fill(false));
+    expect(attr(openTag(elementOf(start, "<button")), "disabled")).toBe("");
+    expect(textOf(elementOf(start, 'class="ai-note"'))).toBe("この AI 解説は準備中です。");
+    expect(childClasses(html)).toEqual(["ai-start ai-start--training"]);
+  });
+
+  it("not_generated で有効: 生成ボタンは押せ、準備中の注記は無い。8 項目は未選択（is-placeholder）で、不正の表示は無い", () => {
+    const html = panel(dto({}));
+    const start = elementOf(html, 'class="ai-start ai-start--training"');
+    expect(childClasses(start)).toEqual(["ai-intro ai-intro--training", "ai-ctx", "ai-gen-btn"]);
+    expect(attr(openTag(elementOf(start, "<button")), "disabled")).toBeUndefined();
+    expect(textOf(elementOf(start, "<button"))).toBe("育成・定着AI解説を生成");
+    expect(tagsOf(start, "select").map((tag) => attr(tag, "class"))).toEqual(
+      Array(8).fill("is-placeholder"),
+    );
+    expect(start).not.toContain("aria-invalid");
+  });
+
+  it("generating（別の画面で始まっている）: 案内 → 8 項目（選べない）と、その下に生成中。生成ボタンは無い", () => {
+    const html = panel(dto({ status: "generating", startedAt: "2026-11-19T00:00:00.000Z" }));
+    expect(childClasses(html)).toEqual(["ai-start ai-start--training", "ai-loading"]);
+    const start = elementOf(html, 'class="ai-start ai-start--training"');
+    expect(childClasses(start)).toEqual(["ai-intro ai-intro--training", "ai-ctx"]);
+    expect(selectsDisabled(start)).toEqual(Array(8).fill(true));
+  });
+
+  it("failed: 案内 → 8 項目（選べる）→ 失敗の枠（T-18 と理由）→ 生成ボタン", () => {
+    const html = panel(dto({ status: "failed", error: "invalid_json" }));
+    expect(childClasses(html)).toEqual(["ai-start ai-start--training"]);
+    const start = elementOf(html, 'class="ai-start ai-start--training"');
+    expect(childClasses(start)).toEqual([
+      "ai-intro ai-intro--training",
+      "ai-ctx",
+      "ai-fail",
+      "ai-gen-btn",
+    ]);
+    expect(selectsDisabled(start)).toEqual(Array(8).fill(false));
+    expect(textOf(elementOf(start, 'class="ai-fail"'))).toBe(
+      "AI解説の生成に失敗しました。AI の応答を解釈できませんでした。再試行してください",
+    );
+  });
+
+  it("completed: 生成の入口は 8 項目だけ（保存した値で選べない）、その下に表示。案内と生成ボタンは無い", () => {
+    const html = panel(
+      dto({
+        status: "completed",
+        context: CONTEXT,
+        latest: {
+          aiAnalysisId: "ai-analysis-1",
+          provider: "stub",
+          model: "claude-opus-5-5",
+          promptVersion: "training-v1",
+          generatedAt: "2026-11-19T00:00:00.000Z",
+          reliability: 82.5,
+          output: validTrainingOutput(),
+        },
+      }),
+    );
+    expect(childClasses(html)).toEqual(["ai-start ai-start--training", "ai-ik"]);
+    const start = elementOf(html, 'class="ai-start ai-start--training"');
+    expect(childClasses(start)).toEqual(["ai-ctx"]);
+    expect(selectsDisabled(start)).toEqual(Array(8).fill(true));
+    for (const key of TRAINING_CONTEXT_KEYS) {
+      expect(selectOf(start, key).selected, key).toEqual([CONTEXT[key]]);
+    }
+    expect(html).not.toContain("ai-gen-btn");
   });
 });

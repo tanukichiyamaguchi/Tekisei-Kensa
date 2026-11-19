@@ -1,5 +1,6 @@
 // AI 解説（02 §3.6、§8.6、11-6 §3.7.9）。種類ごとの results の 4 項目（AI_KIND_FIELDS）を読み書きする。
-// 種類の最新の分析の ID を書くのは、その種類の saveAiAnalysis() だけ（I-7 を種類ごとに広げた I-ai-1）
+// 種類の最新の分析の ID を書くのは、その種類の saveAiAnalysis() だけ（I-7 を種類ごとに広げた I-ai-1）。results.trainingContext を
+// 書くのも、育成・定着の成功の saveAiAnalysis() だけ（I-ai-2）
 import { FieldValue, Timestamp, type Transaction } from "firebase-admin/firestore";
 
 import { addAuditLogToBatch } from "./audit-logs-repository";
@@ -18,6 +19,7 @@ import { MappingError } from "@/lib/db/mappers/timestamp";
 import { aiAnalysisCreateSchema } from "@/lib/db/schemas/ai-analysis";
 import { validateForWrite } from "@/lib/db/schemas/validate";
 import { docIdSchema } from "@/lib/db/schemas/values";
+import type { TrainingContext } from "@/lib/masters/training-context";
 
 function isVisible(result: Result | null, viewer: Viewer): result is Result {
   return (
@@ -132,13 +134,17 @@ export interface SaveAiAnalysisInput {
   /** AiProvider.name（aiAnalyses.provider。AiGenerateResult には含まれないため呼び出し元が渡す。07 §5.1） */
   readonly provider: string;
   readonly reliability: number;
+  /** 育成・定着の入力の 8 項目（育成・定着では必須。採用向けは null。既定は null。11-6 §3.2） */
+  readonly trainingContext?: TrainingContext | null;
   readonly meta: RequestMeta;
 }
 
 /**
  * 成功時の保存。aiAnalyses（analysisKind はその種類）を作成し、同一バッチで results のその種類の項目を completed・理由 null・
- * 最新の分析の ID に更新し、auditLogs（result.ai_generate。details に kind）を追記する。organizationId / respondentId は
- * results 文書の値を写す（I-7、I-ai-1）。育成・定着の 8 項目と経年比較の前回は PR-7.10・PR-7.11b（それまで 3 項目は null）
+ * 最新の分析の ID に更新し、auditLogs（result.ai_generate。details に kind。8 項目は入れない）を追記する。organizationId /
+ * respondentId は results 文書の値を写す（I-7、I-ai-1）。育成・定着は 8 項目を aiAnalyses.trainingContext と、同じバッチで
+ * results.trainingContext に書く（I-ai-2。種類ごとの組み合わせは aiAnalysisCreateSchema が確かめる。11-6 §3.2）。経年比較の前回と
+ * 一手の有無は PR-7.11b（それまで previousResultId・usedTrainingAction は null）
  */
 export async function saveAiAnalysis(
   input: SaveAiAnalysisInput,
@@ -171,8 +177,8 @@ export async function saveAiAnalysis(
       status: "completed",
       reliability: input.reliability,
       generatedBy: input.viewer.uid,
-      // 採用向けの組み合わせ（11-6 §3.2）。3 項目とも null
-      trainingContext: null,
+      // 種類ごとの組み合わせ（11-6 §3.2）。採用向けは 3 項目とも null、育成・定着は 8 項目があり残りは null
+      trainingContext: input.trainingContext ?? null,
       previousResultId: null,
       usedTrainingAction: null,
     },
@@ -185,6 +191,8 @@ export async function saveAiAnalysis(
     [fields.status]: "completed",
     [fields.error]: null,
     [fields.latestId]: ref.id,
+    // I-ai-2: latestTrainingAiAnalysisId が指す分析の 8 項目と同じ値（検証した値）
+    ...(input.kind === "training" ? { trainingContext: data.trainingContext } : {}),
     updatedAt: stamp,
   });
   addAuditLogToBatch(batch, {

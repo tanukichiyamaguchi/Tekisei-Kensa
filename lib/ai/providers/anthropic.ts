@@ -1,5 +1,6 @@
 // Anthropic（Claude API）provider（07 §4、§5.3、11-6 §2.9・§3.7.3）。構造化出力（output_config.format）で種類の JSON を強制する
-// （07 D07-06）。出力の上限は種類ごと（AI_MAX_TOKENS。K-25）。PR-7.9 は採用向けだけ（ほかの種類は版とスキーマが無く config_error）
+// （07 D07-06）。出力の上限は種類ごと（AI_MAX_TOKENS。K-25）。採用向けと育成・定着を生成する（経年比較は版とスキーマが無く
+// config_error。PR-7.11b が足す）
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 

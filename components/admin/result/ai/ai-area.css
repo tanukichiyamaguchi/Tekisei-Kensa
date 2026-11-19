@@ -1,15 +1,15 @@
 /* components/admin/result/ai/ai-area.css（11-6 別表C）
-AI 解説の領域 #ai（結果詳細の目次と新しいレイアウトの間。11-4 §2.1）の見た目。参照元定義の Bubble の要素の値（C.1）と、HTML D・E（C.2。生成前の案内）・
-HTML 生成中（C.3）・HTML A（C.4。採用向けの表示）の CSS を、別表C の並びと値のまま写した。参照元の根の要素の id は #ai の下のクラス（.ai-rec など）に
-置き換え、@keyframes の名前は ai-rot・ai-pulse・ai-blink にした（§3.10）。#ai の中だけに効く。
+AI 解説の領域 #ai（結果詳細の目次と新しいレイアウトの間。11-4 §2.1）の見た目。参照元定義の Bubble の要素の値（C.1。育成・定着の 8 項目の入力欄を含む）と、
+HTML D・E（C.2。生成前の案内）・HTML 生成中（C.3）・HTML A（C.4。採用向けの表示）・HTML B（C.5。育成・定着の表示）の CSS を、別表C の並びと値のまま
+写した。参照元の根の要素の id は #ai の下のクラス（.ai-rec・.ai-ik など）に置き換え、@keyframes の名前は ai-rot・ai-pulse・ai-blink にした（§3.10）。
+#ai の中だけに効く。
 「K-49」「K-50」と書いた指定は、文字のコントラストと部品の見分けやすさのために参照元の色を変えた値で、注記に参照元の値を残した（§2.17）。「アプリ」と書いた
 焦点の枠は、管理画面に共通の焦点の枠（11-8 §2.2.6。.admin-root の指定）と同じ値を、#ai の中の指定だけで見た目が決まるようにここにも書いたもの（11 総論 8.3 の 19。
 共通の枠の値を変えるときは、ここも直す）。
-C.1 のうち 8 項目の入力欄（.ai-ctx で始まる規則と、その @media）と C.5（育成・定着の表示）は PR-7.10、C.6（経年比較）は PR-7.11a が足す。C.1 の
-育成・定着と経年比較の分（.ai-panel--longitudinal・.ai-start--training・.ai-ik を含む規則）と、C.2 の育成・定着の案内の規則は、別表C のまま置く
-（育成・定着のタブの案内は PR-7.9 から出る）。.ai-sr は PR-7.9 では使わない。印刷の形（data-variant="print"）では動きを止める */
+C.6（経年比較）は PR-7.11a が足す。C.1 の経年比較の分（.ai-panel--longitudinal）は別表C のまま置く。.ai-sr は PR-7.10 までの部品では使わない。
+印刷の形（data-variant="print"）では動きを止める */
 
-/* ---- C.1 領域・タブ・生成ボタン・失敗の枠など（参照元定義の Bubble の要素の値と、アプリだけの部品） ---- */
+/* ---- C.1 領域・タブ・生成ボタン・8 項目・失敗の枠など（参照元定義の Bubble の要素の値と、アプリだけの部品） ---- */
 #ai {
   --ai-2-strong: #278379; /* --ai-2-strong は K-49（白い文字の地のグラデーションの終わり。参照元 #2E9B8F） */
   box-sizing: border-box;
@@ -146,6 +146,113 @@ C.1 のうち 8 項目の入力欄（.ai-ctx で始まる規則と、その @med
   color: #b15936; /* K-49（文字。参照元 #C9714E） */
   font-size: 13.5px;
   line-height: 1.7;
+}
+/* 育成・定着の 8 項目の入力欄（§2.5.3）。選択欄の :focus-visible は :focus の outline:none より後に、:disabled は
+[aria-invalid="true"] より後に書く（別表C の C.1 の注記。並びを入れ替えない） */
+#ai .ai-ctx {
+  box-sizing: border-box;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: #ffffff;
+  border: 1px solid #dde4ec;
+  border-radius: 10px;
+}
+#ai .ai-ctx-h {
+  margin: 0;
+  padding-left: 8px;
+  border-left: 5px solid #4b6fb5;
+  font-size: 15px;
+  line-height: 1.5;
+  font-weight: 700;
+  color: #1f3a57;
+}
+#ai .ai-ctx-row {
+  display: flex;
+  gap: 12px;
+}
+#ai .ai-ctx-item {
+  flex: 1 1 0;
+  min-width: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+#ai .ai-ctx-label {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #6b7785;
+}
+#ai .ai-ctx-sel {
+  position: relative;
+}
+#ai .ai-ctx select {
+  box-sizing: border-box;
+  appearance: none;
+  width: 100%;
+  min-width: 180px;
+  height: 48px;
+  padding: 0 32px 0 8px;
+  background: #f7f9fc;
+  border: 1px solid #7893b3; /* K-50（枠。参照元 #DDE4EC。外の白と中の #F7F9FC の両方で届く色） */
+  border-radius: 5px;
+  color: #2c3540;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+#ai .ai-ctx select.is-placeholder {
+  color: #657486;
+  opacity: 1; /* K-49（未選択の表示。参照元 #A6B0BC。不透明度 1 も指定する） */
+}
+#ai .ai-ctx select:focus {
+  border-color: #4b6fb5;
+  outline: none;
+}
+#ai .ai-ctx select:focus-visible {
+  outline: 2px solid #3f8da5;
+  outline-offset: 2px; /* アプリ（管理画面に共通の焦点の枠と同じ指定。参照元の焦点の見た目は上の枠の色だけで、外側の線の定めが無い。§2.17） */
+}
+#ai .ai-ctx select[aria-invalid="true"] {
+  border-color: #ff0000;
+  box-shadow: 0 0 6px #ff0000;
+}
+#ai .ai-ctx select[aria-invalid="true"]:focus-visible {
+  outline-color: #1a3943; /* K-50（不正のときの焦点の枠。共通の枠 #3F8DA5 は影の #FF0000 と 1.06:1。§2.17） */
+}
+#ai .ai-ctx select:disabled {
+  cursor: default;
+  opacity: 1;
+  border-color: #dde4ec; /* 選べない状態の枠は参照元のまま（押せない状態の表示は K-50 の対象外） */
+}
+#ai .ai-ctx .ai-chev {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  margin-top: -6px;
+  font-size: 12px;
+  color: #6b7785;
+  pointer-events: none;
+}
+@media (max-width: 1023px) {
+  #ai .ai-ctx select {
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+  }
+}
+@media (max-width: 900px) {
+  #ai .ai-ctx-row {
+    flex-wrap: wrap;
+    row-gap: 12px;
+  }
+  #ai .ai-ctx-item {
+    flex: 1 1 calc(50% - 6px);
+    min-width: calc(50% - 6px);
+    max-width: calc(50% - 6px);
+  }
 }
 #ai .ai-rec .ai-caution {
   display: block;
@@ -724,6 +831,461 @@ C.1 のうち 8 項目の入力欄（.ai-ctx で始まる規則と、その @med
 }
 @media (max-width: 680px) {
   #ai .ai-rec .two {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- C.5 育成・定着の表示（参照元定義の HTML B） ---- */
+#ai .ai-ik * {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+#ai .ai-ik {
+  --line: #e6ebf1;
+  --ink: #2c3540;
+  --muted: #6a7684;
+  --muted-2: #697888;
+  --muted-chip: #697482; /* K-49（C.4 と同じ） */
+  --ai-1: #4b6fb5;
+  --ai-2: #2e9b8f;
+  --ai-ink: #1f3a57;
+  font-family: "Noto Sans JP", "Hiragino Sans", system-ui, sans-serif;
+  color: var(--ink);
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+#ai .ai-ik .card {
+  background: #fff;
+  border: 1px solid #d5e0e4;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 8px 30px rgba(43, 90, 120, 0.1);
+}
+#ai .ai-ik .head {
+  /* K-49（グラデーションの終わり。参照元 var(--ai-2)） */
+  background: linear-gradient(102deg, var(--ai-1), var(--ai-2-strong));
+  color: #fff;
+  padding: 18px 26px;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  flex-wrap: wrap;
+}
+#ai .ai-ik .head h2 {
+  font-size: 18px;
+  font-weight: 900;
+}
+#ai .ai-ik .head .sp {
+  font-size: 20px;
+}
+#ai .ai-ik .head .tag {
+  font-size: 11.5px;
+  background: rgba(126, 126, 126, 0.2); /* K-49（地。参照元 rgba(255,255,255,.2)） */
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-weight: 700;
+}
+#ai .ai-ik .body {
+  padding: 24px 26px 28px;
+}
+#ai .ai-ik .chips {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+#ai .ai-ik .chip {
+  flex: 1;
+  min-width: 150px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 15px;
+  background: #fafbfd;
+}
+#ai .ai-ik .chip .k {
+  font-size: 11.5px;
+  color: var(--muted-chip); /* K-49（参照元 var(--muted)） */
+  font-weight: 700;
+}
+#ai .ai-ik .chip .v {
+  font-size: 15.5px;
+  font-weight: 900;
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+#ai .ai-ik .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+#ai .ai-ik .good .v {
+  color: #27835e; /* K-49（参照元 #2E9B6F） */
+}
+#ai .ai-ik .good .dot {
+  background: #2e9b6f;
+}
+#ai .ai-ik .warn .v {
+  color: #9b6927; /* K-49（参照元 #CC8A33） */
+}
+#ai .ai-ik .warn .dot {
+  background: #cc8a33;
+}
+#ai .ai-ik .mid .v {
+  color: var(--ai-1);
+}
+#ai .ai-ik .mid .dot {
+  background: var(--ai-1);
+}
+#ai .ai-ik .sec {
+  margin-bottom: 24px;
+}
+#ai .ai-ik .sec:last-child {
+  margin-bottom: 0;
+}
+#ai .ai-ik .lab {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 14.5px;
+  font-weight: 900;
+  color: var(--ai-ink);
+  margin-bottom: 11px;
+}
+#ai .ai-ik .lab .bar {
+  width: 4px;
+  height: 17px;
+  border-radius: 3px;
+  background: linear-gradient(var(--ai-1), var(--ai-2));
+}
+#ai .ai-ik .why {
+  font-size: 13.5px;
+  color: #3c4651;
+  line-height: 1.8;
+  background: #f7f9fc;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 14px 16px;
+}
+#ai .ai-ik .why b {
+  color: var(--ai-ink);
+  font-weight: 800;
+}
+#ai .ai-ik .hyp {
+  margin-top: 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: #fff;
+}
+#ai .ai-ik .hyp-h {
+  font-size: 12.5px;
+  font-weight: 900;
+  color: var(--ai-ink);
+  margin-bottom: 11px;
+}
+#ai .ai-ik .hy {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+#ai .ai-ik .hy:last-child {
+  margin-bottom: 0;
+}
+#ai .ai-ik .hk {
+  flex: none;
+  width: 74px;
+  box-sizing: border-box;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 900;
+  border-radius: 6px;
+  padding: 3px 6px;
+  line-height: 1.7;
+}
+#ai .ai-ik .hk.hi {
+  background: #f7e4e0;
+  color: #ae483c; /* K-49（文字。参照元 #C25A4E） */
+}
+#ai .ai-ik .hk.mi {
+  background: #fcf0e8;
+  color: #93642c; /* K-49（文字。参照元 #C0823A） */
+}
+#ai .ai-ik .hk.lo {
+  background: #edf1f8;
+  color: #53708e; /* K-49（文字。参照元 #5A7A9B） */
+}
+#ai .ai-ik .hv {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  color: #3c4651;
+  line-height: 1.75;
+}
+#ai .ai-ik .gap {
+  border: 1px solid #f0dbc9;
+  background: #fcf5ee;
+  border-radius: 12px;
+  padding: 15px 17px;
+  margin-top: 13px;
+}
+#ai .ai-ik .gr {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+#ai .ai-ik .gr:last-child {
+  margin-bottom: 0;
+}
+#ai .ai-ik .gk {
+  flex: none;
+  width: 110px;
+  box-sizing: border-box;
+  text-align: center;
+  background: #efe0cf;
+  color: #875a25; /* K-49（文字。参照元 #A9712E） */
+  font-size: 11.5px;
+  font-weight: 900;
+  border-radius: 6px;
+  padding: 3px 8px;
+  line-height: 1.7;
+}
+#ai .ai-ik .gv {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  color: #5a4b3a;
+  line-height: 1.75;
+}
+#ai .ai-ik .two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-top: 14px;
+}
+#ai .ai-ik .mini {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 15px 17px;
+}
+#ai .ai-ik .mini.a {
+  background: #f4faf7;
+  border-color: #dbefe5;
+}
+#ai .ai-ik .mini.b {
+  background: #fcf6f3;
+  border-color: #f1e1d7;
+}
+#ai .ai-ik .mini h4 {
+  font-size: 13.5px;
+  font-weight: 900;
+  margin-bottom: 11px;
+}
+#ai .ai-ik .mini.a h4 {
+  color: #26815d; /* K-49（参照元 #2E9B6F） */
+}
+#ai .ai-ik .mini.b h4 {
+  color: #b15936; /* K-49（参照元 #C9714E） */
+}
+#ai .ai-ik .ilist {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+#ai .ai-ik .ilist li {
+  font-size: 13.5px;
+  color: #3c4651;
+  line-height: 1.7;
+  padding-left: 18px;
+  position: relative;
+}
+#ai .ai-ik .ilist li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 9px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+#ai .ai-ik .mini.a .ilist li::before {
+  background: #7fb95e;
+}
+#ai .ai-ik .mini.b .ilist li::before {
+  background: #e0a04a;
+}
+#ai .ai-ik .fill-h {
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--ai-ink);
+  margin: 22px 0 12px;
+}
+#ai .ai-ik .scenes {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+#ai .ai-ik .scene {
+  border: 1px solid #dbefe5;
+  background: #f7fcfa;
+  border-radius: 12px;
+  padding: 15px 17px;
+}
+#ai .ai-ik .scene-t {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--ink);
+  margin-bottom: 9px;
+  flex-wrap: wrap;
+}
+#ai .ai-ik .sn {
+  flex: none;
+  font-size: 11px;
+  font-weight: 900;
+  background: #dcefe4;
+  color: #277651; /* K-49（文字。参照元 #2E8B5F） */
+  border-radius: 99px;
+  padding: 3px 11px;
+}
+#ai .ai-ik .tgt {
+  font-size: 11px;
+  font-weight: 800;
+  color: #297c55; /* K-49（文字。参照元 #2E8B5F） */
+  background: #eaf4ee;
+  border-radius: 99px;
+  padding: 2px 10px;
+}
+#ai .ai-ik .scene-b {
+  font-size: 13.5px;
+  color: #3c4651;
+  line-height: 1.75;
+}
+#ai .ai-ik .say {
+  display: block;
+  margin-top: 9px;
+  font-size: 13px;
+  color: #2e6c57;
+  background: #eff7f2;
+  border-left: 3px solid #7fb95e;
+  border-radius: 0 7px 7px 0;
+  padding: 6px 11px;
+  line-height: 1.7;
+}
+#ai .ai-ik .chk {
+  margin-top: 9px;
+  font-size: 12px;
+  color: #3e6e93;
+  background: #f0f5fa;
+  border-left: 3px solid #7fa8cc;
+  border-radius: 0 7px 7px 0;
+  padding: 7px 11px;
+  line-height: 1.7;
+}
+#ai .ai-ik .chk b {
+  color: #2e5c80;
+  font-weight: 800;
+}
+#ai .ai-ik .cond {
+  margin-top: 14px;
+  font-size: 12.5px;
+  color: #48535f;
+  background: #f5f8fb;
+  border: 1px solid #e3ebf2;
+  border-radius: 9px;
+  padding: 10px 13px;
+}
+#ai .ai-ik .cond b {
+  color: var(--ai-ink);
+  font-weight: 800;
+}
+#ai .ai-ik .fb {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+#ai .ai-ik .f {
+  display: flex;
+  gap: 13px;
+  align-items: flex-start;
+}
+#ai .ai-ik .fh {
+  flex: none;
+  width: 76px;
+  box-sizing: border-box;
+  text-align: center;
+  background: #eaf2f0;
+  color: #247a70; /* K-49（文字。参照元 var(--ai-2)） */
+  font-size: 12px;
+  font-weight: 900;
+  border-radius: 7px;
+  padding: 3px 6px;
+  line-height: 1.7;
+}
+#ai .ai-ik .ft {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  color: #3c4651;
+  line-height: 1.7;
+}
+#ai .ai-ik .qlist {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+#ai .ai-ik .q {
+  display: flex;
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: #fbfcfe;
+}
+#ai .ai-ik .qn {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  /* K-49（グラデーションの終わり。参照元 var(--ai-2)） */
+  background: linear-gradient(var(--ai-1), var(--ai-2-strong));
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#ai .ai-ik .qt {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.6;
+  margin-bottom: 5px;
+}
+#ai .ai-ik .qi {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+#ai .ai-ik .foot {
+  margin-top: 22px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--line);
+  font-size: 11.5px;
+  color: var(--muted-2);
+  line-height: 1.6;
+}
+@media (max-width: 680px) {
+  #ai .ai-ik .two {
     grid-template-columns: 1fr;
   }
 }

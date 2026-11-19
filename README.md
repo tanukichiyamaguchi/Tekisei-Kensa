@@ -62,7 +62,7 @@ pnpm dev                          # http://localhost:3000
 
 受検者画面は `http://localhost:3000/exam?q={組織ID}&p=user`（既存スタッフ用は `p=executives`）から開きます。組織 ID は `pnpm seed:local` の出力に表示されます。管理画面は `http://localhost:3000/admin/login` から、シードのオーナー（`owner@example.com`）・管理者（`admin@example.com`）と `SEED_OWNER_PASSWORD` でログインします（ブラウザは `NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST` で Auth Emulator に接続します）。
 
-- AI 解説: ローカルと CI は `AI_PROVIDER=stub`（API キー不要。確認用の固定文章を返す）。実際の Claude API を使うのは `AI_PROVIDER=anthropic` と `ANTHROPIC_API_KEY` を設定した環境だけです（キーはリポジトリや `.env.example` に書かない）。`ANTHROPIC_API_KEY` には、Anthropic のワークスペースに属する API キーを使います。ワークスペースに属さないキーでは、`anthropic-workspace-id` ヘッダーを求める 400 `invalid_request_error` になり、AI 解説を生成できません。
+- AI 解説: ローカルと CI は `AI_PROVIDER=stub`（API キー不要。確認用の固定文章を返す）。実際の Claude API を使うのは `AI_PROVIDER=anthropic` と `ANTHROPIC_API_KEY` を設定した環境だけです（キーはリポジトリや `.env.example` に書かない）。`ANTHROPIC_API_KEY` には、Anthropic のワークスペースに属する API キーを使います。ワークスペースに属さないキーでは、`anthropic-workspace-id` ヘッダーを求める 400 `invalid_request_error` になり、AI 解説を生成できません。育成・定着の AI 解説は、環境変数 `AI_TRAINING_PROMPT_VERSION`（任意）に版を設定したときだけ生成できます（空のままなら、育成・定着のタブは押せない生成ボタンと「この AI 解説は準備中です。」）。ローカルで試すときは `.env.local` に `training-v1` を設定します。CI と E2E は `training-v1` を設定しています。本番と Preview には、依頼主がプロンプトの全文（付録D §6）を確認し、その版を承認した後に設定します（承認の前の版を設定すると、起動時の検証で止まります）。
 - PDF 出力: ローカルでは Chrome／Chromium の実行ファイルのパスを `PDF_CHROMIUM_EXECUTABLE_PATH` に設定します（未設定なら PDF だけが失敗し、他の機能は動きます）。Vercel では `@sparticuz/chromium` を使うため設定不要です。
 
 | コマンド                    | 内容                                                                                                                                                          |

@@ -172,14 +172,16 @@ function aiKindPath(resultId: string, kind: AiAnalysisKind): string {
 }
 
 /**
- * POST …/ai-analysis/{kind}（生成）。本文なし（育成・定着の 8 項目と経年比較の前回は PR-7.10・PR-7.11b）。同期方式のため
+ * POST …/ai-analysis/{kind}（生成）。body は種類の要求の本文（11-6 §3.4。育成・定着は { context: 8 項目のコード }）で、JSON で送る
+ * （Content-Type は adminFetch が付ける）。body が無ければ本文なしで送る（採用向け。経年比較の前回は PR-7.11b）。同期方式のため
  * ブラウザ側のタイムアウトは設けない（04 の maxDuration に委ねる）
  */
 export function requestAiKind<K extends AiAnalysisKind>(
   resultId: string,
   kind: K,
+  body?: unknown,
 ): Promise<AiKindResponseOf<K>> {
-  return adminFetch(aiKindPath(resultId, kind), { method: "POST" });
+  return adminFetch(aiKindPath(resultId, kind), { method: "POST", body });
 }
 
 /** GET …/ai-analysis/{kind}（生成中の読み直し・通信の失敗の後の状態の確かめ） */

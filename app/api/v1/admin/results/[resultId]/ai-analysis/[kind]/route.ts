@@ -1,12 +1,13 @@
 // POST/GET /api/v1/admin/results/{resultId}/ai-analysis/{kind}（AI 解説の種類ごとの生成と状態。11-6 §3.4・§3.5。04 §5.9、§7.1）。
-// kind は recruitment・training・longitudinal。PR-7.9 は採用向けだけが有効（育成・定着と経年比較の POST は 503 AI_KIND_DISABLED）。
-// 要求の本文は読まない（育成・定着の 8 項目と経年比較の前回は PR-7.10・PR-7.11b）
+// kind は recruitment・training・longitudinal。要求の本文は育成・定着だけが読む（context の 8 項目。Content-Type が JSON でなければ
+// 415、JSON として読めなければ 400、形が違えば 422）。採用向けと経年比較は本文を読まない（あっても読まない。経年比較の前回は
+// PR-7.11b）
 import { requireAdmin } from "@/lib/auth/admin-context";
 import { isAiAnalysisKind, type AiAnalysisKind } from "@/lib/ai/kinds";
 import { generateAi, getAiState } from "@/lib/services/ai-analysis";
 import type { AiKindResponse } from "@/lib/services/dto/ai";
 import { API_ERRORS } from "@/lib/services/errors";
-import { handle, json } from "@/lib/services/http";
+import { handle, json, readJson } from "@/lib/services/http";
 
 export const runtime = "nodejs";
 // 同期方式。provider の 240 秒（04 D04-38）の外側（04 §2.9）
@@ -24,9 +25,12 @@ function kindOf(kind: string): AiAnalysisKind {
 
 export async function POST(request: Request, { params }: Params): Promise<Response> {
   return handle(request, ROUTE, async (meta) => {
-    const { resultId, kind } = await params;
+    const { resultId, kind: rawKind } = await params;
     const ctx = await requireAdmin(request, meta);
-    return json<AiKindResponse>(meta, await generateAi(ctx, resultId, kindOf(kind)));
+    const kind = kindOf(rawKind);
+    // 本文の形の検証（422）は generateAi の手順 1（11-6 §3.5）
+    const body = kind === "training" ? await readJson(request, (v) => v) : undefined;
+    return json<AiKindResponse>(meta, await generateAi(ctx, resultId, kind, body));
   });
 }
 

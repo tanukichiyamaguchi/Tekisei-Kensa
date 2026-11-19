@@ -1,4 +1,5 @@
-// U-11（08 §3.2.2）: lib/ai/prompt-builder.ts・input.ts・prompts/ の埋め込み規則（07 §2.3、§2.4）。buildMessages(kind, …)（11-6 §3.7.3）
+// U-11（08 §3.2.2）: lib/ai/prompt-builder.ts・input.ts・prompts/ の埋め込み規則（07 §2.3、§2.4）。buildMessages(kind, …)（11-6 §3.7.3）。
+// M7-ai-08（11-6 §5.1）: 育成・定着の placeholderValues（8 項目の表示名と D07-05 の丸め。11-6 §2.7.2・§2.7.5）
 import { describe, expect, it } from "vitest";
 
 import { AiProviderError } from "@/lib/ai/errors";
@@ -10,8 +11,9 @@ import {
   formatRiskForAi,
   formatSocialStyleForAi,
 } from "@/lib/ai/input";
-import { buildMessages, fillTemplate } from "@/lib/ai/prompt-builder";
+import { buildMessages, fillTemplate, placeholderValues } from "@/lib/ai/prompt-builder";
 import { RECRUITMENT_V1 } from "@/lib/ai/prompts/recruitment-v1";
+import { TRAINING_V1_SYSTEM } from "@/lib/ai/prompts/training-v1";
 import { APTITUDE_DEFINITIONS } from "@/lib/masters/indicators/aptitudes";
 import { RISK_DEFINITIONS } from "@/lib/masters/indicators/risks";
 import { TRAIT_DEFINITIONS } from "@/lib/masters/indicators/traits";
@@ -69,7 +71,7 @@ describe("U-11 buildMessages", () => {
     }
   });
 
-  it("採用向け以外は config_error（育成・定着の差し込みは PR-7.10、経年比較は PR-7.11b。種類の違う版も同じ）", () => {
+  it("経年比較（{{prompt}} は PR-7.11b）と種類の違う版は config_error", () => {
     const reasonOf = (build: () => unknown) => {
       try {
         build();
@@ -82,9 +84,23 @@ describe("U-11 buildMessages", () => {
     expect(reasonOf(() => buildMessages("training", t06TrainingInput(), "recruitment-v1"))).toBe(
       "config_error",
     );
+    expect(reasonOf(() => buildMessages("recruitment", t06Input(), "training-v1"))).toBe(
+      "config_error",
+    );
     expect(
       reasonOf(() => buildMessages("longitudinal", longitudinalInput(), "recruitment-v2")),
     ).toBe("config_error");
+    expect(reasonOf(() => placeholderValues("longitudinal", longitudinalInput()))).toBe(
+      "config_error",
+    );
+  });
+
+  it("育成・定着は training-v1 で組み立てる（system は定義そのもの）", () => {
+    const messages = buildMessages("training", t06TrainingInput(), "training-v1");
+    expect(messages.system).toBe(TRAINING_V1_SYSTEM);
+    expect(
+      messages.user.startsWith("【氏名】山田 太郎\n【職種】アイリスト（アシスタント・見習い）\n"),
+    ).toBe(true);
   });
 
   it("負値（スタイル・相性・リスク）は 0、資質の 100 超はそのまま、信頼係数は四捨五入", () => {
@@ -154,5 +170,90 @@ describe("U-11 埋め込み規則とラベル", () => {
     expect(() => buildAiAnalysisInput({ respondentName: "a", occupationCode: 99, score })).toThrow(
       RangeError,
     );
+  });
+});
+
+describe("M7-ai-08 育成・定着の差し込み（11-6 §2.7.2・§2.7.5）", () => {
+  it("t06TrainingInput の user: 1〜13 行目は氏名・職種・信頼係数・空行・【責任者・幹部の入力】・8 項目の表示名で、15 行目からは採用向けと同じ", () => {
+    const user = buildMessages("training", t06TrainingInput(), "training-v1").user;
+    const lines = user.split("\n");
+    expect(lines.slice(0, 14)).toEqual([
+      "【氏名】山田 太郎",
+      "【職種】アイリスト（アシスタント・見習い）",
+      "【信頼係数】79%",
+      "",
+      "【責任者・幹部の入力】",
+      "勤続年数:2年目",
+      "現在の評価:期待どおり",
+      "今後期待する役割:新人教育・指導担当",
+      "最近の様子:以前より元気がない",
+      "他スタッフとの関係:特定の人と合わない",
+      "本人の希望:スキルアップしたい",
+      "入職時と比べた変化:変わらない",
+      "気になっていること:報告が少ない",
+      "",
+    ]);
+    // 15 行目から後は採用向けの user の 5 行目から後と同じ（スコアの差し込みの値も同じ）
+    expect(lines.slice(14)).toEqual(EXPECTED_T06_USER.split("\n").slice(4));
+    expect(user).not.toContain("{{");
+    expect(user).not.toContain("}}");
+  });
+
+  it("8 項目はコードの表示名を差し込む（「~」は半角のまま。ほかの選択肢でも）", () => {
+    const input = {
+      ...t06TrainingInput(),
+      context: {
+        tenure: "years_3_5",
+        evaluation: "issues",
+        expectedRole: "stock_equipment",
+        recentState: "complaining",
+        relationship: "unknown",
+        wish: "unknown",
+        changeSinceJoining: "less_proactive",
+        concern: "none",
+      },
+    };
+    const values = placeholderValues("training", input);
+    expect(Object.fromEntries([...values].filter(([key]) => key.startsWith("context.")))).toEqual({
+      "context.tenure": "3年~5年",
+      "context.evaluation": "課題が多い",
+      "context.expectedRole": "在庫・機材管理担当",
+      "context.recentState": "不満をこぼしている",
+      "context.relationship": "把握していない",
+      "context.wish": "把握していない",
+      "context.changeSinceJoining": "以前より消極的になった",
+      "context.concern": "特にない",
+    });
+    // 採用向けの差し込み 40 個は採用向けと同じ値
+    const recruitment = placeholderValues("recruitment", t06Input());
+    expect(recruitment.size).toBe(40);
+    expect(values.size).toBe(48);
+    for (const [key, value] of recruitment) expect(values.get(key), key).toBe(value);
+  });
+
+  it("D07-05 の丸め: 信頼係数 82.6 → 83、組織との相性の負の値 → 0、リスク 12.5 → 12.5", () => {
+    const base = scoreAnswers(cyclicAnswers());
+    const result: ScoreResult = {
+      ...base,
+      reliability: 82.6,
+      compatibility: { ...base.compatibility, adaptive_environment: -7 },
+      risks: { ...base.risks, misconduct: 12.5 },
+    };
+    const user = buildMessages("training", { ...t06TrainingInput(), result }, "training-v1").user;
+    expect(user).toContain("【信頼係数】83%");
+    expect(user).toContain("適応する環境:0 適応する業務:");
+    expect(user).toContain("不祥事:12.5 苦情:");
+  });
+
+  it("純関数: 同じ入力で同じ文字列。値の中の {{ は展開しない", () => {
+    const a = buildMessages("training", t06TrainingInput(), "training-v1");
+    const b = buildMessages("training", t06TrainingInput(), "training-v1");
+    expect(a).toEqual(b);
+    const named = buildMessages(
+      "training",
+      { ...t06TrainingInput(), respondentName: " {{context.tenure}} " },
+      "training-v1",
+    ).user;
+    expect(named.startsWith("【氏名】{{context.tenure}}\n")).toBe(true);
   });
 });

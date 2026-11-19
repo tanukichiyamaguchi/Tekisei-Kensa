@@ -3,8 +3,8 @@
 | 項目 | 内容 |
 |---|---|
 | 文書名 | 適性検査システム 基本設計 04 API・サーバ処理設計 |
-| 版 | 2.9 |
-| 作成日 | 2026-09-17（1.1 版: 2026-09-19、1.2 版: 2026-09-21、2.0 版: 2026-09-21。技術構成の変更（Supabase → Firebase。10 K-06）を反映した全面改版。2.1 版: 2026-09-21。Firebase 化後の分冊間整合（02 2.1 版の関数名・型名に統一）。2.2 版: 2026-09-24。本番デプロイで判明した事項の反映。2.3 版: 2026-11-09。M7 の PR-7.3（受検者画面。11 総論 5.4、11-1 §3.4）。2.4 版: 2026-11-10。M7 の PR-7.4（再受験のつながりと母集団。11 総論 5.4、11-1 §3.4.1・§3.4.3、11-5 §2.1）。2.5 版: 2026-11-10。M7 の PR-7.5（回答一覧の API。11 総論 5.4、11-2 §3.5〜§3.11）。2.6 版: 2026-11-10。M7 の PR-7.6（回答一覧の画面。11 総論 5.4、11-2 §4.1）。2.7 版: 2026-11-10。M7 の PR-7.7a（組織内分類。11 総論 5.4、11-3 §3.2・§4.1）。2.8 版: 2026-11-11。M7 の PR-7.7b（在籍・退職。11 総論 5.4、11-3 §3.3〜§3.6・§4.1）。2.9 版: 2026-11-14。M7 の PR-7.9（AI 解説の 3 つのタブと採用向け。11 総論 5.4、11-6 §3.4〜§3.7・§4.1）。改版履歴は §12） |
+| 版 | 2.10 |
+| 作成日 | 2026-09-17（1.1 版: 2026-09-19、1.2 版: 2026-09-21、2.0 版: 2026-09-21。技術構成の変更（Supabase → Firebase。10 K-06）を反映した全面改版。2.1 版: 2026-09-21。Firebase 化後の分冊間整合（02 2.1 版の関数名・型名に統一）。2.2 版: 2026-09-24。本番デプロイで判明した事項の反映。2.3 版: 2026-11-09。M7 の PR-7.3（受検者画面。11 総論 5.4、11-1 §3.4）。2.4 版: 2026-11-10。M7 の PR-7.4（再受験のつながりと母集団。11 総論 5.4、11-1 §3.4.1・§3.4.3、11-5 §2.1）。2.5 版: 2026-11-10。M7 の PR-7.5（回答一覧の API。11 総論 5.4、11-2 §3.5〜§3.11）。2.6 版: 2026-11-10。M7 の PR-7.6（回答一覧の画面。11 総論 5.4、11-2 §4.1）。2.7 版: 2026-11-10。M7 の PR-7.7a（組織内分類。11 総論 5.4、11-3 §3.2・§4.1）。2.8 版: 2026-11-11。M7 の PR-7.7b（在籍・退職。11 総論 5.4、11-3 §3.3〜§3.6・§4.1）。2.9 版: 2026-11-14。M7 の PR-7.9（AI 解説の 3 つのタブと採用向け。11 総論 5.4、11-6 §3.4〜§3.7・§4.1）。2.10 版: 2026-11-19。M7 の PR-7.10（育成・定着の AI 解説。11 総論 5.4、11-6 §3.4〜§3.8・§4.1）。改版履歴は §12） |
 | 対象 | 実装者（Route Handler、`lib/services/`、`lib/auth/`、`lib/db/` の実装担当）、05〜08 分冊の設計者 |
 
 ## 0. 本書の位置づけ
@@ -227,7 +227,7 @@ export const pdfModeSchema = z.enum(["full", "restricted"]);
 
 | 規則 | 内容 |
 |---|---|
-| 未知のキー | JSON ボディの未知キーは無視する（`z.object` の既定。`strict()` は使わない）。将来のキー追加でクライアントを壊さないため |
+| 未知のキー | JSON ボディの未知キーは無視する（`z.object` の既定。`strict()` は使わない）。将来のキー追加でクライアントを壊さないため。2.10 版: 例外として、育成・定着の生成の要求の `context`（8 項目）は、余分なキーも 422 にする（外側の未知のキーは無視する。§5.9、11-6 §3.4 の 1.2 版） |
 | 検証失敗 | 422 `VALIDATION_ERROR`。`details.issues` に `{ path: "answers[3].choiceCode", message: "..." }` の配列を入れる。**入力値そのものは `details` に含めない**（個人情報の混入防止。01 のログ方針） |
 | JSON 構文エラー | 400 `INVALID_JSON` |
 | 電話番号 | 必須。前後の空白を除いて 1〜30 文字（`requiredText(PHONE_MAX_LENGTH)`）。書式・桁数・文字の種類は検査せず、正規化しない（全角の数字・ハイフンもそのまま `respondents.phoneNumber`・`usageLogs.phoneNumber` に保存する。10 K-39 Q-17・K-42、11-1 §2.2.5。設計判断 D04-06（2.3 版で改めた））。上限の値は画面の検査と同じ定数（`lib/presentation/registration-rules.ts`）。表示・赤枠の条件は 05 分冊 |
@@ -1865,6 +1865,8 @@ export type UpdatePersonInput = z.infer<typeof updatePersonInputSchema>;
 
 要件定義書 §6.2 A-09、§6.6、付録D、00 §3.6、00 §2.2（`aiAnalyses`、`results` の種類ごとの AI の項目）、01（`maxDuration` 300）に対応します。2.9 版（M7 の PR-7.9）で、種類ごとの API に改めました（11-6 §3.4・§3.5 が正。本書はその要約）。種類 `kind` は `recruitment`（採用向け）・`training`（育成・定着）・`longitudinal`（経年比較）の 3 つで、PR-7.9 では採用向けだけが生成でき、育成・定着（PR-7.10）と経年比較（PR-7.11b）は有効でない種類として状態だけを返します。種類なしの `…/ai-analysis` は消しました。生成処理そのもの（プロンプト組み立て、provider 呼び出し、JSON 検証、`aiAnalyses` への保存、状態遷移）は 07 分冊の `lib/ai/` と `lib/services/ai-analysis.ts` の共同責任で、本書は **API の契約と状態の扱い** を定めます。`results` の AI の項目は種類ごとに 4 つ（状態・開始日時・理由・最新の分析の ID。採用向けは今の `aiGenerationStatus`・`aiGenerationStartedAt`・`aiGenerationError`・`latestAiAnalysisId`、育成・定着と経年比較は 11-6 §3.1）で、02 §3.5 で確定済みです。
 
+2.10 版（M7 の PR-7.10。11-6 §3.4・§3.5 の 1.2 版）で、育成・定着を生成できるようにしました。育成・定着は、環境変数 `AI_TRAINING_PROMPT_VERSION`（00 §3.2、01 §4.1）を設定したときだけ有効で、本番と Preview は依頼主の確認（11-6 §2.7.4）まで設定しません（それまでは、正しい本文の POST は今と同じく 503 `AI_KIND_DISABLED`）。育成・定着の POST だけが本文（8 項目のコード）を読みます。経年比較は PR-7.11b まで有効でない種類のままです。
+
 #### 状態遷移（00 D-10、07 §6.2。種類ごと）
 
 ```mermaid
@@ -1885,11 +1887,11 @@ stateDiagram-v2
 | 項目 | 内容 |
 |---|---|
 | 認可 | admin 以上（対象結果が見えること） |
-| リクエスト | 本文なし（読まない。育成・定着の 8 項目は PR-7.10、経年比較の `previousResultId` は PR-7.11b が読み始める。11-6 §3.4） |
+| リクエスト | 採用向け・経年比較: 本文なし（あっても読まない。経年比較の `previousResultId` は PR-7.11b が読み始める）。育成・定着（2.10 版）: `{ "context": { "tenure": "year_2", "evaluation": "meets", "expectedRole": "trainer", "recentState": "low_energy", "relationship": "specific_mismatch", "wish": "skill_up", "changeSinceJoining": "unchanged", "concern": "few_reports" } }`（`Content-Type: application/json`。8 項目すべて必須で、値は 11-6 §2.5.3 のコードだけ。`context` の中の余分なキー・欠け・決まったコードの外は 422、本文の外側の未知のキーは §2.3 のとおり無視）。11-6 §3.4 |
 | 処理 | 下記の手順。**同期方式**（応答まで生成を待つ。`maxDuration = 300`） |
 | 監査ログ | `result.ai_generate`（成功は `details: { "status": "completed", "kind", "aiAnalysisId", "inputTokens", "outputTokens" }`、失敗は `{ "status": "failed", "kind", "reason" }`。トークン数は 07 §4.8 の `AiGenerateResult.usage` から（stub は `null`）。開始時には書かず、終了時に成功・失敗の書き込みと同じバッチで 1 件。氏名は入れない） |
 
-処理手順（`generateAi(ctx, resultId, kind)`。11-6 §3.5）:
+処理手順（`generateAi(ctx, resultId, kind, body)`。2.10 版で `body` を足した。11-6 §3.5）:
 
 1. `kind` が 3 つのどれでもない、または `resultId` が文書 ID の形でなければ 404 `NOT_FOUND`（`kind` はルート、`resultId` の形は手順 2 の `loadVisibleResult` が判定する）。
 2. `loadVisibleResult(ctx, resultId)`（`getResult` と `assertVisibleToAdmin`）と `getRespondent`（氏名・職業）。見えなければ 404 `RESULT_NOT_FOUND`。
@@ -1902,6 +1904,12 @@ stateDiagram-v2
 9. 成功: `saveAiAnalysis({ resultId, viewer: ctx, kind, generated, reliability, meta: ctx.request })`（`ai-analyses-repository.ts`。02 §8.6）で `aiAnalyses` 文書の作成（`organizationId`・`respondentId` は `results` 文書の値、`resultId`、`provider`、`model`、`promptVersion`、`analysisKind`（`kind`）、`rawText`、`output`、`usage`、`stopReason`、`requestId`、`reliability`、`generatedBy` = `ctx.uid`、監査フィールド）と、その種類の `results` の項目の `update`（`completed`・最新の分析の ID・理由 `null`）と `auditLogs`（`result.ai_generate`）を **1 バッチ** で書く（07 §7.1「同一バッチ」）。保存の失敗は理由 `internal_error` で手順 10 と同じ。
 10. 失敗: `markAiGenerationFailed({ resultId, viewer: ctx, kind, reason, meta: ctx.request })`（02 §8.6）でその種類を `failed`・理由に `update` し、`auditLogs` を同じバッチで書く（下記の短い理由コード。個人情報・API キー・生の応答本文を含めない。記録の失敗はログだけ）→ 502 `AI_GENERATION_FAILED`（`details.reason` に同じコードを載せる）。`aiAnalyses` 文書は作らない（07 §4.6）。
 11. 結果を読み直し、`buildAiArea(…, { onlyKind: kind })`（11-6 §3.7.7）のその種類の状態と最新の分析に `resultId` と `kind` を付けて返す（200。読み直した結果で、その種類が出せないタブになっていれば（生成の間に役職を責任者にした）409 `AI_NOT_APPLICABLE`）。
+
+2.10 版（育成・定着。11-6 §3.5 の 1.2 版）:
+
+- 育成・定着の POST は、手順 1 の後・手順 2 の前に本文を読む（11-6 §3.5 の 1）。`Content-Type` が JSON でなければ 415 `UNSUPPORTED_MEDIA_TYPE`、JSON として読めなければ 400 `INVALID_JSON`（§2 の共通の `readJson`）、形が違えば 422 `VALIDATION_ERROR`（`trainingAiRequestSchema`。`lib/services/schemas/admin-results.ts`。`details.issues` は項目の道筋と文だけで、送った値は入れない）。手順 2・3 より先なので、見えない結果や責任者の受験でも、本文が不正なら 422 が先に返る。
+- 手順 5 の有効かどうかは `promptVersionOf("training")`（`AI_TRAINING_PROMPT_VERSION`。未設定・空なら 503 `AI_KIND_DISABLED`）。手順 8 の育成・定着の入力は `{ ...buildAiAnalysisInput(…), context }`（user に 8 項目の表示名が入る。07 §2.3）。
+- 手順 9 の育成・定着は、`saveAiAnalysis` に `trainingContext` を渡し、`aiAnalyses.trainingContext` と、同じバッチで `results.trainingContext` を書く（11-6 の I-ai-2）。手順 7 と手順 10 は 8 項目に触れない（失敗のときは 8 項目を保存しない。作り直しの生成中と失敗のあいだは、前の値と前の分析が対で残る）。ログと監査ログには 8 項目の値を出さない（11-6 §2.16）。
 
 その種類の理由の項目（採用向けは `aiGenerationError`。11-6 §3.1）に保存する値（07 §4.6 の `AI_FAILURE_REASONS` と同じ語彙。07 の一覧が正で、本書は service 側が付ける `internal_error` だけを追加する）:
 
@@ -1956,21 +1964,24 @@ internal_error   Firestore の書き込みエラーなど自システム側の�
 }
 ```
 
-- 育成・定着の応答は、採用向けの形に `context`（生成のときの 8 項目。PR-7.9 ではいつも `null`）を足したもの。経年比較の応答は、PR-7.9 では状態だけ（`status`・`startedAt`・`error`・`enabled`。前回・次の受験・受験回のつながり・レポートは PR-7.11a・PR-7.11b が足す）。
+- 育成・定着の応答は、採用向けの形に `context`（生成のときの 8 項目。PR-7.9 ではいつも `null`）を足したもの（2.10 版: `context` は生成済みで最新の分析が読めたときだけ `results.trainingContext` で、ほかは `null`。`latest.output` は 11-6 §2.8.2 の `TrainingAiOutput`）。経年比較の応答は、PR-7.9 では状態だけ（`status`・`startedAt`・`error`・`enabled`。前回・次の受験・受験回のつながり・レポートは PR-7.11a・PR-7.11b が足す）。
 - 保存した出力が今のスキーマで読めないとき（生成済みなのに最新の分析の ID が無い・文書が無い・必須の項目が無い・参照が合わない・スキーマに合わない。11-6 §3.7.7）は、その種類を `status: "failed"`・`error: "internal_error"`・`latest: null` として返す（保存はしない。ログ `ai.output_unreadable`。11-6 §2.16）。
 
 エラー:
 
 | HTTP | code | 条件 |
 |---:|---|---|
+| 400 | `INVALID_JSON` | 育成・定着の POST で、本文を JSON として読めない（2.10 版） |
 | 404 | `NOT_FOUND` | `kind` が 3 つのどれでもない、`resultId` が文書 ID の形でない |
 | 404 | `RESULT_NOT_FOUND` | 対象結果が見えない |
 | 409 | `AI_NOT_APPLICABLE` | 採用向け・育成・定着で、表示上の役職が責任者 |
 | 409 | `AI_ALREADY_GENERATING` | 生成中（10 分以内） |
+| 415 | `UNSUPPORTED_MEDIA_TYPE` | 育成・定着の POST で、`Content-Type` が JSON でない（本文が無いときを含む。2.10 版） |
+| 422 | `VALIDATION_ERROR` | 育成・定着の POST の本文の形が違う（`context` が無い・8 項目の欠け・決まったコードの外・`context` の中の余分なキー。2.10 版） |
 | 502 | `AI_GENERATION_FAILED` | 生成失敗（`details: { "reason": "invalid_json" }`） |
-| 503 | `AI_KIND_DISABLED` | その種類が有効でなく、生成済みでない |
+| 503 | `AI_KIND_DISABLED` | その種類が有効でなく、生成済みでない（2.10 版: 育成・定着は `AI_TRAINING_PROMPT_VERSION` を設定していないとき。本番は依頼主の確認まで） |
 
-- 2.9 版で 429 `AI_DAILY_LIMIT_EXCEEDED` は無くなりました（日次上限の廃止。K-25。§2.8）。422 `VALIDATION_ERROR`（育成・定着・経年比較の本文）と 409 `LONGITUDINAL_PREVIOUS_REQUIRED`・`LONGITUDINAL_PAIR_CHANGED`・`LONGITUDINAL_ORDER_INVALID` は、本文を読み始める PR-7.10・PR-7.11b で足します（11-6 §3.4）。
+- 2.9 版で 429 `AI_DAILY_LIMIT_EXCEEDED` は無くなりました（日次上限の廃止。K-25。§2.8）。422 `VALIDATION_ERROR`（育成・定着・経年比較の本文）と 409 `LONGITUDINAL_PREVIOUS_REQUIRED`・`LONGITUDINAL_PAIR_CHANGED`・`LONGITUDINAL_ORDER_INVALID` は、本文を読み始める PR-7.10・PR-7.11b で足します（11-6 §3.4）。2.10 版: 育成・定着の本文の 422 と、本文を読むときの 400・415 を PR-7.10 で足しました（経年比較の本文の 422 と `LONGITUDINAL_*` は PR-7.11b）。
 
 #### `GET /api/v1/admin/results/{resultId}/ai-analysis/{kind}`
 
@@ -2197,6 +2208,7 @@ export function buildAiAnalysisInput(args: { respondentName: string; occupationC
 ```
 
 - 2.9 版（11-6 §3.7.1・§3.7.3）: `AiProvider.generate` は種類 `kind`（`AiAnalysisKind`）を受け、出力の上限 `max_tokens` は `AI_MAX_TOKENS[kind]`（採用向け 16000・育成・定着 16000・経年比較 32000。K-25）。版の種類が `kind` と違えば `config_error`（API を呼ばない）。PR-7.9 では、provider・スタブとも採用向けだけを生成し、育成・定着（PR-7.10）と経年比較（PR-7.11b）は `config_error`（サービスは有効でない種類を 503 `AI_KIND_DISABLED` で先に止めるので、provider までは来ない）。
+- 2.10 版（11-6 §3.7.3 の 1.2 版）: provider・スタブとも育成・定着を生成する（出力は `TrainingAiOutput`。経年比較は PR-7.11b まで `config_error`）。版の種類の確かめ（`training` に `recruitment-v2` など）は今のまま `config_error`。
 
 - `AiAnalysisInput.occupationLabel` は `lib/masters/occupations.ts` の表示名（例: `アイリスト`、`ネイリスト`）です（00 §1.10、10 K-19）。
 - 応答の `output` は `zod` で付録D §2 のスキーマに検証済みのもの（07）。検証に失敗した生テキストは `aiAnalyses` に保存せず（成功時のみ文書を作成。07 §4.6）、`aiGenerationError = "invalid_json"` にします。
@@ -2506,9 +2518,9 @@ export interface ComparisonDto extends ComparisonResult {
 ```
 
 ```ts
-// lib/services/dto/ai.ts（2.9 版。11-6 §3.6 が正。PR-7.9 の形）
+// lib/services/dto/ai.ts（2.9 版。11-6 §3.6 が正。2.10 版で TrainingAiDto の形を改めた）
 import type { AiAnalysisKind } from "@/lib/ai/kinds";
-import type { AiAnalysisOutput, AiGenerationStatus, AiOutputByKind } from "@/lib/ai/types";
+import type { AiAnalysisOutput, AiGenerationStatus, TrainingAiOutput } from "@/lib/ai/types";
 import type { TrainingContext } from "@/lib/masters/training-context";
 
 export interface AiKindStateDto {
@@ -2530,8 +2542,8 @@ export interface RecruitmentAiDto extends AiKindStateDto {
   readonly latest: AiLatestDto<AiAnalysisOutput> | null;
 }
 export interface TrainingAiDto extends AiKindStateDto {
-  readonly context: TrainingContext | null; // PR-7.9 ではいつも null
-  readonly latest: AiLatestDto<AiOutputByKind["training"]> | null; // 出力の型は PR-7.10 が入れる
+  readonly context: TrainingContext | null; // results.trainingContext（生成済みで最新の分析が読めたときだけ。ほかは null）
+  readonly latest: AiLatestDto<TrainingAiOutput> | null; // 2.10 版（11-6 §2.8.2）
 }
 export type LongitudinalAiDto = AiKindStateDto; // 前回・次の受験・links・latest は PR-7.11a・PR-7.11b
 export interface AiAreaDto {
@@ -2572,9 +2584,9 @@ export type AiKindResponse =
 | `getEmployment(ctx, now?)`（2.8 版。`now` は基準日のテスト用） | — | `EmploymentDto`（§5.7） | `listOrganizationPeople`（下の行）、`todayInTokyo`（`lib/presentation/employment.ts`） | `employment.view`（`{ count }` は人数） |
 | `listOrganizationPeople(ctx)`（2.7 版。`organization-people.ts`。組織内分類と在籍・退職で共用） | — | `OrganizationPerson[]`（代表の `submittedAt` の降順。11-3 §3.6） | `listResults`（Q3 / Q4 の全件）、`selectCountedHeads`、`getRespondentsByIds`（代表の受検者） | なし（呼び出し側が書く） |
 | `listUsageLogs(ctx)`（2.5 版でクエリをやめた） | — | `UsageLogListDto` | `listUsageLogs({ viewer })`（Q5（改）/ Q6（改）の全件。送信済みだけ） | `usage_log.view` |
-| `generateAi(ctx, resultId, kind)`（2.9 版。`generateAiAnalysis` を置き換えた） | 種類（本文は PR-7.10・PR-7.11b から） | `AiKindResponse` | `getResult`、`getRespondent`、`markAiGenerationStarted`（トランザクション。種類の項目）、07 の provider、`saveAiAnalysis` / `markAiGenerationFailed`（バッチ）、`buildAiArea`（応答） | `result.ai_generate`（同バッチ。`details.kind`） |
+| `generateAi(ctx, resultId, kind, body)`（2.9 版。`generateAiAnalysis` を置き換えた。2.10 版で `body` を足した） | 種類と要求の本文（2.10 版: 育成・定着は `trainingAiRequestSchema` で読む。採用向けと経年比較は `undefined`。経年比較の本文は PR-7.11b） | `AiKindResponse` | `getResult`、`getRespondent`、`markAiGenerationStarted`（トランザクション。種類の項目）、07 の provider、`saveAiAnalysis` / `markAiGenerationFailed`（バッチ）、`buildAiArea`（応答） | `result.ai_generate`（同バッチ。`details.kind`） |
 | `getAiState(ctx, resultId, kind)`（2.9 版。`getAiAnalysisState` を置き換えた） | 種類 | `AiKindResponse` | `getResult`、`getRespondent`、`buildAiArea`、滞留時 `markAiGenerationFailed` | 滞留時のみ `result.ai_generate`（failed） |
-| `isAiKindEnabled(kind)`・`promptVersionOf(kind)`（2.9 版） | 種類 | 真偽・版（無効なら `null`） | なし（環境変数。PR-7.9 は採用向けだけが `AI_PROMPT_VERSION`） | なし |
+| `isAiKindEnabled(kind)`・`promptVersionOf(kind)`（2.9 版） | 種類 | 真偽・版（無効なら `null`） | なし（環境変数。PR-7.9 は採用向けだけが `AI_PROMPT_VERSION`。2.10 版: 育成・定着は `AI_TRAINING_PROMPT_VERSION`（未設定・空なら `null`）。経年比較は PR-7.11b まで `null`） | なし |
 | `buildAiArea({ viewer, result, respondent }, { onlyKind? })`・`visibleTabsOf(result, respondent)`（2.9 版。`ai-area.ts`） | 結果・受検者 | `AiAreaDto`・出すタブ | `getAiAnalysis`（種類の一致も確かめる。読めなければ `failed`・`internal_error` とログ `ai.output_unreadable`） | なし |
 | `exportPdf(ctx, { resultId, mode, scope })` | | `{ bytes: Uint8Array; filename: string }` | `getResult`（可視性確認）、`fetchPopulation`（`scope` 指定時の 0 件判定）+ 07 の `lib/pdf` | `result.pdf_export` |
 | `validateInviteToken(inviteToken)` | 平文トークン | `{ organizationName } \| null`（例外を投げない。06 M-02 の事前検証） | `findOrganizationByInviteTokenHash` | なし |
@@ -2893,5 +2905,6 @@ sequenceDiagram
 | 2.7 | 2026-11-10 | M7 の PR-7.7a（組織内分類。11 総論 5.4・6.1、11-3 §3.2・§3.5・§3.6・§4.1・§4.3）。§3.2 の組織内分類の行（人の一覧）。§5.7 を 11-3 §3.2 の要約（クエリなし・`includeExcluded` の廃止（付いていても無視し 422 にしない）、`getClassification(ctx)` → `listOrganizationPeople` の手順 1〜7、`ClassificationDto { people }` と見本の値、監査 `classification.view` の `count` は人数、個人情報は代表の受検者の氏名・電話番号だけ、16 タイプの枠は返さない、エラー表から 422 の行を消して 503 を足した）に置き換え、在籍・退職（11-3 §3.3）は PR-7.7b が足すと書いた。§8.1 のファイル（`organization-people.ts`、`person-chain.ts` の `selectCountedHeads`、`schemas/admin-results.ts` を消した）、§8.2 の Dto（`ClassificationMemberDto` と旧形の `ClassificationDto` を `ClassificationDto { people }`・`ClassificationPersonDto` に置き換えた）、§8.3 の関数（`getClassification(ctx)`・`listOrganizationPeople`）、§8.4（`listResultsForClassification` を消し、`listResults` の用途に組織内分類）、§10 の 06・08 宛て、§11 の D04-31（K-29 を引く）・D04-32（除外者を数えない。`includeExcluded` は廃止。K-39 Q-24）・D04-55 を改めた |
 | 2.8 | 2026-11-11 | M7 の PR-7.7b（在籍・退職。11 総論 5.4・6.1、11-3 §3.3〜§3.6・§4.1）。§2.6 の `AuditAction` の型の写しとタイミングの閲覧系に `employment.view`。§3.2 に `GET /api/v1/admin/employment` の行。§5.7 の見出しを「組織内分類・在籍・退職」にし、前置きの「在籍・退職の API は PR-7.7b が足します」を改め、在籍・退職の小節（11-3 §3.3 の要約: 認可・クエリなし・`getEmployment(ctx)` の手順・基準日 `today`（Asia/Tokyo）・監査ログ `employment.view` の `{ count }`・`EmploymentDto` と見本の値・電話番号を返さない・エラー・区分などの更新は §5.6 の `PATCH`（API を足さない）・画面の Server Component も `getEmployment` を直接呼ぶ）を足した。§8.1（`classification.ts` の `getEmployment`）、§8.2（`EmploymentDto`・`EmploymentPersonDto`）、§8.3（`getEmployment(ctx, now?)` の行）、§10 の 06・08 宛て、§11 の D04-31（在籍・退職も閲覧範囲で数える）・D04-55（在籍・退職も同じ目安。PF-10）を改めた |
 | 2.9 | 2026-11-14 | M7 の PR-7.9（AI 解説の 3 つのタブと採用向け。11 総論 5.4・6.1、11-6 §3.4〜§3.7・§4.1）。§2.4 のエラーコードの型の写しと表から 429 `AI_DAILY_LIMIT_EXCEEDED` を消し、409 `AI_NOT_APPLICABLE`・503 `AI_KIND_DISABLED` を足した（経年比較の `LONGITUDINAL_*` は PR-7.11b）。§2.8 から AI 生成の日次上限を消した（K-25。`countAiAnalysesSince` と Q14 は残す）。§2.9 の `maxDuration` を種類ごとのルートに。§3.2 の AI 解説の 2 行を `…/ai-analysis/{kind}` に。§5.4 の読み取り（`buildAiArea`）と応答の `aiAnalysis` を `ai`（`AiAreaDto`。PR-7.9 の形）に。§5.9 を種類ごとの API に書き直した（状態遷移は種類ごと、POST の手順 1〜11（責任者の受験の 409、有効でない種類の 503、読めない出力の作り直し、`buildAiArea` で応答）、監査ログの `details.kind`、応答の `kind`・`enabled`、エラー表、GET の返し得るエラー。本文は PR-7.10・PR-7.11b から読む）。§7.1 の打ち切り対策・二重起動の手順の番号、コスト上限、`AiProvider.generate(kind, …)` と `AI_MAX_TOKENS`。§8.1 のファイル（`rate-limit.ts`・`ai-analysis.ts`・`ai-area.ts`・`dto/ai.ts`）、§8.2 の `ResultDetailDto.ai` と `dto/ai.ts` の型の写し（`AiAnalysisDto` を消した）、§8.3 の service 関数（`generateAi`・`getAiState`・`isAiKindEnabled`・`promptVersionOf`・`buildAiArea`・`visibleTabsOf`。`generateAiAnalysis`・`getAiAnalysis` の行を置き換えた）、§8.4 のリポジトリの契約の `kind` と `toAiAnalysisDto` の削除、§9.2 のシーケンス、§10 の 07・08 の行。検証のあと: §5.9 の手順 1 の判定の場所（`kind` はルート、`resultId` の形は `loadVisibleResult`）、手順 4 と GET の読めない出力の形（最新の分析の ID が無い・必須の項目が無いを足した） |
+| 2.10 | 2026-11-19 | M7 の PR-7.10（育成・定着の AI 解説。11 総論 5.4・6.1、11-6 §3.4〜§3.8・§4.1）。§2.3 の未知のキーの行（育成・定着の `context` の例外への参照）。§5.9 の冒頭の 2.10 版の注記（育成・定着の有効化と `AI_TRAINING_PROMPT_VERSION`）、POST の要求（育成・定着の本文 `context` の 8 項目。`context` の中の余分なキーは 422、外側の未知のキーは無視）、処理の手順の 2.10 版の注記（本文の検証の順・415・400・422、有効かどうか、入力と `trainingContext` の保存）、応答の `context`、エラーの表（400・415・422 を足し、503 に注記）、表の後の注記。§7.1 の provider の注記。§8.2 の DTO の写し（`TrainingAiDto`）。§8.3 の `generateAi` の `body` と `promptVersionOf` |
 
 以上。

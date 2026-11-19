@@ -2,8 +2,9 @@
 // 種類ごとの AI 解説の生成と状態（11-6 §3.9 の useAiGeneration。§2.3.4・§2.3.5、06 §3.5.9）。旧の AI 解説の領域の生成・読み直し・
 // 失敗の扱いを種類ごとに一般化したもの。API を呼ぶために resultId を引数に足した（§3.9 は useAiGeneration(kind, initial)。名前と
 // 引数は 11 総論 8.3 の 13 のとおり先に入るこの形に合わせ、後の仕様書を読み替える）。
-// - generate(): 生成の要求（POST …/ai-analysis/{kind}。同期方式で最大 300 秒。ブラウザ側のタイムアウトは設けない）。この画面の要求・
-//   読み直しの最中、404 の後（locked）、生成済みのときは何もしない（戻り値 false）。応答が届いたら、その内容で状態を置き換える
+// - generate(body?): 生成の要求（POST …/ai-analysis/{kind}。同期方式で最大 300 秒。ブラウザ側のタイムアウトは設けない）。body は種類の
+//   要求の本文（§3.4。育成・定着は { context: 8 項目のコード }。採用向けは本文なし）で、そのまま requestAiKind に渡す。この画面の
+//   要求・読み直しの最中、404 の後（locked）、生成済みのときは何もしない（戻り値 false）。応答が届いたら、その内容で状態を置き換える
 //   （generating なら読み直しに移る）。失敗は classifyAiPostFailure（§3.7.10）で分ける: 409 AI_ALREADY_GENERATING は生成中の表示で
 //   読み直し、502 は失敗の枠（理由は details.reason）、404 は通知（Toast）に応答の文を出して再読み込みまでボタンを押せなくし、通信の
 //   失敗と 5xx は GET で 1 回確かめ（generating なら読み直し、確かめも失敗したら通知 T-33）、そのほか（409 AI_NOT_APPLICABLE・
@@ -44,8 +45,8 @@ export interface AiGeneration<K extends AiAnalysisKind> {
   readonly pollingTimedOut: boolean;
   /** この画面で生成を始めたか */
   readonly startedHere: boolean;
-  /** 生成を始める。始めなかったとき（要求・読み直しの最中、404 の後、生成済み）は false */
-  readonly generate: () => boolean;
+  /** 生成を始める（body は要求の本文。育成・定着の 8 項目）。始めなかったとき（要求・読み直しの最中、404 の後、生成済み）は false */
+  readonly generate: (body?: unknown) => boolean;
 }
 
 export function useAiGeneration<K extends AiAnalysisKind>(
@@ -110,50 +111,53 @@ export function useAiGeneration<K extends AiAnalysisKind>(
     }
   }, [kind, resultId, toast]);
 
-  const generate = useCallback((): boolean => {
-    const now = latest.current;
-    if (now.busy !== "idle" || now.locked || now.status === "completed") return false;
-    latest.current = { ...now, busy: "requesting" };
-    setStartedHere(true);
-    setPollingTimedOut(false);
-    setBusy("requesting");
-    void (async () => {
-      try {
-        const dto = await requestAiKind(resultId, kind);
-        setState(dto);
-        setBusy(dto.status === "generating" ? "polling" : "idle");
-      } catch (error) {
-        if (!(error instanceof AdminApiError)) {
-          await checkState();
-          return;
-        }
-        const action = classifyAiPostFailure(error);
-        switch (action.kind) {
-          case "poll":
-            setState((s) => ({ ...s, status: "generating" }));
-            setBusy("polling");
-            break;
-          case "failed":
-            setState((s) => ({ ...s, status: "failed", error: action.reason }));
-            setBusy("idle");
-            break;
-          case "notFound":
-            toast.show(action.message, "error");
-            setLocked(true);
-            setBusy("idle");
-            break;
-          case "check":
+  const generate = useCallback(
+    (body?: unknown): boolean => {
+      const now = latest.current;
+      if (now.busy !== "idle" || now.locked || now.status === "completed") return false;
+      latest.current = { ...now, busy: "requesting" };
+      setStartedHere(true);
+      setPollingTimedOut(false);
+      setBusy("requesting");
+      void (async () => {
+        try {
+          const dto = await requestAiKind(resultId, kind, body);
+          setState(dto);
+          setBusy(dto.status === "generating" ? "polling" : "idle");
+        } catch (error) {
+          if (!(error instanceof AdminApiError)) {
             await checkState();
-            break;
-          case "error":
-            toast.show(action.message, "error");
-            setBusy("idle");
-            break;
+            return;
+          }
+          const action = classifyAiPostFailure(error);
+          switch (action.kind) {
+            case "poll":
+              setState((s) => ({ ...s, status: "generating" }));
+              setBusy("polling");
+              break;
+            case "failed":
+              setState((s) => ({ ...s, status: "failed", error: action.reason }));
+              setBusy("idle");
+              break;
+            case "notFound":
+              toast.show(action.message, "error");
+              setLocked(true);
+              setBusy("idle");
+              break;
+            case "check":
+              await checkState();
+              break;
+            case "error":
+              toast.show(action.message, "error");
+              setBusy("idle");
+              break;
+          }
         }
-      }
-    })();
-    return true;
-  }, [checkState, kind, resultId, toast]);
+      })();
+      return true;
+    },
+    [checkState, kind, resultId, toast],
+  );
 
   return { state, busy, locked, pollingTimedOut, startedHere, generate };
 }

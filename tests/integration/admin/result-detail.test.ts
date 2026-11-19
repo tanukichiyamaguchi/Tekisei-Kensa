@@ -177,11 +177,12 @@ describe("I-35 GET /admin/results/{resultId}", () => {
       output,
     });
     expect(Object.keys(body.ai.recruitment ?? {})).not.toContain("resultId");
+    // 育成・定着は結合テストの環境変数（AI_TRAINING_PROMPT_VERSION）で有効。生成前なので 8 項目は null
     expect(body.ai.training).toEqual({
       status: "not_generated",
       startedAt: null,
       error: null,
-      enabled: false,
+      enabled: true,
       context: null,
       latest: null,
     });
@@ -211,7 +212,7 @@ describe("I-35 GET /admin/results/{resultId}", () => {
         status: "not_generated",
         startedAt: null,
         error: null,
-        enabled: false,
+        enabled: true,
         context: null,
         latest: null,
       },

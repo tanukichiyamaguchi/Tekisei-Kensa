@@ -1,11 +1,14 @@
-// U-08 lib/utils/env.ts（01 §4.3、00 §3.2）
+// U-08 lib/utils/env.ts（01 §4.3、00 §3.2）。M7-ai-19（11-6 §5.1）: 種類ごとの版の環境変数の起動時の検証（11-6 §2.7.4・§3.8）
 import { describe, expect, it } from "vitest";
 
+import { getPromptDefinition, type PromptDefinition } from "@/lib/ai/prompts";
+import { TRAINING_V1 } from "@/lib/ai/prompts/training-v1";
 import {
   appBaseUrl,
   EnvError,
   isLocalHttp,
   parseServiceAccount,
+  type PromptLookup,
   validateFirebaseAdminEnv,
   validateServerEnv,
 } from "@/lib/utils/env";
@@ -148,6 +151,87 @@ describe("U-08 validateServerEnv", () => {
       expect((e as Error).message).not.toContain("sa@example");
       expect((e as Error).message).not.toContain("dummy");
     }
+  });
+});
+
+describe("M7-ai-19 種類ごとの版の環境変数（11-6 §2.7.4・§3.8）", () => {
+  /** Preview（本番の Firebase につながる。K-13）の最小構成 */
+  const PREVIEW = { ...PRODUCTION, VERCEL_ENV: "preview", NEXT_PUBLIC_APP_BASE_URL: undefined };
+  /** 開発（VERCEL_ENV が development） */
+  const DEVELOPMENT = { ...LOCAL, VERCEL_ENV: "development" };
+
+  it("AI_TRAINING_PROMPT_VERSION の未設定と空は、無効のまま起動する（値は undefined）", () => {
+    for (const source of [LOCAL, PRODUCTION, PREVIEW]) {
+      expect(validateServerEnv(source).AI_TRAINING_PROMPT_VERSION).toBeUndefined();
+      expect(
+        validateServerEnv({ ...source, AI_TRAINING_PROMPT_VERSION: "" }).AI_TRAINING_PROMPT_VERSION,
+      ).toBeUndefined();
+    }
+  });
+
+  it("開発（VERCEL_ENV が未設定・development）では、確認の前の training-v1 で起動する", () => {
+    for (const source of [LOCAL, DEVELOPMENT]) {
+      expect(
+        validateServerEnv({ ...source, AI_TRAINING_PROMPT_VERSION: "training-v1" })
+          .AI_TRAINING_PROMPT_VERSION,
+      ).toBe("training-v1");
+    }
+  });
+
+  it("登録されていない版は止まる（変数名と版の名前を文に入れる）", () => {
+    fails(
+      { ...LOCAL, AI_TRAINING_PROMPT_VERSION: "training-v9" },
+      /AI_TRAINING_PROMPT_VERSION=training-v9 は lib\/ai\/prompts に登録されていません/,
+    );
+  });
+
+  it("種類の違う版は止まる（AI_TRAINING_PROMPT_VERSION=recruitment-v2、AI_PROMPT_VERSION=training-v1）", () => {
+    fails(
+      { ...LOCAL, AI_TRAINING_PROMPT_VERSION: "recruitment-v2" },
+      /AI_TRAINING_PROMPT_VERSION=recruitment-v2 は育成・定着（training）の版ではありません/,
+    );
+    fails(
+      { ...LOCAL, AI_PROMPT_VERSION: "training-v1" },
+      /AI_PROMPT_VERSION=training-v1 は採用向け（recruitment）の版ではありません/,
+    );
+  });
+
+  it("本番・Preview では、確認の前の training-v1（approvedForProduction が偽）は止まる。採用向けの承認済みの版はそのまま通る", () => {
+    for (const source of [PRODUCTION, PREVIEW]) {
+      fails(
+        { ...source, AI_TRAINING_PROMPT_VERSION: "training-v1" },
+        /AI_TRAINING_PROMPT_VERSION=training-v1 は本番での使用が承認されていない版/,
+      );
+      for (const version of ["recruitment-v1", "recruitment-v2"]) {
+        expect(validateServerEnv({ ...source, AI_PROMPT_VERSION: version }).AI_PROMPT_VERSION).toBe(
+          version,
+        );
+      }
+    }
+  });
+
+  it("承認した版（テスト用の定義を引き方で渡す）は本番・Preview で動く。承認していない採用向けの版は本番で止まる", () => {
+    const approvedTraining: PromptDefinition = { ...TRAINING_V1, approvedForProduction: true };
+    const unapprovedRecruitment: PromptDefinition = {
+      ...getPromptDefinition("recruitment-v2"),
+      approvedForProduction: false,
+    };
+    const lookup: PromptLookup = (version) => {
+      if (version === "training-v1") return approvedTraining;
+      if (version === "recruitment-v2") return unapprovedRecruitment;
+      return getPromptDefinition(version);
+    };
+    for (const source of [PRODUCTION, PREVIEW]) {
+      expect(
+        validateServerEnv({ ...source, AI_TRAINING_PROMPT_VERSION: "training-v1" }, lookup)
+          .AI_TRAINING_PROMPT_VERSION,
+      ).toBe("training-v1");
+      expect(() =>
+        validateServerEnv({ ...source, AI_PROMPT_VERSION: "recruitment-v2" }, lookup),
+      ).toThrow(/AI_PROMPT_VERSION=recruitment-v2 は本番での使用が承認されていない版/);
+    }
+    // 引き方を渡さないとき（既定）は lib/ai/prompts の登録（training-v1 は承認前）
+    fails({ ...PRODUCTION, AI_TRAINING_PROMPT_VERSION: "training-v1" });
   });
 });
 

@@ -60,6 +60,7 @@ jobs:
           AI_PROVIDER: stub
           AI_MODEL: claude-opus-5
           AI_PROMPT_VERSION: recruitment-v2
+          AI_TRAINING_PROMPT_VERSION: training-v1
           PDF_TOKEN_SECRET: dummy-pdf-token-secret-do-not-ship-0123456789
       - name: ダミーのサービスアカウント鍵を作る（ブラウザ用バンドルへの混入検査用。実在の鍵ではない）
         id: dummy_sa
@@ -80,6 +81,7 @@ jobs:
           AI_PROVIDER: stub
           AI_MODEL: claude-opus-5
           AI_PROMPT_VERSION: recruitment-v2
+          AI_TRAINING_PROMPT_VERSION: training-v1
           PDF_TOKEN_SECRET: dummy-pdf-token-secret-do-not-ship-0123456789
       # Vercel の PDF 関数には @sparticuz/chromium の bin/（圧縮済み Chromium）が必要。Turbopack のビルドでは
       # outputFileTracingIncludes が適用されず同梱されなかった（2026-09-23 の本番で browser_launch_failed）ため、

@@ -1,17 +1,18 @@
 // AI 解説（11-6 §5.3。スタブのプロバイダ）: M7-ai-38 タブ・採用向けの案内・生成中・表示（E-20 の置き換え）と読み直し（409・開いたときの
-// 生成中・10 分の打ち切り。§2.3.5）、M7-ai-40 責任者の受験、M7-ai-42 失敗と作り直しと、生成の要求のそのほかの失敗（§2.3.4）。
-// E-21 PDF ダウンロード（06 §3.5.11、07 §9、要件定義書 §6.2 A-10）。
-// 別の画面で始まった生成（開いたときの生成中）は、アプリと同じリポジトリの関数で作る（直接は書かない）。読み直しの 10 分の打ち切りは
-// ブラウザの時計（page.clock）を進めて確かめる。選んだタブを画面の状態（aiTab）に書くことは、読む部品（PDF のダウンロード）が入る
-// PR-7.12 の M7-ai-43 で確かめる。
-// PR-7.9 の形（11-6 §4.4）: タブは採用向けと育成・定着の 2 つ（経年比較のタブは PR-7.11a まで出さない）。育成・定着は生成できず
-// （有効でない種類）、案内と押せない生成ボタンと「この AI 解説は準備中です。」だけ（8 項目と表示は PR-7.10）。表示上の役職が責任者の受験は
+// 生成中・10 分の打ち切り。§2.3.5）と育成・定着のタブの中身、M7-ai-39 育成・定着の 8 項目の入力 → 生成 → 表示と、未選択のときの不正の
+// 表示・開いたときの生成中、M7-ai-40 責任者の受験、M7-ai-42 失敗と作り直し（採用向けと育成・定着）と、生成の要求のそのほかの失敗
+// （§2.3.4）。E-21 PDF ダウンロード（06 §3.5.11、07 §9、要件定義書 §6.2 A-10）。
+// 別の画面で始まった生成（開いたときの生成中）は、アプリと同じリポジトリの関数で作る（直接は書かない）。読み直しの 10 分の打ち切りと、
+// 育成・定着の開いたときの生成中の読み直し（3 秒）は、ブラウザの時計（page.clock）を進めて確かめる。選んだタブを画面の状態（aiTab）に
+// 書くことは、読む部品（PDF のダウンロード）が入る PR-7.12 の M7-ai-43 で確かめる。
+// タブは採用向けと育成・定着の 2 つ（経年比較のタブは PR-7.11a まで出さない。11-6 §4.4）。育成・定着は、E2E のサーバの環境変数
+// AI_TRAINING_PROMPT_VERSION=training-v1 で有効（e2e.yml。11-6 §3.8。本番は依頼主の確認まで無効）。表示上の役職が責任者の受験は
 // 出せるタブが 0 で、AI 解説の領域も目次の「AI解説」も描かない（PR-7.11a から経年比較のタブだけを出す）。待ち合わせはパネルの
-// data-status と、11-6 §2.1 の要素（#ai・.ai-loading・.ai-fail・.ai-rec）で行う。生成中の表示は、生成の要求を page.route で止めて
-// 確かめてから放す。位置は実行のときに測る（決め打ちしない）。
+// data-status と、11-6 §2.1 の要素（#ai・.ai-loading・.ai-fail・.ai-rec・.ai-ik）で行う。生成中の表示は、生成の要求を page.route で
+// 止めて確かめてから放す。位置は実行のときに測る（決め打ちしない）。
 // PDF は結果詳細と同じ部品の印刷の形（11-4 §2.18）。PR-7.12 まで、全画面の PDF の AI 解説は採用向けの表示だけ（タブの行・生成前の案内・
-// 育成・定着は描かない）。画面の状態は既定（第二候補は出さない・タブはドライビング）で描く（ダウンロードのポップアップの文と PDF の
-// 作り、画面の状態を写すことは 11-5 の PR-7.12）
+// 育成・定着は描かない。育成・定着が生成済みでタブを表示していても載らない）。画面の状態は既定（第二候補は出さない・タブはドライビング）で
+// 描く（ダウンロードのポップアップの文と PDF の作り、画面の状態を写すことは 11-5 の PR-7.12）
 import { readFile } from "node:fs/promises";
 
 import type { Locator, Page } from "@playwright/test";
@@ -26,16 +27,24 @@ import {
   focusByKeyboard,
   holdAiPost,
   loginViaUi,
+  nextAiPost,
   openResultDetail,
   rectOf,
   resultDetail,
   seedExam,
+  selectTrainingContext,
   submitNamed,
   submitType,
   test,
+  TRAINING_CONTEXT_SAMPLE,
   watchAiGets,
   watchAiPosts,
 } from "../support/admin-ui";
+import {
+  TRAINING_CONTEXT_ITEMS,
+  TRAINING_CONTEXT_KEYS,
+  trainingContextLabel,
+} from "@/lib/masters/training-context";
 
 /** 採用向けの生成前の案内（11-6 §2.4.2） */
 const RECRUITMENT_INTRO = {
@@ -72,6 +81,34 @@ const TRAINING_INTRO = {
   warn: "一度生成した内容は、あとから修正できません。生成前に入力内容をご確認ください。",
   warnStrong: "あとから修正できません",
 };
+
+/** 育成・定着の 8 項目の見出しと未選択の表示（11-6 §2.5.3） */
+const TRAINING_CONTEXT_HEADING = "現場の状況を入力（8項目）";
+const TRAINING_CONTEXT_PLACEHOLDER = "選択してください";
+
+/** 育成・定着の表示（11-6 §2.5.5 の 1〜7） */
+const TRAINING_VIEW = {
+  band: "AI 育成・定着アドバイザー",
+  tag: "在籍スタッフ向け",
+  chips: ["期待役割へのマッチ度", "離職リスク", "サポートの必要度"],
+  sections: [
+    "1. すぐに手を打つべき理由と、その一手",
+    "2. 期待役割に向けて",
+    "3. 日常の接し方（○と×）",
+    "4. 次回の1on1で聞くこと",
+  ],
+  footer:
+    "※ 診断スコア（16特性・ソーシャルスタイル・資質タイプ）と、ご入力いただいた勤務状況をもとにAIが自動生成しています。",
+};
+
+/** 育成・定着の判定チップの色の段階（11-6 §2.5.5 の表。値の空白を除いて比べる。bad は使わない） */
+function trainingTone(kind: "match" | "risk" | "support", value: string): "good" | "warn" | "mid" {
+  const compact = value.replace(/\s/g, "");
+  const high = ["非常に高い", "高い"].includes(compact);
+  const low = ["低い", "非常に低い"].includes(compact);
+  if (kind === "match") return high ? "good" : low ? "warn" : "mid";
+  return low ? "good" : high ? "warn" : "mid";
+}
 
 /** 生成中（11-6 §2.3.3。「~」は半角） */
 const GENERATING = {
@@ -229,7 +266,7 @@ test("M7-ai-38 採用向け: 目次の下にタブ 2 つ（初めは採用向け
   expect(posts).toHaveLength(1);
 });
 
-test("M7-ai-38 育成・定着のタブ: 押すと育成・定着のパネル（案内・枠・警告・押せない「育成・定着AI解説を生成」と「この AI 解説は準備中です。」）が出て採用向けのパネルが隠れ、URL は変わらない。キーボードは左右の矢印・Home・End（端では止まる）。?ai=training で開くと育成・定着が選ばれている", async ({
+test("M7-ai-38 育成・定着のタブ: 押すと育成・定着のパネル（案内・枠・警告・8 項目の入力欄・押せる「育成・定着AI解説を生成」。準備中の注記は無い）が出て採用向けのパネルが隠れ、URL は変わらない。キーボードは左右の矢印・Home・End（端では止まる）。?ai=training で開くと育成・定着が選ばれている", async ({
   page,
   adminOrg,
 }) => {
@@ -249,7 +286,8 @@ test("M7-ai-38 育成・定着のタブ: 押すと育成・定着のパネル（
   await expect(ai.tab("training")).toHaveAttribute("aria-selected", "true");
   expect(page.url()).toBe(url);
 
-  // 育成・定着のパネル（PR-7.9 の形。§2.5.2・§2.3.2）: 案内・枠・警告（「！」の丸は読み上げない）と、押せない生成ボタンとその下の注記
+  // 育成・定着のパネル（§2.5.1・§2.5.2・§2.3.2）: 生成の入口（案内・枠・警告（「！」の丸は読み上げない）→ 8 項目の入力欄 → 生成ボタン）。
+  // 育成・定着は E2E のサーバで有効なので、生成ボタンは押せ、準備中の注記は無い
   const panel = ai.panel("training");
   await expect(panel).toHaveAttribute("data-status", "not_generated");
   await expect(panel.locator("h2.ih-t")).toHaveText(TRAINING_INTRO.title);
@@ -262,12 +300,12 @@ test("M7-ai-38 育成・定着のタブ: 押すと育成・定着のパネル（
   await expect(panel.locator(".warn b")).toHaveText(TRAINING_INTRO.warnStrong);
   await expect(panel.locator(".warn-i")).toHaveText("！");
   await expect(panel.locator(".warn-i")).toHaveAttribute("aria-hidden", "true");
-  await expect(ai.genButton("training")).toBeDisabled();
-  await expect(panel.locator(".ai-note")).toHaveText("この AI 解説は準備中です。");
+  await expect(ai.genButton("training")).toBeEnabled();
+  await expect(panel.locator(".ai-note")).toHaveCount(0);
   const start = await panel
-    .locator(".ai-start > *")
+    .locator(".ai-start.ai-start--training > *")
     .evaluateAll((els) => els.map((el) => el.className));
-  expect(start).toEqual(["ai-intro ai-intro--training", "ai-gen-btn", "ai-note"]);
+  expect(start).toEqual(["ai-intro ai-intro--training", "ai-ctx", "ai-gen-btn"]);
 
   // キーボード（§2.2）: 選んでいるタブだけ tabindex 0。左右の矢印で隣へ移って選び（端では止まる）、Home・End で先頭・末尾
   await ai.tab("recruitment").click();
@@ -412,6 +450,313 @@ test("M7-ai-38 読み直しが 10 分たっても終わらない（11-6 §2.3.4�
   await expect(panel.locator(".ai-intro")).toBeVisible();
 });
 
+test("M7-ai-39 育成・定着の 8 項目（11-6 §2.5.3・§2.5.4）: 見出しと 2 行 × 4 の項目（ラベルで選択欄に結び付き、先頭は値が空の「選択してください」、続けてマスタの表示名）。3 つだけ選んで押すと、未選択の 5 つが不正の表示（aria-invalid・赤枠と影）になり、選んだ 3 つには付かず、要求は出ず、焦点は最初の未選択の欄。選び直した欄は不正の表示が消え、空に戻しても次に押すまでは付かない", async ({
+  page,
+  adminOrg,
+}) => {
+  const { resultId } = submitType(adminOrg.organizationId, "conductor");
+  await loginViaUi(page, adminOrg.ownerEmail);
+  await openResultDetail(page, resultId, "?ai=training", "none");
+  const ai = aiArea(page);
+  const panel = ai.panel("training");
+  const posts = watchAiPosts(page, resultId, "training");
+
+  // 見出しは h3（案内の h2 の下）。行は 2 つで各 4 項目、並びは §2.5.3 の表（TRAINING_CONTEXT_KEYS）
+  await expect(ai.ctx.locator("h2.ai-ctx-h")).toHaveText(TRAINING_CONTEXT_HEADING);
+  await expect(ai.ctx.locator(".ai-ctx-row")).toHaveCount(2);
+  for (const row of [0, 1]) {
+    await expect(ai.ctx.locator(".ai-ctx-row").nth(row).locator(".ai-ctx-item")).toHaveCount(4);
+  }
+  await expect(ai.ctx.locator(".ai-ctx-label")).toHaveText(
+    TRAINING_CONTEXT_KEYS.map((key) => TRAINING_CONTEXT_ITEMS[key].label),
+  );
+  expect(await ai.selects.evaluateAll((els) => els.map((el) => el.id))).toEqual(
+    TRAINING_CONTEXT_KEYS.map((key) => `ai-ctx-${key}`),
+  );
+  for (const key of TRAINING_CONTEXT_KEYS) {
+    const select = panel.getByLabel(TRAINING_CONTEXT_ITEMS[key].label, { exact: true });
+    await expect(select, key).toHaveAttribute("id", `ai-ctx-${key}`);
+    await expect(select.locator("option"), key).toHaveText([
+      TRAINING_CONTEXT_PLACEHOLDER,
+      ...TRAINING_CONTEXT_ITEMS[key].options.map((option) => option.label),
+    ]);
+    expect(
+      await select.locator("option").evaluateAll((els) =>
+        els.map((el) => ({
+          value: (el as HTMLOptionElement).value,
+          disabled: (el as HTMLOptionElement).disabled,
+        })),
+      ),
+      key,
+    ).toEqual([
+      { value: "", disabled: false },
+      ...TRAINING_CONTEXT_ITEMS[key].options.map((option) => ({
+        value: option.code,
+        disabled: false,
+      })),
+    ]);
+    await expect(select, key).toHaveValue("");
+    await expect(select, key).toHaveClass("is-placeholder");
+    await expect(select, key).toBeEnabled();
+    await expect(select, key).not.toHaveAttribute("aria-invalid");
+  }
+
+  // 3 つだけ選ぶ（1 行目の 1・2 列と 2 行目の 1 列）。選んだ欄は未選択の表示でなくなる
+  const chosen = ["tenure", "evaluation", "relationship"] as const;
+  await selectTrainingContext(page, {
+    tenure: TRAINING_CONTEXT_SAMPLE.tenure,
+    evaluation: TRAINING_CONTEXT_SAMPLE.evaluation,
+    relationship: TRAINING_CONTEXT_SAMPLE.relationship,
+  });
+  for (const key of chosen) await expect(ai.select(key), key).not.toHaveClass("is-placeholder");
+
+  // 押すと、未選択の 5 つ（画面の並び）が不正の表示（枠 #FF0000 と同じ色の外側の影 6px）になり、生成を始めない
+  await ai.genButton("training").click();
+  const missing = TRAINING_CONTEXT_KEYS.filter(
+    (key) => !(chosen as readonly string[]).includes(key),
+  );
+  expect(missing).toEqual(["expectedRole", "recentState", "wish", "changeSinceJoining", "concern"]);
+  for (const key of missing) {
+    await expect(ai.select(key), key).toHaveAttribute("aria-invalid", "true");
+    await expect(ai.select(key), key).toHaveCSS("border-top-color", "rgb(255, 0, 0)");
+    await expect(ai.select(key), key).toHaveCSS("box-shadow", "rgb(255, 0, 0) 0px 0px 6px 0px");
+  }
+  for (const key of chosen) {
+    await expect(ai.select(key), key).not.toHaveAttribute("aria-invalid");
+    await expect(ai.select(key), key).not.toHaveCSS("box-shadow", "rgb(255, 0, 0) 0px 0px 6px 0px");
+  }
+  // 焦点は最初の未選択の欄（今後期待する役割）。生成の入口はそのままで、生成中にならない
+  await expect(ai.select("expectedRole")).toBeFocused();
+  await expect(ai.genButton("training")).toBeEnabled();
+  await expect(ai.loadingIn("training")).toHaveCount(0);
+  await expect(panel).toHaveAttribute("data-status", "not_generated");
+  expect(posts).toHaveLength(0);
+
+  // 選び直した欄は不正の表示が消える（ほかの未選択の欄は残る）
+  await selectTrainingContext(page, { expectedRole: TRAINING_CONTEXT_SAMPLE.expectedRole });
+  await expect(ai.select("expectedRole")).not.toHaveAttribute("aria-invalid");
+  await expect(ai.select("expectedRole")).not.toHaveClass("is-placeholder");
+  for (const key of missing.slice(1)) {
+    await expect(ai.select(key), key).toHaveAttribute("aria-invalid", "true");
+  }
+
+  // 選んだ欄を「選択してください」に戻すと未選択の表示になるが、不正の表示は次に押したときに付く（§2.5.4 の 1）
+  await ai.select("tenure").selectOption({ label: TRAINING_CONTEXT_PLACEHOLDER });
+  await expect(ai.select("tenure")).toHaveValue("");
+  await expect(ai.select("tenure")).toHaveClass("is-placeholder");
+  await expect(ai.select("tenure")).not.toHaveAttribute("aria-invalid");
+  await ai.genButton("training").click();
+  await expect(ai.select("tenure")).toHaveAttribute("aria-invalid", "true");
+  await expect(ai.select("tenure")).toBeFocused();
+  expect(posts).toHaveLength(0);
+});
+
+test("M7-ai-39 育成・定着の生成（11-6 §2.5.4・§2.5.5）: 8 つ選んで押すと、要求の本文が { context: 8 項目のコード } で、生成中は 8 項目が選んだ値のまま選べない。終わると表示（見出し帯の札「在籍スタッフ向け」、チップ 3 つとその色、1.〜4. の節、末尾）が出て、8 項目は保存した値で選べず、案内と生成ボタンは無い。再読み込みしても同じで、要求は出ない", async ({
+  page,
+  adminOrg,
+}) => {
+  const { resultId } = submitType(adminOrg.organizationId, "conductor");
+  await loginViaUi(page, adminOrg.ownerEmail);
+  await openResultDetail(page, resultId, "?ai=training", "none");
+  const ai = aiArea(page);
+  const panel = ai.panel("training");
+  const posts = watchAiPosts(page, resultId, "training");
+
+  await selectTrainingContext(page, TRAINING_CONTEXT_SAMPLE);
+  const release = await holdAiPost(page, resultId, "training");
+  const post = nextAiPost(page, resultId, "training");
+  await ai.genButton("training").click();
+  // 要求の本文は 8 項目のコード（表示名ではない。11-6 §3.4）
+  expect((await post).postDataJSON()).toEqual({ context: TRAINING_CONTEXT_SAMPLE });
+
+  // 生成中（§2.3.5）: 案内と 8 項目（選んだ値のまま選べない）と生成中。生成ボタンは無い
+  await expect(ai.loadingIn("training")).toBeVisible();
+  await expect(ai.loadingIn("training").getByRole("status").locator(".ttl")).toHaveText(
+    GENERATING.title,
+  );
+  await expect(ai.genButton("training")).toHaveCount(0);
+  await expect(panel.locator(".ai-intro")).toBeVisible();
+  for (const key of TRAINING_CONTEXT_KEYS) {
+    await expect(ai.select(key), key).toBeDisabled();
+    await expect(ai.select(key), key).toHaveValue(TRAINING_CONTEXT_SAMPLE[key]);
+  }
+  release();
+
+  // 表示（§2.5.5）
+  await expect(ai.trainingView).toBeVisible({ timeout: 30_000 });
+  await expect(panel).toHaveAttribute("data-status", "completed");
+  const expectSaved = async (label: string) => {
+    await expect(panel.locator(".ai-intro"), label).toHaveCount(0);
+    await expect(ai.genButton("training"), label).toHaveCount(0);
+    await expect(ai.loadingIn("training"), label).toHaveCount(0);
+    await expect(panel.locator(".ai-start.ai-start--training > *"), label).toHaveClass(["ai-ctx"]);
+    for (const key of TRAINING_CONTEXT_KEYS) {
+      await expect(ai.select(key), `${label} ${key}`).toBeDisabled();
+      await expect(ai.select(key), `${label} ${key}`).toHaveValue(TRAINING_CONTEXT_SAMPLE[key]);
+      expect(
+        await ai.select(key).evaluate((el) => {
+          const select = el as HTMLSelectElement;
+          return select.options[select.selectedIndex]?.text ?? "";
+        }),
+        `${label} ${key}`,
+      ).toBe(trainingContextLabel(key, TRAINING_CONTEXT_SAMPLE[key]));
+    }
+    const view = ai.trainingView;
+    await expect(view.locator(".head h2"), label).toHaveText(TRAINING_VIEW.band);
+    await expect(view.locator(".head .tag"), label).toHaveText(TRAINING_VIEW.tag);
+    const order = await view
+      .locator(".head .tag, .chips, h3.lab, .foot")
+      .evaluateAll((els) =>
+        els.map((el) =>
+          el.classList.contains("tag")
+            ? "札"
+            : el.classList.contains("chips")
+              ? "判定チップ"
+              : el.classList.contains("foot")
+                ? "末尾"
+                : (el.textContent ?? "").trim(),
+        ),
+      );
+    expect(order, label).toEqual(["札", "判定チップ", ...TRAINING_VIEW.sections, "末尾"]);
+    await expect(view.locator(".foot"), label).toHaveText(TRAINING_VIEW.footer);
+    // 判定チップ（§2.5.5 の 2）: マッチ度 → 離職リスク → サポートの必要度。色は表示された値から §2.5.5 の表で求めた段階
+    const chips = view.locator(".chips .chip");
+    await expect(chips.locator(".k"), label).toHaveText(TRAINING_VIEW.chips);
+    for (const [i, kind] of (["match", "risk", "support"] as const).entries()) {
+      const value = (await chips.nth(i).locator(".v").textContent()) ?? "";
+      await expect(chips.nth(i), `${label} ${kind}`).toHaveAttribute(
+        "class",
+        `chip ${trainingTone(kind, value)}`,
+      );
+    }
+  };
+  await expectSaved("生成の直後");
+  await expect(ai.root).not.toContainText("生成日時");
+  expect(posts).toHaveLength(1);
+
+  // 再読み込みしても保存済みを表示し（8 項目は保存した値）、生成ボタンが無く、要求が出ない
+  await page.reload();
+  await expectComparison(page, "none");
+  await expect(ai.trainingView).toBeVisible();
+  await expect(panel).toHaveAttribute("data-status", "completed");
+  await expectSaved("再読み込みの後");
+  await expect(panel.getByRole("button")).toHaveCount(0);
+  expect(posts).toHaveLength(1);
+});
+
+test("M7-ai-39 生成済みの 8 項目は保存した値（11-6 §2.5.3 の初めの値・§2.5.4 の 4）: 生成前のまま開いている画面の裏で、同じ結果の育成・定着を別の要求（画面と同じ API）で見本の 8 項目で生成済みにしてから、この画面で全項目の違う 8 項目を選んで押すと、応答は保存済み（作り直さない）で、8 項目はこの画面で選んだ値ではなく保存した見本の値を選べない状態で出し、焦点は育成・定着のタブ", async ({
+  page,
+  adminOrg,
+}) => {
+  const { resultId } = submitType(adminOrg.organizationId, "conductor");
+  await loginViaUi(page, adminOrg.ownerEmail);
+  await openResultDetail(page, resultId, "?ai=training", "none");
+  const ai = aiArea(page);
+  const panel = ai.panel("training");
+  await expect(panel).toHaveAttribute("data-status", "not_generated");
+
+  // 別の画面の生成（同じブラウザのログインで、画面と同じ API に見本の 8 項目を送る）
+  const elsewhere = await page.request.post(
+    `/api/v1/admin/results/${resultId}/ai-analysis/training`,
+    { data: { context: TRAINING_CONTEXT_SAMPLE } },
+  );
+  expect(elsewhere.status()).toBe(200);
+
+  // この画面（生成前のまま）で、見本と全項目の違う 8 項目を選んで押す
+  const other = {
+    tenure: "under_1y",
+    evaluation: "above",
+    expectedRole: "leader",
+    recentState: "motivated",
+    relationship: "good",
+    wish: "expand_role",
+    changeSinceJoining: "growing",
+    concern: "none",
+  } as const;
+  for (const key of TRAINING_CONTEXT_KEYS)
+    expect(other[key], key).not.toBe(TRAINING_CONTEXT_SAMPLE[key]);
+  await selectTrainingContext(page, other);
+  const post = nextAiPost(page, resultId, "training");
+  await ai.genButton("training").click();
+  const request = await post;
+  expect(request.postDataJSON()).toEqual({ context: other });
+  const response = await request.response();
+  expect(response?.status()).toBe(200);
+  expect(await response?.json()).toMatchObject({
+    status: "completed",
+    context: TRAINING_CONTEXT_SAMPLE,
+  });
+
+  // 表示と、保存した 8 項目（選べない）。焦点は育成・定着のタブ（押した生成ボタンは消える）
+  await expect(ai.trainingView).toBeVisible({ timeout: 30_000 });
+  await expect(panel).toHaveAttribute("data-status", "completed");
+  for (const key of TRAINING_CONTEXT_KEYS) {
+    await expect(ai.select(key), key).toBeDisabled();
+    await expect(ai.select(key), key).toHaveValue(TRAINING_CONTEXT_SAMPLE[key]);
+    expect(
+      await ai.select(key).evaluate((el) => {
+        const select = el as HTMLSelectElement;
+        return select.options[select.selectedIndex]?.text ?? "";
+      }),
+      key,
+    ).toBe(trainingContextLabel(key, TRAINING_CONTEXT_SAMPLE[key]));
+  }
+  await expect(ai.tab("training")).toBeFocused();
+});
+
+test("M7-ai-39 開いたときに育成・定着が生成中（別の画面で始まっている。11-6 §2.3.5。読み直しの 3 秒はブラウザの時計で進める）: 案内と 8 項目（選べない）と生成中（生成ボタンは無い）で GET …/training を読み直し、その生成が失敗すると失敗の枠と生成ボタンを出し、8 項目は未選択のまま選べる", async ({
+  page,
+  adminOrg,
+}) => {
+  const { resultId } = submitType(adminOrg.organizationId, "conductor");
+  await loginViaUi(page, adminOrg.ownerEmail);
+  aiGenerationElsewhere(adminOrg, resultId, "start", "", "training");
+  const gets = watchAiGets(page, resultId, "training");
+  const recruitmentGets = watchAiGets(page, resultId, "recruitment");
+  await page.clock.install();
+  await openResultDetail(page, resultId, "?ai=training", "none");
+  const ai = aiArea(page);
+  const panel = ai.panel("training");
+  await expect(panel).toHaveAttribute("data-status", "generating");
+  await expect(panel.locator(".ai-intro")).toBeVisible();
+  await expect(ai.loadingIn("training")).toBeVisible();
+  await expect(ai.genButton("training")).toHaveCount(0);
+  for (const key of TRAINING_CONTEXT_KEYS) {
+    await expect(ai.select(key), key).toBeDisabled();
+    await expect(ai.select(key), key).toHaveValue("");
+  }
+  // 採用向けのパネルは生成前のまま（種類ごとに別々に読み直す）
+  await expect(ai.panel("recruitment")).toHaveAttribute("data-status", "not_generated");
+
+  // 読み直し（3 秒ごと）: 時計を 3 秒進めると GET …/training が出て、まだ生成中
+  const polled = page.waitForResponse(
+    (res) =>
+      res.request().method() === "GET" &&
+      new URL(res.url()).pathname === `/api/v1/admin/results/${resultId}/ai-analysis/training`,
+  );
+  await page.clock.fastForward(3_000);
+  expect(((await (await polled).json()) as { status: string }).status).toBe("generating");
+  expect(gets.length).toBeGreaterThanOrEqual(1);
+
+  // 別の画面の生成が失敗すると、次の読み直し（時計を 3 秒進める）で失敗の枠と生成ボタンに変わり、8 項目は未選択のまま選べる
+  aiGenerationElsewhere(adminOrg, resultId, "fail", "invalid_json", "training");
+  await page.clock.fastForward(3_000);
+  await expect(ai.failIn("training")).toHaveText(FAILED_INVALID_JSON, { timeout: 10_000 });
+  await expect(panel).toHaveAttribute("data-status", "failed");
+  await expect(ai.loadingIn("training")).toHaveCount(0);
+  await expect(ai.genButton("training")).toBeEnabled();
+  expect(
+    await panel
+      .locator(".ai-start.ai-start--training > *")
+      .evaluateAll((els) => els.map((el) => el.className)),
+  ).toEqual(["ai-intro ai-intro--training", "ai-ctx", "ai-fail", "ai-gen-btn"]);
+  for (const key of TRAINING_CONTEXT_KEYS) {
+    await expect(ai.select(key), key).toBeEnabled();
+    await expect(ai.select(key), key).toHaveValue("");
+  }
+  expect(recruitmentGets).toHaveLength(0);
+});
+
 test("M7-ai-40 責任者の受験（職業が責任者で役職が未設定の受験と、役職を責任者にした受験）: AI 解説の領域も目次の「AI解説」も無い（目次は 7 つ）。採用向け・育成・定着の API は 409 AI_NOT_APPLICABLE、経年比較の GET は 200", async ({
   page,
   adminOrg,
@@ -448,7 +793,8 @@ test("M7-ai-40 責任者の受験（職業が責任者で役職が未設定の�
       "接し方",
     ]);
 
-    // API（§3.4）: 採用向け・育成・定着は GET・POST とも 409（K-21）。経年比較は GET が状態を返す（PR-7.9 は無効）
+    // API（§3.4）: 採用向け・育成・定着は GET・POST とも 409（K-21）。育成・定着の POST は正しい本文（8 項目）で送る（本文の検証
+    // （§3.5 の 1。違えば 422）が責任者の判定より先のため）。経年比較は GET が状態を返す（PR-7.11b まで無効）
     const base = `/api/v1/admin/results/${resultId}/ai-analysis`;
     for (const [method, kind] of [
       ["GET", "recruitment"],
@@ -459,7 +805,11 @@ test("M7-ai-40 責任者の受験（職業が責任者で役職が未設定の�
       const res =
         method === "GET"
           ? await page.request.get(`${base}/${kind}`)
-          : await page.request.post(`${base}/${kind}`);
+          : kind === "training"
+            ? await page.request.post(`${base}/${kind}`, {
+                data: { context: TRAINING_CONTEXT_SAMPLE },
+              })
+            : await page.request.post(`${base}/${kind}`);
       expect(res.status(), `${label} ${method} ${kind}`).toBe(409);
       expect((await res.json()) as unknown, `${label} ${method} ${kind}`).toMatchObject({
         error: { code: "AI_NOT_APPLICABLE", message: "この受験では、この AI 解説は使えません" },
@@ -522,6 +872,75 @@ test("M7-ai-42 失敗と作り直し: スタブの不正な JSON の氏名の受
   await expectComparison(page, "none");
   await expect(ai.fail).toHaveText(FAILED_INVALID_JSON);
   await expect(ai.genButton("recruitment")).toBeVisible();
+  expect(posts).toHaveLength(2);
+});
+
+test("M7-ai-42 育成・定着の失敗と作り直し: スタブの不正な JSON の氏名の受験で 8 つ選んで押すと、失敗の枠（T-18 に続く理由の文。role=alert）と生成ボタンが出て、8 項目は選んだ値のまま選べる。もう一度（キーボードで）押すと同じ 8 項目で作り直しの要求が出て（2 本目）、生成中・失敗の後とも焦点は育成・定着のタブ（body に落ちない）、また失敗の枠。再読み込みすると 8 項目は未選択に戻る", async ({
+  page,
+  adminOrg,
+}) => {
+  const { resultId } = submitNamed(adminOrg.organizationId, "__INVALID_JSON__");
+  await loginViaUi(page, adminOrg.ownerEmail);
+  await openResultDetail(page, resultId, "?ai=training", "none");
+  const ai = aiArea(page);
+  const panel = ai.panel("training");
+  const gen = ai.genButton("training");
+  const posts = watchAiPosts(page, resultId, "training");
+  const activeTag = () => page.evaluate(() => document.activeElement?.tagName ?? "");
+  const expectSelected = async (label: string, enabled: boolean) => {
+    for (const key of TRAINING_CONTEXT_KEYS) {
+      await expect(ai.select(key), `${label} ${key}`).toHaveValue(TRAINING_CONTEXT_SAMPLE[key]);
+      if (enabled) await expect(ai.select(key), `${label} ${key}`).toBeEnabled();
+      else await expect(ai.select(key), `${label} ${key}`).toBeDisabled();
+    }
+  };
+
+  // 1 本目（マウス）: 失敗の枠は 8 項目と生成ボタンの間（案内 → 8 項目 → 失敗の枠 → 生成ボタン。§2.5.1・§2.3.4）
+  await selectTrainingContext(page, TRAINING_CONTEXT_SAMPLE);
+  await gen.click();
+  await expect(ai.failIn("training")).toHaveText(FAILED_INVALID_JSON);
+  await expect(ai.failIn("training")).toHaveAttribute("role", "alert");
+  await expect(panel).toHaveAttribute("data-status", "failed");
+  await expect(gen).toBeEnabled();
+  expect(
+    await panel
+      .locator(".ai-start.ai-start--training > *")
+      .evaluateAll((els) => els.map((el) => el.className)),
+  ).toEqual(["ai-intro ai-intro--training", "ai-ctx", "ai-fail", "ai-gen-btn"]);
+  await expectSelected("1 本目の失敗の後", true);
+  await expect(ai.trainingView).toHaveCount(0);
+  expect(posts).toHaveLength(1);
+
+  // 2 本目（キーボード）: この画面で選んだ 8 項目のまま送る。押した生成ボタンは消えるので、焦点は育成・定着のタブに移る
+  const release = await holdAiPost(page, resultId, "training");
+  const retry = nextAiPost(page, resultId, "training");
+  await focusByKeyboard(gen);
+  await page.keyboard.press("Enter");
+  expect((await retry).postDataJSON()).toEqual({ context: TRAINING_CONTEXT_SAMPLE });
+  await expect(ai.loadingIn("training")).toBeVisible();
+  await expect(ai.failIn("training")).toHaveCount(0);
+  await expect(gen).toHaveCount(0);
+  await expectSelected("2 本目の生成中", false);
+  await expect(ai.tab("training")).toBeFocused();
+  expect(await activeTag()).not.toBe("BODY");
+  release();
+  await expect(ai.failIn("training")).toHaveText(FAILED_INVALID_JSON);
+  await expect(gen).toBeVisible();
+  await expect(ai.loadingIn("training")).toHaveCount(0);
+  await expectSelected("2 本目の失敗の後", true);
+  await expect(ai.tab("training")).toBeFocused();
+  expect(await activeTag()).not.toBe("BODY");
+  expect(posts).toHaveLength(2);
+
+  // 再読み込みすると、失敗の枠と生成ボタン（状態は保存されている）と、未選択の 8 項目（失敗のときは 8 項目を保存しない。§2.5.3）
+  await page.reload();
+  await expectComparison(page, "none");
+  await expect(ai.failIn("training")).toHaveText(FAILED_INVALID_JSON);
+  await expect(gen).toBeVisible();
+  for (const key of TRAINING_CONTEXT_KEYS) {
+    await expect(ai.select(key), key).toHaveValue("");
+    await expect(ai.select(key), key).toBeEnabled();
+  }
   expect(posts).toHaveLength(2);
 });
 
@@ -691,7 +1110,7 @@ async function downloadVia(
   return { filename: download.suggestedFilename(), bytes: await readFile(path) };
 }
 
-test("E-21 PDF: 2 モード、ファイル名、restricted の非表示、比較組織の引き継ぎ。育て方・接し方が載り、旧の見出しが無い（描画完了を待つグラフは 0 個）。全画面の AI 解説は採用向けの表示だけで、画面の採用向けの表示の文字がすべて載る（育成・定着のタブを表示していても採用向け。タブの行・生成ボタンは載らない。PR-7.12 まで）", async ({
+test("E-21 PDF: 2 モード、ファイル名、restricted の非表示、比較組織の引き継ぎ。育て方・接し方が載り、旧の見出しが無い（描画完了を待つグラフは 0 個）。全画面の AI 解説は採用向けの表示だけで、画面の採用向けの表示の文字がすべて載る（育成・定着を生成してそのタブを表示していても採用向けだけで、育成・定着の表示の文（見出し帯・札・節の見出し・末尾）は載らない。タブの行・生成ボタンは載らない。PR-7.12 まで）", async ({
   page,
   adminOrg,
 }) => {
@@ -700,7 +1119,7 @@ test("E-21 PDF: 2 モード、ファイル名、restricted の非表示、比較
   await loginViaUi(page, adminOrg.ownerEmail);
   await openResultDetail(page, resultId);
   // 採用向けの AI 解説を completed にしておく（full には掲載、restricted には掲載しない）。画面の表示の文字を控えてから、
-  // 育成・定着のタブを表示する（PR-7.12 までは、表示中のタブにかかわらず全画面の PDF に採用向けを載せる。11-6 §2.12）
+  // 育成・定着も生成してそのタブを表示する（PR-7.12 までは、表示中のタブにかかわらず全画面の PDF に採用向けだけを載せる。11-6 §2.12）
   const ai = aiArea(page);
   await ai.genButton("recruitment").click();
   await expect(ai.view).toBeVisible({ timeout: 30_000 });
@@ -708,6 +1127,19 @@ test("E-21 PDF: 2 モード、ファイル名、restricted の非表示、比較
   expect(recruitmentPieces.length).toBeGreaterThan(30);
   await ai.tab("training").click();
   await expect(ai.panel("training")).toBeVisible();
+  await selectTrainingContext(page, TRAINING_CONTEXT_SAMPLE);
+  await ai.genButton("training").click();
+  await expect(ai.trainingView).toBeVisible({ timeout: 30_000 });
+  await expect(ai.panel("training")).toHaveAttribute("data-status", "completed");
+  /** 育成・定着の表示だけにある文（§2.5.5 の見出し帯・札・節の見出し・末尾） */
+  const trainingOnly = [
+    TRAINING_VIEW.band,
+    TRAINING_VIEW.tag,
+    ...TRAINING_VIEW.sections,
+    TRAINING_VIEW.footer,
+  ].map(asPdfText);
+  const trainingScreen = (await textPieces(ai.trainingView)).map(asPdfText).join("");
+  for (const text of trainingOnly) expect(trainingScreen).toContain(text);
 
   // 比較組織を選んだ状態でダウンロード（合致度のカードの「組織全体（n人）と比べた近さ」で待つ）
   await page.getByLabel("比較組織").selectOption("organization");
@@ -734,10 +1166,12 @@ test("E-21 PDF: 2 モード、ファイル名、restricted の非表示、比較
   expect(fullText).toContain("診断スコア(16特性・ソーシャルスタイル・リスク指標)");
   // 採用向けの表示（見出し帯・注意書き・判定チップ・要約・強みと注意点・質問・接し方・辞めそうなサイン・末尾）の文字がすべて載る
   expect(recruitmentPieces.filter((piece) => !fullText.includes(piece))).toEqual([]);
-  // PR-7.12 まで、印刷用ページは採用向けの表示だけを置く（タブの行・生成前の案内・生成ボタン・育成・定着は描かない）
+  // PR-7.12 まで、印刷用ページは採用向けの表示だけを置く（タブの行・生成前の案内・生成ボタン・育成・定着は描かない。育成・定着が
+  // 生成済みでタブを表示していても、育成・定着の表示は載らない）
   expect(fullText).not.toContain("採用向けAI解説を生成");
   expect(fullText).not.toContain("育成・定着AI解説");
   expect(fullText).not.toContain(asPdfText(TRAINING_INTRO.title));
+  expect(trainingOnly.filter((text) => fullText.includes(text))).toEqual([]);
   // 育て方・接し方（11-4 §2.18。PR-7.8b）が載り、旧のセクション 5・6 の見出しは無い
   for (const label of LEARN_STYLE_LABELS) expect(fullText).toContain(label);
   for (const heading of OLD_SECTION_HEADINGS) expect(fullText).not.toContain(heading);
@@ -757,6 +1191,7 @@ test("E-21 PDF: 2 モード、ファイル名、restricted の非表示、比較
   expect(restrictedText).not.toContain("診断スコア(16特性・ソーシャルスタイル・リスク指標)");
   expect(restrictedText).not.toContain(asPdfText("AI 採用・育成アドバイザー"));
   expect(restrictedText).not.toContain(asPdfText(CAUTION));
+  expect(trainingOnly.filter((text) => restrictedText.includes(text))).toEqual([]);
   // 組織内のポジションは印字する（K-15、06 D06-26）。フッターに非表示の注記
   expect(restrictedText).toContain("組織内のポジション");
   expect(restrictedText).toContain("評価・合致度・リスク非表示");
