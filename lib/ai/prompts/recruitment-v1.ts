@@ -175,4 +175,5 @@ export const RECRUITMENT_V1: PromptDefinition = {
   analysisKind: "recruitment",
   system: RECRUITMENT_V1_SYSTEM,
   userTemplate: RECRUITMENT_V1_USER_TEMPLATE,
+  approvedForProduction: true,
 };

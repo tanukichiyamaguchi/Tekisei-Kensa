@@ -10,7 +10,10 @@ export interface AiAnalysisInput {
   readonly result: ScoreResult;
 }
 
-/** 育成・定着の入力（採用向けの入力に 8 項目を足す。11-6 §3.7.3。組み立ては PR-7.10） */
+/**
+ * 育成・定着の入力（採用向けの入力に 8 項目のコードを足す。11-6 §3.5 の 9・§3.7.3）。サービスが
+ * { ...buildAiAnalysisInput(…), context } と組み、プロンプトには 8 項目の表示名を差し込む（lib/ai/prompt-builder.ts）
+ */
 export interface TrainingAiInput extends AiAnalysisInput {
   readonly context: TrainingContext;
 }
@@ -48,13 +51,54 @@ export interface AiAnalysisOutput {
   };
 }
 
+/** 育成・定着の判定の 5 段階（11-6 §2.8.2 の LEVEL5） */
+type TrainingVerdictLevel = "非常に高い" | "高い" | "中" | "低い" | "非常に低い";
+
+/** 育成・定着の原因の確からしさ（11-6 §2.8.2 の HYPOTHESIS_LEVELS） */
+export type HypothesisLevel = "高" | "中" | "診断外";
+
+/** 育成・定着の出力（11-6 §2.8.2 の TrainingAiOutputSchema と 1 対 1。readonly の有無だけが異なる） */
+export interface TrainingAiOutput {
+  readonly verdict: {
+    readonly match: TrainingVerdictLevel;
+    readonly risk: TrainingVerdictLevel;
+    readonly support: TrainingVerdictLevel;
+  };
+  readonly urgent: {
+    readonly why: string;
+    readonly hypotheses: ReadonlyArray<{ readonly level: HypothesisLevel; readonly text: string }>;
+    readonly actions: ReadonlyArray<{ readonly label: string; readonly text: string }>;
+  };
+  readonly role: {
+    readonly why: string;
+    readonly have: readonly string[];
+    readonly lack: readonly string[];
+    readonly steps: ReadonlyArray<{
+      readonly badge: string;
+      readonly target: string;
+      readonly title: string;
+      readonly body: string;
+      readonly say: string;
+      readonly note: string;
+    }>;
+    readonly cond: string;
+  };
+  readonly daily: ReadonlyArray<{
+    readonly scene: string;
+    readonly ok: string;
+    readonly ng: string;
+    readonly say: string;
+  }>;
+  readonly oneonone: ReadonlyArray<{ readonly q: string; readonly intent: string }>;
+}
+
 /**
- * 種類ごとの出力（11-6 §3.7.3）。育成・定着と経年比較の出力の型は、それぞれのスキーマと一緒に PR-7.10・PR-7.11b が
- * 入れ替える（それまでは never。PR-7.9 の provider の中身は採用向けだけ。11-6 §4.4）
+ * 種類ごとの出力（11-6 §3.7.3）。経年比較の出力の型は、スキーマと一緒に PR-7.11b が入れ替える（それまでは never。PR-7.10 の
+ * provider の中身は採用向けと育成・定着。11-6 §4.4）
  */
 export interface AiOutputByKind {
   readonly recruitment: AiAnalysisOutput;
-  readonly training: never;
+  readonly training: TrainingAiOutput;
   readonly longitudinal: never;
 }
 

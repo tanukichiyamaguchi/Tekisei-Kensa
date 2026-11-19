@@ -1,7 +1,8 @@
 // 環境変数の唯一の読み出し口（01 §4.3）。process.env を直接読むのはこのファイルだけ（例外は scripts/ と proxy.ts）。
 import { z } from "zod";
 
-import { isKnownPromptVersion } from "@/lib/ai/prompts";
+import type { AiAnalysisKind } from "@/lib/ai/kinds";
+import { getPromptDefinition, type PromptDefinition } from "@/lib/ai/prompts";
 
 const hostPattern = /^[A-Za-z0-9.-]+:\d+$/; // 例 127.0.0.1:8080
 
@@ -35,6 +36,8 @@ const serverSchema = firebaseAdminSchema.extend({
   ANTHROPIC_API_KEY: optionalString(z.string().min(1)),
   AI_MODEL: z.string().min(1),
   AI_PROMPT_VERSION: z.string().min(1),
+  // 育成・定着の版（11-6 §2.7.4・§3.8）。任意。未設定（空を含む）なら育成・定着は無効
+  AI_TRAINING_PROMPT_VERSION: optionalString(z.string().min(1)),
   // PDF 印刷トークンの HMAC 鍵（04 D04-40）。32 バイト以上の乱数を base64 / hex で表した文字列
   PDF_TOKEN_SECRET: z.string().min(32),
   PDF_CHROMIUM_EXECUTABLE_PATH: optionalString(z.string().min(1)),
@@ -68,6 +71,46 @@ export class EnvError extends Error {
 }
 
 type EnvSource = Readonly<Record<string, string | undefined>>;
+
+/** 版の定義の引き方（既定は lib/ai/prompts の getPromptDefinition。登録されていない版は例外を投げる） */
+export type PromptLookup = (version: string) => PromptDefinition;
+
+/** 種類ごとの版の環境変数（11-6 §2.7.4・§3.8。経年比較の AI_LONGITUDINAL_PROMPT_VERSION は PR-7.11b） */
+const PROMPT_VERSION_VARIABLES: ReadonlyArray<{
+  readonly name: "AI_PROMPT_VERSION" | "AI_TRAINING_PROMPT_VERSION";
+  readonly kind: AiAnalysisKind;
+  readonly label: string;
+}> = [
+  { name: "AI_PROMPT_VERSION", kind: "recruitment", label: "採用向け" },
+  { name: "AI_TRAINING_PROMPT_VERSION", kind: "training", label: "育成・定着" },
+];
+
+/**
+ * 種類の版の確かめ（11-6 §2.7.4）。設定されている版が lib/ai/prompts に登録されていて、その種類の版であること。本番・プレビュー
+ * （VERCEL_ENV が production・preview。どちらも本番の Firebase につながる。K-13）では、依頼主の確認を経た版（approvedForProduction
+ * が真）であること。設定されていない任意の版（その種類は無効）は確かめない
+ */
+function assertPromptVersions(env: ServerEnv, lookup: PromptLookup): void {
+  const productionData = env.VERCEL_ENV === "production" || env.VERCEL_ENV === "preview";
+  for (const { name, kind, label } of PROMPT_VERSION_VARIABLES) {
+    const version = env[name];
+    if (version === undefined) continue;
+    let prompt: PromptDefinition;
+    try {
+      prompt = lookup(version);
+    } catch {
+      throw new EnvError(`${name}=${version} は lib/ai/prompts に登録されていません`);
+    }
+    if (prompt.analysisKind !== kind) {
+      throw new EnvError(`${name}=${version} は${label}（${kind}）の版ではありません`);
+    }
+    if (productionData && !prompt.approvedForProduction) {
+      throw new EnvError(
+        `${name}=${version} は本番での使用が承認されていない版（approvedForProduction が偽）のため、本番・プレビュー環境では使えません`,
+      );
+    }
+  }
+}
 
 function issuesOf(error: z.ZodError): string {
   return error.issues.map((i) => i.path.join(".")).join(", ");
@@ -132,8 +175,14 @@ export function validateFirebaseAdminEnv(source: EnvSource): FirebaseAdminEnv {
   return env;
 }
 
-/** アプリ全体の起動時検証（01 §4.3）。テストから任意の値で呼べるよう source を受け取る */
-export function validateServerEnv(source: EnvSource): ServerEnv {
+/**
+ * アプリ全体の起動時検証（01 §4.3）。テストから任意の値で呼べるよう source を受け取る。lookupPrompt は版の定義の引き方
+ * （単体テストが承認したテスト用の定義を渡す。既定は lib/ai/prompts の登録）
+ */
+export function validateServerEnv(
+  source: EnvSource,
+  lookupPrompt: PromptLookup = getPromptDefinition,
+): ServerEnv {
   validateFirebaseAdminEnv(source);
   const parsed = serverSchema.safeParse(source);
   if (!parsed.success) throw new EnvError(`環境変数が不正です: ${issuesOf(parsed.error)}`);
@@ -161,11 +210,7 @@ export function validateServerEnv(source: EnvSource): ServerEnv {
   if (env.VERCEL_ENV === "production" && !env.NEXT_PUBLIC_APP_BASE_URL) {
     throw new EnvError("本番環境では NEXT_PUBLIC_APP_BASE_URL を設定してください");
   }
-  if (!isKnownPromptVersion(env.AI_PROMPT_VERSION)) {
-    throw new EnvError(
-      `AI_PROMPT_VERSION=${env.AI_PROMPT_VERSION} は lib/ai/prompts に登録されていません`,
-    );
-  }
+  assertPromptVersions(env, lookupPrompt);
   if (onVercel && env.PDF_CHROMIUM_EXECUTABLE_PATH) {
     throw new EnvError(
       "Vercel 上では PDF_CHROMIUM_EXECUTABLE_PATH を設定しないでください（@sparticuz/chromium を使う）",

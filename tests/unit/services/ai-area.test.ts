@@ -1,7 +1,7 @@
 // M7-ai-01（11-6 §5.1。PR-7.9 の形）: visibleTabsOf（11-6 §2.2・§3.7.7、K-21）。表示上の役職が責任者の受験は採用向け・育成・定着を
 // 出さない。経年比較のタブは PR-7.11a まで出さないので、責任者の受験は []、ほかは ["recruitment", "training"]（PR-7.11a で
 // 責任者 → ["longitudinal"]、ほか → 3 つに改める）。種類ごとの版と有効かどうか（promptVersionOf・isAiKindEnabled。11-6 §2.7.4・
-// §3.7.7）。buildAiArea は結合テスト（M7-ai-34）で確かめる。Emulator 不要
+// §3.7.7。育成・定着は AI_TRAINING_PROMPT_VERSION があるときだけ有効）。buildAiArea は結合テスト（M7-ai-34）で確かめる。Emulator 不要
 import { Timestamp } from "firebase-admin/firestore";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -102,13 +102,13 @@ describe("M7-ai-01 visibleTabsOf（PR-7.9 の形）", () => {
   });
 });
 
-describe("promptVersionOf・isAiKindEnabled（PR-7.9: 採用向けだけが有効）", () => {
+describe("promptVersionOf・isAiKindEnabled（11-6 §2.7.4・§3.7.7）", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     resetEnvCacheForTest();
   });
 
-  it("採用向けは AI_PROMPT_VERSION の版で有効。育成・定着と経年比較は版の環境変数がまだ無く null で無効（PR-7.10・PR-7.11b）", () => {
+  const useEnv = (trainingVersion: string) => {
     const env = {
       NEXT_PUBLIC_FIREBASE_API_KEY: "demo-api-key",
       NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: "localhost",
@@ -120,16 +120,38 @@ describe("promptVersionOf・isAiKindEnabled（PR-7.9: 採用向けだけが有�
       AI_MODEL: "claude-opus-5",
       AI_PROMPT_VERSION: "recruitment-v2",
       PDF_TOKEN_SECRET: "x".repeat(32),
+      AI_TRAINING_PROMPT_VERSION: trainingVersion,
       VERCEL: "",
       VERCEL_ENV: "",
     };
     for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value);
     resetEnvCacheForTest();
+  };
+
+  it("AI_TRAINING_PROMPT_VERSION=training-v1: 採用向けは AI_PROMPT_VERSION の版、育成・定着は training-v1 で有効。経年比較は版の環境変数がまだ無く null で無効（PR-7.11b）", () => {
+    useEnv("training-v1");
+    expect(promptVersionOf("recruitment")).toBe("recruitment-v2");
+    expect(promptVersionOf("training")).toBe("training-v1");
+    expect(promptVersionOf("longitudinal")).toBeNull();
+    expect(isAiKindEnabled("recruitment")).toBe(true);
+    expect(isAiKindEnabled("training")).toBe(true);
+    expect(isAiKindEnabled("longitudinal")).toBe(false);
+  });
+
+  it("AI_TRAINING_PROMPT_VERSION が空（未設定と同じ）: 育成・定着は null で無効。採用向けは有効のまま", () => {
+    useEnv("");
     expect(promptVersionOf("recruitment")).toBe("recruitment-v2");
     expect(promptVersionOf("training")).toBeNull();
     expect(promptVersionOf("longitudinal")).toBeNull();
     expect(isAiKindEnabled("recruitment")).toBe(true);
     expect(isAiKindEnabled("training")).toBe(false);
-    expect(isAiKindEnabled("longitudinal")).toBe(false);
+  });
+
+  it("AI_TRAINING_PROMPT_VERSION が無い: 育成・定着は null で無効", () => {
+    useEnv("training-v1");
+    vi.stubEnv("AI_TRAINING_PROMPT_VERSION", undefined);
+    resetEnvCacheForTest();
+    expect(promptVersionOf("training")).toBeNull();
+    expect(isAiKindEnabled("training")).toBe(false);
   });
 });

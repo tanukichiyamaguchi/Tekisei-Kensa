@@ -148,7 +148,7 @@ export async function buildAiArea(
   let training: TrainingAiDto | null = null;
   if (visibleTabs.includes("training")) {
     const { latest, ...state } = await kindWithLatest(source, "training", readsLatest("training"));
-    // 8 項目は生成済みで最新の分析が読めたときだけ（PR-7.9 は育成・定着の出力のスキーマが無く、いつも null。11-6 §3.6）
+    // 8 項目は生成済みで最新の分析が読めたときだけ（読まない種類・読めない出力・生成前は null。11-6 §3.6）
     training = {
       ...state,
       context: latest === null ? null : source.result.trainingContext,

@@ -70,11 +70,23 @@ describe("M7-ai-22 classifyAiPostFailure（11-6 §2.3.4 の生成の要求の失
     expect(classifyAiPostFailure(err(503, "SERVICE_UNAVAILABLE"))).toEqual({ kind: "check" });
   });
 
-  it("その他の 4xx は通知", () => {
-    expect(classifyAiPostFailure(err(422, "VALIDATION_ERROR"))).toEqual({
-      kind: "error",
-      message: "m-VALIDATION_ERROR",
-    });
+  it("422 VALIDATION_ERROR（育成・定着の要求の本文の検証。11-6 §3.4）は error（応答の文を通知に出す分け方。§2.3.4）", () => {
+    expect(
+      classifyAiPostFailure(err(422, "VALIDATION_ERROR", { issues: [{ path: "context.tenure" }] })),
+    ).toEqual({ kind: "error", message: "m-VALIDATION_ERROR" });
+  });
+
+  it("その他の 4xx（本文の形の 400 INVALID_JSON・415 UNSUPPORTED_MEDIA_TYPE を含む）は通知", () => {
+    for (const [status, code] of [
+      [400, "INVALID_JSON"],
+      [415, "UNSUPPORTED_MEDIA_TYPE"],
+      [403, "ROLE_REQUIRED"],
+    ] as const) {
+      expect(classifyAiPostFailure(err(status, code)), code).toEqual({
+        kind: "error",
+        message: `m-${code}`,
+      });
+    }
   });
 
   it("ポーリングは 3 秒間隔・最大 10 分", () => {

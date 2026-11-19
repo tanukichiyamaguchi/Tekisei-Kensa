@@ -8,9 +8,17 @@ import {
   type BrowserContext,
   type Locator,
   type Page,
+  type Request,
 } from "@playwright/test";
 
 import { emulatorTask } from "./admin";
+import {
+  TRAINING_CONTEXT_ITEMS,
+  TRAINING_CONTEXT_KEYS,
+  trainingContextLabel,
+  type TrainingContext,
+  type TrainingContextKey,
+} from "@/lib/masters/training-context";
 import type { AptitudeTypeKey, SocialStyleKey } from "@/lib/scoring/types";
 
 export const E2E_ADMIN_PASSWORD = "e2e-admin-pass-1234";
@@ -97,16 +105,17 @@ export function submitNamed(
 }
 
 /**
- * 採用向けの AI 解説を、別の画面で生成を始めた状態（start）か、その生成が失敗した状態（fail。reason は失敗の理由）にする
- * （11-6 §2.3.5 の「開いたときに generating」。アプリと同じリポジトリの関数でオーナーとして書く。直接は書かない）
+ * AI 解説（kind。既定は採用向け）を、別の画面で生成を始めた状態（start）か、その生成が失敗した状態（fail。reason は失敗の理由）に
+ * する（11-6 §2.3.5 の「開いたときに generating」。アプリと同じリポジトリの関数でオーナーとして書く。直接は書かない）
  */
 export function aiGenerationElsewhere(
   org: AdminOrg,
   resultId: string,
   step: "start" | "fail",
   reason = "",
+  kind: "recruitment" | "training" = "recruitment",
 ): void {
-  emulatorTask("ai-generation", step, org.organizationId, org.ownerUid, resultId, reason);
+  emulatorTask("ai-generation", step, org.organizationId, org.ownerUid, resultId, reason, kind);
 }
 
 /** 受験が 0 件の組織（組織・オーナー・管理者だけ。M7-list-47） */
@@ -471,12 +480,18 @@ export const OB_ROOT_OUTLINE = {
   offset: "2px",
 } as const;
 
-// ---- AI 解説の領域（11-6 §2.1〜§2.4。結果詳細の #ai。クラスは別表C）の要素
+// ---- AI 解説の領域（11-6 §2.1〜§2.5。結果詳細の #ai。クラスは別表C）の要素
 
-/** AI 解説の種類（タブとパネル。PR-7.9 は採用向けと育成・定着の 2 つ。経年比較のタブは PR-7.11a） */
+/** AI 解説の種類（タブとパネル。PR-7.9・PR-7.10 は採用向けと育成・定着の 2 つ。経年比較のタブは PR-7.11a） */
 export type AiKind = "recruitment" | "training" | "longitudinal";
 
-/** AI 解説の領域の部品（タブ・パネル・生成ボタン・生成中・失敗の枠・採用向けの表示） */
+/** 生成ボタンのある種類（採用向けと育成・定着） */
+export type AiStartKind = "recruitment" | "training";
+
+/**
+ * AI 解説の領域の部品（タブ・パネル・生成ボタン・生成中・失敗の枠・採用向けと育成・定着の表示・育成・定着の 8 項目）。2 つのパネルを
+ * 両方描く（選んでいないパネルは hidden。11-6 §2.1）ので、生成中と失敗の枠を種類で限るときは loadingIn・failIn を使う
+ */
 export const aiArea = (page: Page) => ({
   /** 領域（section#ai。読み上げの名前「AI解説」） */
   root: page.locator("#ai"),
@@ -487,7 +502,7 @@ export const aiArea = (page: Page) => ({
   /** パネル（role="tabpanel"。data-status は種類の状態） */
   panel: (kind: AiKind) => page.locator(`#ai-panel-${kind}`),
   /** 生成ボタン（「採用向けAI解説を生成」「育成・定着AI解説を生成」） */
-  genButton: (kind: "recruitment" | "training") =>
+  genButton: (kind: AiStartKind) =>
     page.locator(`#ai-panel-${kind}`).getByRole("button", {
       name: kind === "recruitment" ? "採用向けAI解説を生成" : "育成・定着AI解説を生成",
       exact: true,
@@ -496,48 +511,114 @@ export const aiArea = (page: Page) => ({
   loading: page.locator("#ai .ai-loading"),
   /** 失敗の枠（.ai-fail。role="alert"） */
   fail: page.locator("#ai .ai-fail"),
+  /** 種類のパネルの中の生成中と失敗の枠 */
+  loadingIn: (kind: AiStartKind) => page.locator(`#ai-panel-${kind} .ai-loading`),
+  failIn: (kind: AiStartKind) => page.locator(`#ai-panel-${kind} .ai-fail`),
   /** 採用向けの表示（.ai-rec） */
   view: page.locator("#ai .ai-rec"),
+  /** 育成・定着の表示（.ai-ik） */
+  trainingView: page.locator("#ai .ai-ik"),
+  /** 育成・定着の「現場の状況を入力（8項目）」の箱（.ai-ctx） */
+  ctx: page.locator("#ai-panel-training .ai-ctx"),
+  /** 8 項目の選択欄（select#ai-ctx-{キー}） */
+  select: (key: TrainingContextKey) => page.locator(`#ai-ctx-${key}`),
+  /** 8 項目の選択欄（画面の並び。TRAINING_CONTEXT_KEYS の順） */
+  selects: page.locator("#ai-panel-training .ai-ctx select"),
 });
 
-/** 採用向けの AI 解説の API のパス（11-6 §3.4） */
-const recruitmentAiPath = (resultId: string): string =>
-  `/api/v1/admin/results/${resultId}/ai-analysis/recruitment`;
+/**
+ * 育成・定着の 8 項目の見本（コード。11-6 §3.4 の要求の例と同じ値）。M7-ai-39・42・50 と E-21 が選んで送る
+ */
+export const TRAINING_CONTEXT_SAMPLE: TrainingContext = Object.freeze({
+  tenure: "year_2",
+  evaluation: "meets",
+  expectedRole: "trainer",
+  recentState: "low_energy",
+  relationship: "specific_mismatch",
+  wish: "skill_up",
+  changeSinceJoining: "unchanged",
+  concern: "few_reports",
+});
 
-/** 採用向けの生成の要求（POST …/ai-analysis/recruitment）を数える（返す配列に出た要求の URL が入る） */
-export function watchAiPosts(page: Page, resultId: string): string[] {
+/**
+ * 育成・定着の 8 項目を、ラベルで引いた選択欄（label の for で結び付いたもの）で、マスタの表示名の選択肢を選ぶ（context に無い
+ * キーは触らない）。値はコードで受け、選ぶのは表示名（11-6 §2.5.3）
+ */
+export async function selectTrainingContext(
+  page: Page,
+  context: Partial<TrainingContext>,
+): Promise<void> {
+  const panel = page.locator("#ai-panel-training");
+  for (const key of TRAINING_CONTEXT_KEYS) {
+    const code = context[key];
+    if (code === undefined) continue;
+    await panel
+      .getByLabel(TRAINING_CONTEXT_ITEMS[key].label, { exact: true })
+      .selectOption({ label: trainingContextLabel(key, code) });
+  }
+}
+
+/** AI 解説の API のパス（11-6 §3.4） */
+const aiPath = (resultId: string, kind: AiKind): string =>
+  `/api/v1/admin/results/${resultId}/ai-analysis/${kind}`;
+
+/** 生成の要求（POST …/ai-analysis/{kind}。既定は採用向け）を数える（返す配列に出た要求の URL が入る） */
+export function watchAiPosts(page: Page, resultId: string, kind: AiKind = "recruitment"): string[] {
   const posts: string[] = [];
   page.on("request", (req) => {
-    if (req.method() === "POST" && new URL(req.url()).pathname === recruitmentAiPath(resultId)) {
+    if (req.method() === "POST" && new URL(req.url()).pathname === aiPath(resultId, kind)) {
       posts.push(req.url());
     }
   });
   return posts;
 }
 
-/** 採用向けの状態の読み直し（GET …/ai-analysis/recruitment）を数える（返す配列に、出た要求の時刻（ミリ秒）が入る） */
-export function watchAiGets(page: Page, resultId: string): number[] {
+/** 次の生成の要求（POST …/ai-analysis/{kind}）。本文は postDataJSON() で読む */
+export const nextAiPost = (page: Page, resultId: string, kind: AiKind): Promise<Request> =>
+  page.waitForRequest(
+    (req) => req.method() === "POST" && new URL(req.url()).pathname === aiPath(resultId, kind),
+  );
+
+/** 状態の読み直し（GET …/ai-analysis/{kind}。既定は採用向け）を数える（返す配列に、出た要求の時刻（ミリ秒）が入る） */
+export function watchAiGets(page: Page, resultId: string, kind: AiKind = "recruitment"): number[] {
   const gets: number[] = [];
   page.on("request", (req) => {
-    if (req.method() === "GET" && new URL(req.url()).pathname === recruitmentAiPath(resultId)) {
+    if (req.method() === "GET" && new URL(req.url()).pathname === aiPath(resultId, kind)) {
       gets.push(Date.now());
     }
   });
   return gets;
 }
 
-/** 採用向けの生成の要求を止める（生成中の表示を確かめるため）。返す関数で放すと、要求はそのままサーバへ送られる */
-export async function holdAiPost(page: Page, resultId: string): Promise<() => void> {
+/**
+ * 生成の要求（既定は採用向け）を止める（生成中の表示を確かめるため）。返す関数で放すと、要求はそのままサーバへ送られる
+ */
+export async function holdAiPost(
+  page: Page,
+  resultId: string,
+  kind: AiKind = "recruitment",
+): Promise<() => void> {
   let release: () => void = () => undefined;
   const held = new Promise<void>((resolve) => {
     release = resolve;
   });
-  await page.route(`**${recruitmentAiPath(resultId)}`, async (route) => {
+  await page.route(`**${aiPath(resultId, kind)}`, async (route) => {
     if (route.request().method() === "POST") await held;
     await route.continue();
   });
   return release;
 }
+
+/**
+ * ページの描画のフレームを 2 つ待つ（焦点が移った後に ResultToc が次のフレームで動かす処理の後まで。時間で待たない。11-4 §2.5）
+ */
+export const nextFrames = (page: Page): Promise<void> =>
+  page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }),
+  );
 
 // ---- クリップボード（回答リンクのコピー。11-2 §2.17）
 

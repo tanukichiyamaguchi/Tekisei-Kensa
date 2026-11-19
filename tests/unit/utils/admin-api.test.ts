@@ -1,5 +1,6 @@
 // lib/utils/admin-api.ts の adminFetch（06 §10.4）: 401 → ログイン、403（停止・未登録）→ 再読み込み、その他 → AdminApiError。
-// 回答一覧の updatePerson・fetchUsageLogs（11-2 §3.6・§3.8・§5.5）。AI 解説の requestAiKind・fetchAiKind（11-6 §3.4）
+// 回答一覧の updatePerson・fetchUsageLogs（11-2 §3.6・§3.8・§5.5）。AI 解説の requestAiKind・fetchAiKind（11-6 §3.4。育成・定着の
+// 生成の要求の本文を含む）
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -240,17 +241,29 @@ describe("requestAiKind・fetchAiKind（11-6 §3.4）", () => {
     latest: null,
   };
 
-  it("POST・GET を種類のパス …/ai-analysis/{kind} に送り、ID はエンコードする。POST に本文は無い", async () => {
+  /** 育成・定着の要求の本文（11-6 §3.4 の形。8 項目のコード） */
+  const trainingBody = {
+    context: {
+      tenure: "year_2",
+      evaluation: "meets",
+      expectedRole: "trainer",
+      recentState: "low_energy",
+      relationship: "specific_mismatch",
+      wish: "skill_up",
+      changeSinceJoining: "unchanged",
+      concern: "few_reports",
+    },
+  };
+
+  it("POST・GET を種類のパス …/ai-analysis/{kind} に送り、ID はエンコードする。本文を渡さない POST（採用向け）と GET に本文も Content-Type も無い", async () => {
     const fetchMock = stubFetch(() => jsonResponse(200, recruitment));
     await expect(requestAiKind("R/1", "recruitment")).resolves.toEqual(recruitment);
     await expect(fetchAiKind("R/1", "recruitment")).resolves.toEqual(recruitment);
-    await requestAiKind("R1", "training");
     await fetchAiKind("R1", "training");
     await fetchAiKind("R1", "longitudinal");
     expect(fetchMock.mock.calls.map(([url, init]) => [url, init.method])).toEqual([
       ["/api/v1/admin/results/R%2F1/ai-analysis/recruitment", "POST"],
       ["/api/v1/admin/results/R%2F1/ai-analysis/recruitment", "GET"],
-      ["/api/v1/admin/results/R1/ai-analysis/training", "POST"],
       ["/api/v1/admin/results/R1/ai-analysis/training", "GET"],
       ["/api/v1/admin/results/R1/ai-analysis/longitudinal", "GET"],
     ]);
@@ -258,6 +271,31 @@ describe("requestAiKind・fetchAiKind（11-6 §3.4）", () => {
       expect(init).not.toHaveProperty("body");
       expect(init).not.toHaveProperty("headers");
     }
+  });
+
+  it("本文を渡すと、その本文を JSON で POST する（育成・定着の { context: 8 項目のコード }。Content-Type は application/json）", async () => {
+    const training = {
+      resultId: "R/1",
+      kind: "training",
+      status: "completed",
+      startedAt: null,
+      error: null,
+      enabled: true,
+      context: trainingBody.context,
+      latest: null,
+    };
+    const fetchMock = stubFetch(() => jsonResponse(200, training));
+    await expect(requestAiKind("R/1", "training", trainingBody)).resolves.toEqual(training);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("/api/v1/admin/results/R%2F1/ai-analysis/training");
+    expect(init).toMatchObject({
+      method: "POST",
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(JSON.parse(init.body as string)).toEqual(trainingBody);
   });
 
   it("GET は中断の signal を渡す", async () => {
@@ -285,10 +323,23 @@ describe("requestAiKind・fetchAiKind（11-6 §3.4）", () => {
       details: { reason: "invalid_json" },
     });
     stubFetch(() => jsonResponse(503, errorBody("AI_KIND_DISABLED", "この AI 解説は準備中です")));
-    await expect(requestAiKind("R1", "training")).rejects.toMatchObject({
+    await expect(requestAiKind("R1", "training", trainingBody)).rejects.toMatchObject({
       status: 503,
       code: "AI_KIND_DISABLED",
       message: "この AI 解説は準備中です",
+    });
+    stubFetch(() =>
+      jsonResponse(
+        422,
+        errorBody("VALIDATION_ERROR", "入力内容に誤りがあります", {
+          issues: [{ path: "context.tenure", message: "Invalid option" }],
+        }),
+      ),
+    );
+    await expect(requestAiKind("R1", "training", { context: {} })).rejects.toMatchObject({
+      status: 422,
+      code: "VALIDATION_ERROR",
+      details: { issues: [{ path: "context.tenure", message: "Invalid option" }] },
     });
   });
 });

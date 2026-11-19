@@ -10,7 +10,7 @@ export type AiPostFailureAction =
   | { readonly kind: "failed"; readonly reason: string | null } // 502 → 失敗の枠
   | { readonly kind: "notFound"; readonly message: string } // 404 → 通知とボタンを押せなくする
   | { readonly kind: "check" } // 通信の失敗・ゲートウェイの失敗 → GET で状態を確かめる
-  | { readonly kind: "error"; readonly message: string }; // 409 AI_NOT_APPLICABLE・503 AI_KIND_DISABLED・その他 → 通知（状態は変えない）
+  | { readonly kind: "error"; readonly message: string }; // 409 AI_NOT_APPLICABLE・503 AI_KIND_DISABLED・422 VALIDATION_ERROR（育成・定着の本文）・その他 → 通知（状態は変えない）
 
 export function classifyAiPostFailure(error: {
   readonly status: number;

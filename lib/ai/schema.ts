@@ -1,11 +1,11 @@
-// AI 出力の検証スキーマ（07 §3.2、11-6 §2.8・§3.7.3）。採用向けは付録D §2 と 00 §3.6 の AiAnalysisOutput に 1 対 1。
-// 定義はこの 1 箇所だけにし、種類ごとの表 AI_OUTPUT_SCHEMAS を、Anthropic provider の zodOutputFormat() と parseAiOutputText()・
-// parseStoredAiOutput() が使う（08 D08-10）
+// AI 出力の検証スキーマ（07 §3.2、11-6 §2.8・§3.7.3）。採用向けは付録D §2 と 00 §3.6 の AiAnalysisOutput に、育成・定着は
+// 11-6 §2.8.2 と TrainingAiOutput に 1 対 1。定義はこの 1 箇所だけにし、種類ごとの表 AI_OUTPUT_SCHEMAS を、Anthropic provider の
+// zodOutputFormat() と parseAiOutputText()・parseStoredAiOutput() が使う（08 D08-10）
 import { z } from "zod";
 
 import { AiProviderError } from "@/lib/ai/errors";
 import type { AiAnalysisKind } from "@/lib/ai/kinds";
-import type { AiAnalysisOutput, AiOutputByKind } from "@/lib/ai/types";
+import type { AiAnalysisOutput, AiOutputByKind, TrainingAiOutput } from "@/lib/ai/types";
 
 export const LEVER_LABELS = ["関わり方", "任せ方", "認め方", "伸ばし方"] as const;
 
@@ -73,13 +73,81 @@ export type AiAnalysisOutputParsed = z.infer<typeof AiAnalysisOutputSchema>;
 const _outputCompatible: (v: AiAnalysisOutputParsed) => AiAnalysisOutput = (v) => v;
 void _outputCompatible;
 
+/** 育成・定着の判定の 5 段階（11-6 §2.8.2） */
+const LEVEL5 = ["非常に高い", "高い", "中", "低い", "非常に低い"] as const;
+/** 育成・定着の原因の確からしさ（11-6 §2.8.2） */
+export const HYPOTHESIS_LEVELS = ["高", "中", "診断外"] as const;
+
+/** min ≤ n ≤ max（11-6 §2.8.2） */
+function between(n: number, min: number, max: number): boolean {
+  return min <= n && n <= max;
+}
+
+// 育成・定着（11-6 §2.8.2）。余分なキーは各段で拒否する（.strict()）。配列の数と文字の空は API 側では強制されないため refine で
+// 確かめる。数の上限はプロンプトの指示より緩い（1 個の過不足では失敗にしない。07 D07-07 の考え方）
+export const TrainingAiOutputSchema = z
+  .object({
+    verdict: z
+      .object({ match: z.enum(LEVEL5), risk: z.enum(LEVEL5), support: z.enum(LEVEL5) })
+      .strict(),
+    urgent: z
+      .object({
+        why: z.string(),
+        hypotheses: z.array(
+          z.object({ level: z.enum(HYPOTHESIS_LEVELS), text: z.string() }).strict(),
+        ),
+        actions: z.array(z.object({ label: z.string(), text: z.string() }).strict()),
+      })
+      .strict(),
+    role: z
+      .object({
+        why: z.string(),
+        have: z.array(z.string()),
+        lack: z.array(z.string()),
+        steps: z.array(
+          z
+            .object({
+              badge: z.string(),
+              target: z.string(),
+              title: z.string(),
+              body: z.string(),
+              say: z.string(),
+              note: z.string(),
+            })
+            .strict(),
+        ),
+        cond: z.string(),
+      })
+      .strict(),
+    daily: z.array(
+      z.object({ scene: z.string(), ok: z.string(), ng: z.string(), say: z.string() }).strict(),
+    ),
+    oneonone: z.array(z.object({ q: z.string(), intent: z.string() }).strict()),
+  })
+  .strict()
+  .refine((v) => v.urgent.why.trim().length > 0, { message: "urgent.why is empty" })
+  .refine((v) => v.role.why.trim().length > 0, { message: "role.why is empty" })
+  .refine((v) => between(v.urgent.hypotheses.length, 1, 5), { message: "hypotheses length" })
+  .refine((v) => between(v.urgent.actions.length, 1, 6), { message: "actions length" })
+  .refine((v) => between(v.role.have.length, 1, 5), { message: "have length" })
+  .refine((v) => between(v.role.lack.length, 1, 6), { message: "lack length" })
+  .refine((v) => between(v.role.steps.length, 1, 6), { message: "steps length" })
+  .refine((v) => between(v.daily.length, 1, 8), { message: "daily length" })
+  .refine((v) => between(v.oneonone.length, 1, 5), { message: "oneonone length" });
+
+export type TrainingAiOutputParsed = z.infer<typeof TrainingAiOutputSchema>;
+
+/** 型の対応の確認（readonly の有無だけが異なる。07 §3.2） */
+const _trainingOutputCompatible: (v: TrainingAiOutputParsed) => TrainingAiOutput = (v) => v;
+void _trainingOutputCompatible;
+
 /**
- * 種類ごとの出力のスキーマ（11-6 §3.7.3）。PR-7.9 は採用向けだけ（育成・定着の TrainingAiOutputSchema は PR-7.10、経年比較の
- * LongitudinalAiOutputSchema は PR-7.11b が足す）
+ * 種類ごとの出力のスキーマ（11-6 §3.7.3）。採用向けと育成・定着（経年比較の LongitudinalAiOutputSchema は PR-7.11b が足す）
  */
 export const AI_OUTPUT_SCHEMAS: { readonly [K in AiAnalysisKind]?: z.ZodType<AiOutputByKind[K]> } =
   {
     recruitment: AiAnalysisOutputSchema,
+    training: TrainingAiOutputSchema,
   };
 
 /**

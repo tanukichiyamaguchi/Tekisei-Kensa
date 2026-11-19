@@ -186,7 +186,7 @@ describe("作成時の値（M7 の項目を書く）", () => {
     expect(usage.respondentKind).toBe("executive");
   });
 
-  it("今の AI の API（スタブ）で作った aiAnalyses は trainingContext・previousResultId・usedTrainingAction が null", async () => {
+  it("採用向けの AI の API（スタブ）で作った aiAnalyses は trainingContext・previousResultId・usedTrainingAction が null", async () => {
     const submitted = await submitAnswerSet(org, uniformAnswers(2), { name: "生成 花子" });
     const res = await callRoute(postAiRoute, {
       method: "POST",

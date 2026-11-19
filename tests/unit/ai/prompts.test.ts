@@ -1,8 +1,10 @@
 // U-15（08 §3.2.2）: lib/ai/prompts/recruitment-v1.ts が付録D §3 と一致すること（07 §2.2、D07-03）。
-// 種類の版の引き方 getPromptDefinitionForKind（11-6 §3.7.2）
+// 種類の版の引き方 getPromptDefinitionForKind と本番で使えるか approvedForProduction（11-6 §2.7.4・§3.7.2）。
+// M7-ai-06（11-6 §5.1）: lib/ai/prompts/training-v1.ts が 11-6 別表A と一字一句同じで、K-19 の対象の語が残らないこと
 import { describe, expect, it } from "vitest";
 
 import { AiProviderError } from "@/lib/ai/errors";
+import { placeholderValues } from "@/lib/ai/prompt-builder";
 import {
   getPromptDefinition,
   getPromptDefinitionForKind,
@@ -12,12 +14,22 @@ import {
 } from "@/lib/ai/prompts";
 import { RECRUITMENT_V1 } from "@/lib/ai/prompts/recruitment-v1";
 import { RECRUITMENT_V2, RECRUITMENT_V2_REPLACEMENTS } from "@/lib/ai/prompts/recruitment-v2";
+import {
+  TRAINING_V1,
+  TRAINING_V1_SYSTEM,
+  TRAINING_V1_USER_TEMPLATE,
+} from "@/lib/ai/prompts/training-v1";
 import { APTITUDE_DEFINITIONS } from "@/lib/masters/indicators/aptitudes";
 import { COMPATIBILITY_DEFINITIONS } from "@/lib/masters/indicators/compatibility";
 import { SOCIAL_STYLE_DEFINITIONS } from "@/lib/masters/indicators/social-styles";
 import { TRAIT_DEFINITIONS } from "@/lib/masters/indicators/traits";
 
-import { readAppendixDPrompt } from "./helpers";
+import {
+  readAppendixDPrompt,
+  readAppendixDTrainingPrompt,
+  readTrainingV1Appendix,
+  t06TrainingInput,
+} from "./helpers";
 
 /** 付録D の山括弧の名前 → テンプレートのプレースホルダ名（ラベル表記はマスタから引き、リスクだけは付録D 固有の名前） */
 function placeholderNameMap(): Map<string, string> {
@@ -89,12 +101,26 @@ describe("プロンプトのレジストリ（07 §2.2）", () => {
   it("getPromptDefinition: 既知の版は定義、未知の版は config_error", () => {
     expect(getPromptDefinition("recruitment-v1")).toBe(RECRUITMENT_V1);
     expect(getPromptDefinition("recruitment-v2")).toBe(RECRUITMENT_V2);
+    expect(getPromptDefinition("training-v1")).toBe(TRAINING_V1);
     expect(isKnownPromptVersion("recruitment-v3")).toBe(false);
     expect(() => getPromptDefinition("recruitment-v3")).toThrow(AiProviderError);
   });
 
-  it("登録されている版はすべて採用向け（育成・定着の版は PR-7.10、経年比較の版は PR-7.11b が足す）", () => {
-    for (const def of Object.values(PROMPT_REGISTRY)) expect(def.analysisKind).toBe("recruitment");
+  it("登録されている版は採用向けの 2 つと育成・定着の training-v1（経年比較の longitudinal-v1 は PR-7.11b が足す）", () => {
+    expect([...PROMPT_VERSIONS]).toEqual(["recruitment-v1", "recruitment-v2", "training-v1"]);
+    expect(
+      Object.fromEntries(Object.entries(PROMPT_REGISTRY).map(([k, d]) => [k, d.analysisKind])),
+    ).toEqual({
+      "recruitment-v1": "recruitment",
+      "recruitment-v2": "recruitment",
+      "training-v1": "training",
+    });
+  });
+
+  it("approvedForProduction（11-6 §2.7.4）: 採用向けの v1・v2 は真、依頼主の確認の前の training-v1 は偽", () => {
+    expect(RECRUITMENT_V1.approvedForProduction).toBe(true);
+    expect(RECRUITMENT_V2.approvedForProduction).toBe(true);
+    expect(TRAINING_V1.approvedForProduction).toBe(false);
   });
 
   it("getPromptDefinitionForKind（11-6 §3.7.2）: 種類の合う版は定義、種類の違う版・未知の版は config_error（文は版と種類の名前だけ）", () => {
@@ -102,12 +128,17 @@ describe("プロンプトのレジストリ（07 §2.2）", () => {
     expect(def).toBe(RECRUITMENT_V2);
     expect(def.analysisKind).toBe("recruitment");
     expect(getPromptDefinitionForKind("recruitment", "recruitment-v1")).toBe(RECRUITMENT_V1);
+    const training = getPromptDefinitionForKind("training", "training-v1");
+    expect(training).toBe(TRAINING_V1);
+    expect(training.analysisKind).toBe("training");
 
     const cases = [
       ["training", "recruitment-v2", "prompt version recruitment-v2 is not for training"],
+      ["recruitment", "training-v1", "prompt version training-v1 is not for recruitment"],
       ["longitudinal", "recruitment-v1", "prompt version recruitment-v1 is not for longitudinal"],
+      ["longitudinal", "training-v1", "prompt version training-v1 is not for longitudinal"],
       ["recruitment", "recruitment-v9", "unknown prompt version: recruitment-v9"],
-      ["training", "training-v1", "unknown prompt version: training-v1"],
+      ["training", "training-v2", "unknown prompt version: training-v2"],
     ] as const;
     for (const [kind, version, message] of cases) {
       let caught: unknown;
@@ -142,5 +173,92 @@ describe("recruitment-v2（アイリストのサロン向け。10 K-19）", () =
     expect(RECRUITMENT_V2.userTemplate).toBe(RECRUITMENT_V1.userTemplate);
     expect(RECRUITMENT_V2.version).toBe("recruitment-v2");
     expect(RECRUITMENT_V2.analysisKind).toBe("recruitment");
+  });
+});
+
+describe("M7-ai-06 training-v1 と 11-6 別表A（11-6 §2.7.2）", () => {
+  const appendix = readTrainingV1Appendix();
+  /** 置き換えの対象の語（K-19・K-32 ⑪。11-6 §2.7.2 の確かめの語。§0.5・付録C の K-19 の対象を含む） */
+  const REPLACED_WORDS = [
+    "歯科",
+    "院長",
+    "医院",
+    "クリニック",
+    "他院",
+    "滅菌",
+    "器具準備",
+    "アシスト業務",
+    "スケーリング",
+    "衛生士",
+    "助手",
+    "コンタクター",
+    "停滞",
+  ];
+
+  it("system は別表A §A.1 の囲みの中身と一字一句同じ（7,511 字。末尾に改行 1 つ）", () => {
+    expect(TRAINING_V1_SYSTEM).toBe(appendix.system);
+    expect(TRAINING_V1.system).toBe(TRAINING_V1_SYSTEM);
+    expect([...TRAINING_V1_SYSTEM]).toHaveLength(7511);
+    expect(TRAINING_V1_SYSTEM.endsWith("積極的に入れる。\n")).toBe(true);
+    expect(TRAINING_V1_SYSTEM.endsWith("\n\n")).toBe(false);
+    // 参照元どおり残すもの（11-6 §2.7.2）: 「# 判定基準」の前の 2 行の空行と、出力に無い cautions・retention を指す行
+    expect(TRAINING_V1_SYSTEM).toContain("70以上は強く警告。\n\n\n# 判定基準（");
+    expect(TRAINING_V1_SYSTEM).toContain("→ cautions と retention（特にsign・action）に、");
+    // 行頭の空白（4 つ・2 つ）も残す
+    expect(TRAINING_V1_SYSTEM).toContain(
+      "\n    ・入職時と比べた変化が「以前より消極的になった」\n",
+    );
+    expect(TRAINING_V1_SYSTEM).toContain("\n  - badge: 「STEP 1」など。");
+  });
+
+  it("user テンプレートは別表A §A.2 の囲みの中身から末尾の改行 1 つを除いたもの（1,597 字・30 行）", () => {
+    expect(appendix.user.endsWith("\n")).toBe(true);
+    expect(TRAINING_V1_USER_TEMPLATE).toBe(appendix.user.slice(0, -1));
+    expect(TRAINING_V1.userTemplate).toBe(TRAINING_V1_USER_TEMPLATE);
+    expect(TRAINING_V1_USER_TEMPLATE.endsWith("\n")).toBe(false);
+    expect([...TRAINING_V1_USER_TEMPLATE]).toHaveLength(1597);
+    expect(TRAINING_V1_USER_TEMPLATE.split("\n")).toHaveLength(30);
+  });
+
+  it("置き換えの対象の語が残らず、置き換えた後の語がある", () => {
+    for (const word of REPLACED_WORDS) {
+      expect(TRAINING_V1_SYSTEM, word).not.toContain(word);
+      expect(TRAINING_V1_USER_TEMPLATE, word).not.toContain(word);
+    }
+    expect(TRAINING_V1_SYSTEM).toContain("コンダクター=人を活かす大組織のリーダー");
+    expect(TRAINING_V1_SYSTEM).toContain("入職時と比べた変化が「以前より消極的になった」");
+    expect(TRAINING_V1_SYSTEM).toContain("責任者・幹部");
+    expect(TRAINING_V1_SYSTEM).toContain("他サロンからの誘い");
+    expect(TRAINING_V1_USER_TEMPLATE.split("\n")[4]).toBe("【責任者・幹部の入力】");
+  });
+
+  it("user の 15 行目から後は recruitment-v1 の user テンプレートの 5 行目から後と同じ", () => {
+    expect(TRAINING_V1_USER_TEMPLATE.split("\n").slice(14)).toEqual(
+      RECRUITMENT_V1.userTemplate.split("\n").slice(4),
+    );
+  });
+
+  it("差し込みは 48 種（1 回ずつ）で、育成・定着の placeholderValues のキーと一致する", () => {
+    const names = [...TRAINING_V1_USER_TEMPLATE.matchAll(/\{\{([A-Za-z_.]+)\}\}/g)].map(
+      (m) => m[1],
+    );
+    expect(names).toHaveLength(48);
+    expect(new Set(names).size).toBe(48);
+    expect([...placeholderValues("training", t06TrainingInput()).keys()].sort()).toEqual(
+      [...names].sort(),
+    );
+  });
+
+  it("付録D §6 の 2 つの囲みは別表A と同じで、コードの system と user テンプレート（末尾の改行 1 つを除く）と一字一句同じ（11-6 §4.1）", () => {
+    const appendixD = readAppendixDTrainingPrompt();
+    expect(appendixD).toEqual(appendix);
+    expect(appendixD.system).toBe(TRAINING_V1_SYSTEM);
+    expect(appendixD.user.slice(0, -1)).toBe(TRAINING_V1_USER_TEMPLATE);
+    expect(appendixD.user.endsWith("\n")).toBe(true);
+  });
+
+  it("版と分析種別", () => {
+    expect(TRAINING_V1.version).toBe("training-v1");
+    expect(TRAINING_V1.analysisKind).toBe("training");
   });
 });

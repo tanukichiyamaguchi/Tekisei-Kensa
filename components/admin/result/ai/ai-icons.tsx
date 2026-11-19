@@ -3,7 +3,8 @@
 // （大きさは置き場所の font-size。別表C の .ai-ico）・読み上げない（aria-hidden）・クラス ai-ico。線のアイコンは文字の色の線（端と角は
 // 丸）、塗りのアイコン（SparkIcon・ZapIcon）は文字の色の塗りで、色は置き場所の文字の色（稲妻と芽は ai-ico--zap・ai-ico--sprout の
 // クラスで色を付ける。style の属性は使わない）。path の d は別表D の値のまま。フックを使わないので Server でも Client でも描ける。
-// 名前を付けて export し、11-8 のお知らせ（PR-7.16）も使う。ChevronDownIcon は 8 項目の選択欄（PR-7.10）が使う
+// 名前を付けて export し、11-8 のお知らせ（PR-7.16）も使う。ChevronDownIcon は育成・定着の 8 項目の選択欄（TrainingContextForm）が使い、
+// svg 自身にクラス ai-chev も付ける（別表C の #ai .ai-ctx .ai-chev で、選択欄の右に縦の中央でそろえる）
 import type { ReactNode } from "react";
 
 /** 線のアイコン（別表D の「線」。線の幅は 1.5 か 2） */
@@ -117,10 +118,14 @@ export function SproutIcon() {
   );
 }
 
-/** 下向きの山形（プルダウンの矢印の代わり）。8 項目の選択欄（PR-7.10） */
+/**
+ * 下向きの山形（プルダウンの矢印の代わり）。育成・定着の 8 項目の選択欄。クラス ai-chev は svg 自身に付ける（別表C の .ai-chev は
+ * absolute・top 50%・margin-top -6px・font-size 12px で、高さ 1em（12px）の svg がちょうど選択欄の縦の中央に来る。span で包むと、
+ * 包んだ要素の高さが行の高さになって中央からずれる）
+ */
 export function ChevronDownIcon() {
   return (
-    <LineIcon strokeWidth={2}>
+    <LineIcon strokeWidth={2} className="ai-ico ai-chev">
       <path d="M6 9 L12 15 L18 9" />
     </LineIcon>
   );

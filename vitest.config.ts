@@ -14,6 +14,8 @@ const integrationEnv = {
   AI_PROVIDER: "stub",
   AI_MODEL: "claude-opus-5",
   AI_PROMPT_VERSION: "recruitment-v1",
+  // 育成・定着を有効にする（11-6 §3.8。CI の ci.yml の同じキーより、この値が効く）。無効のときの確かめ（M7-ai-28）は vi.stubEnv で外す
+  AI_TRAINING_PROMPT_VERSION: "training-v1",
   PDF_TOKEN_SECRET: "dummy-pdf-token-secret-do-not-ship-0123456789",
   // google-auth-library が GCE メタデータサーバを探しに行かないようにする（Emulator では認証情報を使わない）
   METADATA_SERVER_DETECTION: "none",

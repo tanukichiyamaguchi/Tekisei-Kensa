@@ -1,7 +1,8 @@
-// M7-ai-23（11-6 §5.1）: AI 解説の文言 ai-texts.ts（11-6 §2.15 の PR-7.9 の分）。文言は 11-6 の 2 章（仕様）にそのままの文字で
-// 書かれていること（タブ・生成ボタン・準備中の注記・生成中は §2.15 の表、読み上げの名前は §2.1、案内は §2.4.2・§2.5.2、失敗の枠は
-// §2.3.4、採用向けの表示は §2.4.3 を読んで比べる）、K-19 の置き換え後の文（§0.5）で「院長」「クリニック」「医院」を含まないこと、
-// 参照元の文字（半角の「~」・「…」・「◎」「△」「⚠」「＆」「！」）のままであることを確かめる。
+// M7-ai-23（11-6 §5.1）: AI 解説の文言 ai-texts.ts（11-6 §2.15 の PR-7.9・PR-7.10 の分）。文言は 11-6 の 2 章（仕様）にそのままの
+// 文字で書かれていること（タブ・生成ボタン・準備中の注記・生成中・8 項目の入力欄は §2.15 の表、読み上げの名前は §2.1、案内は §2.4.2・
+// §2.5.2、失敗の枠は §2.3.4、採用向けの表示は §2.4.3、育成・定着の表示は §2.5.5、8 項目の入力欄は §2.5.3 を読んで比べる）、K-19 の
+// 置き換え後の文（§0.5）で「院長」「クリニック」「医院」を含まないこと（育成・定着の表示と 8 項目のラベル・選択肢にも無く、置き換えた
+// 文言が無いこと）、参照元の文字（半角の「~」・「…」・「◎」「△」「⚠」「＆」「！」「○」「×」）のままであることを確かめる。
 // X-12（06 §11）: 失敗の理由の文（AI_FAILURE_TEXTS・aiFailureText。admin-texts.ts から移した T-30 群）
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -10,7 +11,8 @@ import { describe, expect, it } from "vitest";
 
 import { AI_FAILURE_REASONS } from "@/lib/ai/errors";
 import { AI_ANALYSIS_KINDS } from "@/lib/ai/kinds";
-import { RECRUITMENT_CHIP_ORDER } from "@/lib/presentation/ai-area";
+import { TRAINING_CONTEXT_ITEMS, TRAINING_CONTEXT_KEYS } from "@/lib/masters/training-context";
+import { RECRUITMENT_CHIP_ORDER, TRAINING_CHIP_ORDER } from "@/lib/presentation/ai-area";
 import { AI_FAILURE_TEXTS, AI_TEXTS as T, aiFailureText } from "@/lib/presentation/ai-texts";
 
 const SPEC = readFileSync(
@@ -38,6 +40,8 @@ const SECTION_2_4_2 = between(SPEC, "#### 2.4.2 ", "#### 2.4.3 ");
 const SECTION_2_4_3 = between(SPEC, "#### 2.4.3 ", "#### 2.4.4 ");
 const SECTION_2_4_4 = between(SPEC, "#### 2.4.4 ", "### 2.5 ");
 const SECTION_2_5_2 = between(SPEC, "#### 2.5.2 ", "#### 2.5.3 ");
+const SECTION_2_5_3 = between(SPEC, "#### 2.5.3 ", "#### 2.5.4 ");
+const SECTION_2_5_5 = between(SPEC, "#### 2.5.5 ", "### 2.6 ");
 const SECTION_2_15 = between(SPEC, "### 2.15 ", "### 2.16 ");
 
 /** 文言の定数の文字をすべて取り出す */
@@ -48,6 +52,12 @@ function stringLeaves(value: unknown): string[] {
     return Object.values(value).flatMap(stringLeaves);
   return [];
 }
+
+/** 育成・定着の 8 項目のラベルと選択肢の表示名（lib/masters/training-context.ts。画面の入力欄に出る文言） */
+const TRAINING_CONTEXT_LABELS = TRAINING_CONTEXT_KEYS.flatMap((key) => [
+  TRAINING_CONTEXT_ITEMS[key].label,
+  ...TRAINING_CONTEXT_ITEMS[key].options.map((option) => option.label),
+]);
 
 /** §2.15 の表の、1 列目が constants の行の文言（2 列目を「／」で分けたもの） */
 function textsRow(constants: string): string[] {
@@ -64,7 +74,7 @@ function featureRows(section: string): Array<[string, string]> {
   ]);
 }
 
-describe("M7-ai-23 AI_TEXTS（11-6 §2.15 の PR-7.9 の分）", () => {
+describe("M7-ai-23 AI_TEXTS（11-6 §2.15 の PR-7.9・PR-7.10 の分）", () => {
   it("どの文言も 11-6 の 2 章にそのままの文字で書かれている", () => {
     const leaves = stringLeaves(T);
     expect(leaves.length).toBeGreaterThan(40);
@@ -186,6 +196,55 @@ describe("M7-ai-23 AI_TEXTS（11-6 §2.15 の PR-7.9 の分）", () => {
     );
   });
 
+  it("育成・定着の表示は §2.5.5 の文（見出し帯と札・節の見出し・小見出し・原因の札の前置きと「診断外」・○ と ×・末尾）", () => {
+    const view = T.trainingView;
+    expect(SECTION_2_5_5).toContain(
+      `「✦」（20px）と「${view.band}」（18px・太さ 900）と札「${view.tag}」（11.5px`,
+    );
+    expect(SECTION_2_5_5).toContain(`| 3 | ${view.urgent} | `);
+    expect(SECTION_2_5_5).toContain(`に「${view.hypotheses}」（12.5px・太さ 900`);
+    expect(SECTION_2_5_5).toContain(
+      `札の文言は \`level\` が「${view.outOfDiagnosis}」なら「${view.outOfDiagnosis}」、それ以外は「${view.possibility}」+ \`level\``,
+    );
+    expect(SECTION_2_5_5).toContain(`| 4 | ${view.role} | `);
+    expect(SECTION_2_5_5).toContain(`左「${view.have}」（\`role.have\``);
+    expect(SECTION_2_5_5).toContain(`右「${view.lack}」（\`role.lack\``);
+    expect(SECTION_2_5_5).toContain(`「${view.steps}」（13px・太さ 900`);
+    expect(SECTION_2_5_5).toContain(`| 5 | ${view.daily} | `);
+    expect(SECTION_2_5_5).toContain(
+      `に「${view.okMark}」+ \`ok\`、改行、「${view.ngMark}」+ \`ng\``,
+    );
+    expect(SECTION_2_5_5).toContain(`| 6 | ${view.oneonone} | `);
+    expect(SECTION_2_5_5).toContain(`| 7 | 末尾 | 「${view.footer}」。`);
+    // 判定チップの値が空の文字のときの「-」は採用向けと同じ定数（recruitmentView.empty）
+    expect(SECTION_2_5_5).toContain(`チップの値が空の文字なら「${T.recruitmentView.empty}」`);
+    // §2.15 の表の trainingView の行に挙げた文字
+    expect(SECTION_2_15).toContain(
+      `「${view.possibility}」・「${view.outOfDiagnosis}」・「${view.okMark}」「${view.ngMark}」`,
+    );
+  });
+
+  it("育成・定着の判定チップのラベルは §2.5.5 の 2 の順（期待役割へのマッチ度 → 離職リスク → サポートの必要度）と verdict のキー", () => {
+    const labels = [...SECTION_2_5_5.matchAll(/「([^「」]+)」（`verdict\.(\w+)`）/g)].map((m) => [
+      m[2]!,
+      m[1]!,
+    ]);
+    expect(labels).toEqual(TRAINING_CHIP_ORDER.map((kind) => [kind, T.trainingView.chips[kind]]));
+    expect(Object.keys(T.trainingView.chips).sort()).toEqual([...TRAINING_CHIP_ORDER].sort());
+  });
+
+  it("8 項目の入力欄は §2.15 の表と §2.5.3 の見出し・先頭の選択肢。8 項目のラベルと選択肢はマスタにあり、ここには写さない", () => {
+    const ctx = T.trainingContext;
+    expect(textsRow("`trainingContext.heading`・`placeholder`")).toEqual([
+      ctx.heading,
+      ctx.placeholder,
+    ]);
+    expect(SECTION_2_5_3).toContain(`見出し「${ctx.heading}」: 15px`);
+    expect(SECTION_2_5_3).toContain(`先頭の選択肢「${ctx.placeholder}」（値は空`);
+    expect(TRAINING_CONTEXT_LABELS).toHaveLength(8 + 36); // 8 項目のラベルと 36 の選択肢（§2.5.3 の表）
+    expect(stringLeaves(T).filter((text) => TRAINING_CONTEXT_LABELS.includes(text))).toEqual([]);
+  });
+
   it("K-19: どの文言（失敗の理由の文を含む）にも「院長」「クリニック」「医院」が無い", () => {
     const all = [...stringLeaves(T), ...Object.values(AI_FAILURE_TEXTS)];
     for (const word of ["院長", "クリニック", "医院"]) {
@@ -194,6 +253,30 @@ describe("M7-ai-23 AI_TEXTS（11-6 §2.15 の PR-7.9 の分）", () => {
         word,
       ).toEqual([]);
     }
+  });
+
+  it("K-19: 育成・定着の表示と 8 項目の文言（8 項目のラベル・選択肢の表示名を含む）にも「院長」「クリニック」「医院」が無く、置き換えた文言も無い（§0.5）", () => {
+    const training = [
+      ...stringLeaves(T.trainingView),
+      ...stringLeaves(T.trainingContext),
+      ...TRAINING_CONTEXT_LABELS,
+    ];
+    expect(training.length).toBeGreaterThan(60);
+    for (const word of ["院長", "クリニック", "医院"]) {
+      expect(
+        training.filter((text) => text.includes(word)),
+        word,
+      ).toEqual([]);
+    }
+    // §0.5 の置き換えの表（1 列目は場所）に育成・定着の行が無く、医療・歯科の語が無いと書いてある
+    const places = SECTION_0_5.split("\n")
+      .filter((l) => /^\| [^-|]/.test(l) && !l.startsWith("| 場所 |"))
+      .map((l) => l.split(" | ")[0]!.slice(2));
+    expect(places).toHaveLength(5);
+    expect(places.filter((place) => place.includes("育成・定着"))).toEqual([]);
+    expect(SECTION_0_5).toContain(
+      "8 項目の選択肢、案内、生成中、育成・定着の表示、経年比較のレポートのほかの文言に、医療・歯科の語は無い（参照元定義の全文で確かめた）",
+    );
   });
 
   it("参照元の文字のまま: 「~」は半角（U+007E）、「…」は U+2026、「◎」「△」「⚠」（異体字セレクタなし）・「＆」「！」は全角、AI の後ろの空白は半角", () => {
@@ -208,6 +291,21 @@ describe("M7-ai-23 AI_TEXTS（11-6 §2.15 の PR-7.9 の分）", () => {
     expect(T.intro.recruitment.title).toBe("AI 採用アドバイザー");
     expect(T.recruitmentView.band).toBe("AI 採用・育成アドバイザー");
     expect(stringLeaves(T).filter((text) => text.includes("\uFE0F"))).toEqual([]);
+  });
+
+  it("育成・定着の参照元の文字のまま: 「◎」「△」、「○」（U+25CB）「×」（U+00D7）と後ろの半角の空白、「可能性 」の後ろの半角の空白、数字と「1on1」は半角", () => {
+    const view = T.trainingView;
+    expect(view.have).toBe("\u25CE 足りている");
+    expect(view.lack).toBe("\u25B3 欠けている");
+    expect(view.okMark).toBe("\u25CB ");
+    expect(view.ngMark).toBe("\u00D7 ");
+    expect(view.daily).toBe("3. 日常の接し方\uFF08\u25CBと\u00D7\uFF09");
+    expect(view.possibility).toBe("可能性 ");
+    expect(view.oneonone).toBe("4. 次回の1on1で聞くこと");
+    expect(view.urgent.startsWith("1. ")).toBe(true);
+    expect(view.role.startsWith("2. ")).toBe(true);
+    expect(T.trainingContext.heading).toBe("現場の状況を入力\uFF088項目\uFF09");
+    expect(view.band).toBe("AI 育成・定着アドバイザー");
   });
 });
 

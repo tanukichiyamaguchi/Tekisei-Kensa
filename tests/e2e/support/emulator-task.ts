@@ -4,6 +4,7 @@ import { Timestamp } from "firebase-admin/firestore";
 
 import { registerAndSave, seedLocal } from "../../../scripts/seed-local";
 import { randomAnswers, uniformAnswers } from "../../../scripts/lib/synthetic-answers";
+import { isAiAnalysisKind } from "@/lib/ai/kinds";
 import { createAdminAccount } from "@/lib/auth/admin-accounts";
 import { COLLECTIONS } from "@/lib/db/collections";
 import {
@@ -238,20 +239,28 @@ async function run(task: string | undefined, args: string[]): Promise<unknown> {
       return { resultId, respondentId: registered.respondentId };
     }
     case "ai-generation": {
-      // 採用向けの AI 解説を、別の画面で生成を始めた状態（start）と、その生成が失敗した状態（fail。理由は args の 5 つ目）にする
-      // （11-6 §2.3.5 の「開いたときに generating」。M7-ai-38）。アプリと同じリポジトリの関数（生成の開始のトランザクションと失敗の
-      // 記録）でオーナーとして書く。直接は書かない
-      const [step = "", organizationId = "", ownerUid = "", resultId = "", reason = ""] = args;
+      // AI 解説（args の 6 つ目の種類。既定は採用向け）を、別の画面で生成を始めた状態（start）と、その生成が失敗した状態（fail。
+      // 理由は args の 5 つ目）にする（11-6 §2.3.5 の「開いたときに generating」。M7-ai-38・39）。アプリと同じリポジトリの関数（生成の
+      // 開始のトランザクションと失敗の記録）でオーナーとして書く。直接は書かない
+      const [
+        step = "",
+        organizationId = "",
+        ownerUid = "",
+        resultId = "",
+        reason = "",
+        kind = "recruitment",
+      ] = args;
+      if (!isAiAnalysisKind(kind)) throw new Error(`未知の種類です: ${kind}`);
       const viewer = { uid: ownerUid, organizationId, role: "owner" } as const;
       if (step === "start") {
         await markAiGenerationStarted({
           resultId,
           viewer,
-          kind: "recruitment",
+          kind,
           staleAfterMs: AI_STALE_AFTER_MS,
         });
       } else if (step === "fail") {
-        await markAiGenerationFailed({ resultId, viewer, kind: "recruitment", reason, meta });
+        await markAiGenerationFailed({ resultId, viewer, kind, reason, meta });
       } else {
         throw new Error(`未知の段階です: ${step}`);
       }

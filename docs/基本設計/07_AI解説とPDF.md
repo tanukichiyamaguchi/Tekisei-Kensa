@@ -3,8 +3,8 @@
 | 項目 | 内容 |
 |---|---|
 | 文書名 | 適性検査システム 基本設計 07 AI 解説・PDF 出力設計 |
-| 版 | 1.8 |
-| 作成日 | 2026-09-17（1.1 版: 2026-09-21、1.2 版: 2026-09-21 最終点検、1.3 版: 2026-09-21 K-06（Supabase → Firebase）に伴う部分改版、1.4 版: 2026-09-21 Firebase 化後の分冊間整合（02・04 の 2.1 版に合わせた）、1.5 版: 2026-09-24 本番デプロイで判明した事項の反映、1.6 版: 2026-11-11 M7 の PR-7.8a（結果詳細の枠と上半分）で変わった描画完了の待ちの個数の注記（§9.6）、1.7 版: 2026-11-11 M7 の PR-7.8b（結果詳細の下半分と片付け）で変わった印刷用ページの注記（§0.2・§9.4〜§9.6・§12）、1.8 版: 2026-11-14 M7 の PR-7.9（AI 解説の 3 つのタブと採用向け。11-6）で変わった AI 解説の流れ・種類ごとの `max_tokens`・ログ・provider の形・状態と再試行・日次上限の廃止・保存と表示・費用・PR-7.12 までの PDF の AI 解説（§0.2・§1・§4.2・§4.8・§5.1・§5.3・§5.4・§6・§7・§8・§9.5・§10・§12）。§13） |
+| 版 | 1.9 |
+| 作成日 | 2026-09-17（1.1 版: 2026-09-21、1.2 版: 2026-09-21 最終点検、1.3 版: 2026-09-21 K-06（Supabase → Firebase）に伴う部分改版、1.4 版: 2026-09-21 Firebase 化後の分冊間整合（02・04 の 2.1 版に合わせた）、1.5 版: 2026-09-24 本番デプロイで判明した事項の反映、1.6 版: 2026-11-11 M7 の PR-7.8a（結果詳細の枠と上半分）で変わった描画完了の待ちの個数の注記（§9.6）、1.7 版: 2026-11-11 M7 の PR-7.8b（結果詳細の下半分と片付け）で変わった印刷用ページの注記（§0.2・§9.4〜§9.6・§12）、1.8 版: 2026-11-14 M7 の PR-7.9（AI 解説の 3 つのタブと採用向け。11-6）で変わった AI 解説の流れ・種類ごとの `max_tokens`・ログ・provider の形・状態と再試行・日次上限の廃止・保存と表示・費用・PR-7.12 までの PDF の AI 解説（§0.2・§1・§4.2・§4.8・§5.1・§5.3・§5.4・§6・§7・§8・§9.5・§10・§12）、1.9 版: 2026-11-19 M7 の PR-7.10（育成・定着の AI 解説。11-6）で変わったファイル構成・版とレジストリ（`approvedForProduction`）・種類ごとの版の環境変数と起動時の検証・育成・定着の差し込み・出力の型とスキーマ・スタブの育成・定着の出力（§1・§2.2・§2.3・§3.2・§5.1・§5.4・§10・§12）。§13） |
 | 対象 | `lib/ai/`、`lib/pdf/`、印刷用ページ、`lib/services/ai-analysis.ts` / `pdf-export.ts` の 07 担当部分を実装する担当者。04（API）、06（管理者画面）、08（テスト）の担当者 |
 
 ## 0. 本書の位置づけ
@@ -89,6 +89,7 @@ sequenceDiagram
 
 - サービス（`lib/services/ai-analysis.ts`）が状態遷移・保存・監査ログを担い、`lib/ai/` は「入力を受け取って検証済み JSON を返す」ことだけを担います（04 §7.1「provider は生成のみ」）。
 - 1.8 版（M7 の PR-7.9。11-6 §3.4・§3.5・§3.7）: AI 解説は 3 種類（`AiAnalysisKind`: `recruitment` 採用向け・`training` 育成・定着・`longitudinal` 経年比較）になり、API・状態（`results` の種類ごとの 4 項目）・provider は種類ごと。PR-7.9 では採用向けだけを生成し、育成・定着（`training-v1`）は PR-7.10、経年比較（`longitudinal-v1`）は PR-7.11b が足す（それまでは有効でない種類として API が 503 `AI_KIND_DISABLED`）。表示上の役職が責任者の受験の採用向け・育成・定着は 409 `AI_NOT_APPLICABLE`（K-21）。日次上限は廃止した（K-25。§6.4）。画面は結果詳細の AI 解説の領域（11-6 の `AiArea`。タブと種類ごとのパネル）で、旧の `AiAnalysisSection` は消した。
+- 1.9 版（M7 の PR-7.10。11-6 §2.5・§2.7.2・§3.5）: 育成・定着（`training-v1`）を足した。要求の本文は 8 項目のコード（`{ "context": { … } }`）で、サービスが表示名にして user に入れる。成功の保存は `aiAnalyses`（`analysisKind: "training"`・`trainingContext`）と `results` の育成・定着の項目と `results.trainingContext` を同じバッチで書く。育成・定着は環境変数 `AI_TRAINING_PROMPT_VERSION` を設定したときだけ有効で、本番は依頼主の確認まで設定しない（§2.2）。経年比較は PR-7.11b まで有効でない種類のまま。
 - `lib/ai/` は Firebase と Next.js に依存しません（`@anthropic-ai/sdk` と `zod` のみ。01）。`lib/scoring/` と `lib/masters/` から型と定義を import します（逆方向の import は禁止。01 §3.5 の `no-restricted-imports`）。
 
 ### 1.2 ファイル構成（`lib/ai/`）
@@ -103,8 +104,9 @@ lib/ai/
 ├── prompts/
 │   ├── index.ts             # PROMPT_REGISTRY: プロンプト版 → PromptDefinition（§2.2）。getPromptDefinitionForKind(kind, version)（種類の違う版は config_error。1.8 版）
 │   ├── recruitment-v1.ts    # 付録D §3 の system 指示とユーザー入力テンプレート（§2.1）
-│   └── recruitment-v2.ts    # 付録D §5 のアイリスト向けのプロンプト（10 K-19。PR #13・#14）。training-v1.ts・longitudinal-v1.ts は PR-7.10・PR-7.11b（11-6）
-├── prompt-builder.ts        # buildMessages(kind, input, promptVersion): { system, user }（§2.1。1.8 版で種類を受ける。PR-7.9 は採用向けだけ）
+│   ├── recruitment-v2.ts    # 付録D §5 のアイリスト向けのプロンプト（10 K-19。PR #13・#14）
+│   └── training-v1.ts       # 付録D §6 の育成・定着のプロンプト（11-6 別表A。1.9 版。本番は確認まで無効）。longitudinal-v1.ts は PR-7.11b（11-6）
+├── prompt-builder.ts        # buildMessages(kind, input, promptVersion): { system, user }（§2.1。1.8 版で種類を受ける。1.9 版で採用向けと育成・定着。経年比較は PR-7.11b）
 ├── provider.ts              # getAiProvider(): AI_PROVIDER に応じた実装を返す（§5.2）
 └── providers/
     ├── anthropic.ts         # AnthropicProvider（§5.3）
@@ -167,6 +169,12 @@ export function getPromptDefinition(version: string): PromptDefinition {
 }
 ```
 
+1.9 版（M7 の PR-7.10。11-6 §2.7.1・§2.7.4・§3.7.2・§3.8）:
+
+- `PromptDefinition` に `approvedForProduction`（真偽）を足し、`analysisKind` は `AiAnalysisKind` の型にした。`recruitment-v1`・`recruitment-v2` は真、`training-v1`（`lib/ai/prompts/training-v1.ts`。付録D §6。11-6 別表A と一字一句同じ）は偽（依頼主の確認の前）。`PROMPT_VERSIONS` とレジストリに `training-v1` を足した（`longitudinal-v1` は PR-7.11b）。
+- 版は種類ごとの環境変数で選ぶ: 採用向けは `AI_PROMPT_VERSION`（必須。今のまま）、育成・定着は `AI_TRAINING_PROMPT_VERSION`（任意。未設定・空なら育成・定着は無効）。起動時検証（01 §4.3 の `validateServerEnv`）は、設定されている版がレジストリにあること・その種類の版であること（`AI_TRAINING_PROMPT_VERSION=recruitment-v2` などは止める）と、`VERCEL_ENV` が `production` か `preview` なら `approvedForProduction` が真であることを確かめ、合わなければ起動を止める。本番・Preview は確認まで `AI_TRAINING_PROMPT_VERSION` を設定しない。確認の後は、10_決定記録に K 番号で記録し `approvedForProduction` を真にする PR の後に設定する（11-6 §2.7.4）。確認の前は、出た直しを同じ版に当ててよい（本番の分析が無いため）。
+- `training-v1` の転記ルール: 参照元の育成・定着のプロンプトに 11-6 §2.7.2 の T-1〜T-11 を当てた全文（11-6 別表A）を、一字一句そのまま置く（参照元どおり残す 2 か所を含む。付録D §6）。参照元の原文と置き換えの表はコードに置かない。
+
 ### 2.3 ユーザー入力テンプレートへの埋め込み規則
 
 付録D §3 のテンプレートの山括弧部分を、`AiAnalysisInput`（00 §3.6: `respondentName`、`occupationLabel`、`result: ScoreResult`）から埋めます。テンプレートは実装上 `{{name}}` のような二重波括弧のプレースホルダに置き換えて保持し、`prompt-builder.ts` が置換します（山括弧のままだと値中の記号と衝突し得るため）。
@@ -192,6 +200,7 @@ export function getPromptDefinition(version: string): PromptDefinition {
 - 資質の 100 超をそのまま渡す判断（D07-04 と対）の理由: (1) 画面も 122.5 のような真値を表示する（付録E §2 の実例 `[122.5, 132.5, 85, 37.5]`）ため、画面と AI 入力を一致させる。(2) 付録D は資質を「最高点=第一候補／2位=第二候補」の **相対比較** にしか使わず、絶対閾値が無いので、宣言範囲（0〜100）を超えた値が判定を変える経路が無い。(3) 100 に切り詰めると複数の型が 100 で同点になり、第一候補・第二候補の判別（相対比較そのもの）を壊す。負値の置換（相性・リスク）と 100 超の非置換（資質）は「画面の表示値と一致させ、付録D の判定基準を変えない」という同じ基準から出た判断です。プロンプトの宣言範囲の記載（0〜100）を実態（0〜約 150）に直すかどうかは D07-04 として依頼主に確認します。
 - 16 タイプ得点・第一／第二候補・ソーシャルスタイル名は、付録D §3 のテンプレートに無いため渡しません（03 §8.4）。資質の候補は AI が 4 値から判断します（付録D「最高点=第一候補」）。
 - 個人情報の扱い: AI に送る個人情報は氏名のみです（付録D §1 の仕様どおり）。電話番号・メールアドレスは送りません。氏名は `summary` に含まれて返るため、`aiAnalyses.output` と `aiAnalyses.rawText` は個人情報を含むデータとして扱います（02 の「個人情報の所在」に記載する）。
+- 1.9 版（M7 の PR-7.10。11-6 §2.7.2・§2.7.5）: 育成・定着（`training-v1`）のテンプレートの差し込みは、採用向けと同じ 40 個（上の表と同じ規則）に、8 項目の表示名 `{{context.tenure}}`・`{{context.evaluation}}`・`{{context.expectedRole}}`・`{{context.recentState}}`・`{{context.relationship}}`・`{{context.wish}}`・`{{context.changeSinceJoining}}`・`{{context.concern}}`（`lib/masters/training-context.ts` の `trainingContextLabel`。11-6 §2.5.3）を足した 48 個。`placeholderValues(kind, input)` が種類ごとに作る（`buildMessages(kind, input, promptVersion)`。経年比較は PR-7.11b まで `config_error`）。8 項目はコードで受けて表示名にするので、AI に送る個人情報は採用向けと同じく氏名だけ。
 
 `buildAiAnalysisInput`（04 §7.1 の契約）と `buildMessages` の形:
 
@@ -348,6 +357,7 @@ export function parseAiOutputText(text: string): AiAnalysisOutput {
 - 設計判断 D07-07: 配列長の検証は付録D の「2〜4個」「3〜5個」より緩い上限（6・8）で **失敗扱いにせず受け入れ** ます。理由: 付録D の個数は文体の指示であり、1 個多い・少ないだけで生成失敗にして再生成コストを払うより、そのまま表示する方が利用者の利益になる。0 個と `levers` の順序違反だけは失敗にします（画面の 7 ブロックが成立しないため）。
 - `describe()` の文言は付録D §2 の説明を転記したものです（スキーマの `description` としてモデルに渡ります）。
 - ファイル名は `lib/ai/schema.ts` を正とします（08 §2.6 PR-5.1 と U-10 は 08 1.1 版で本書に合わせて改版済み。§11）。方式 A では `zodOutputFormat(AiAnalysisOutputSchema)` が、方式 C と stub では `parseAiOutputText()` が同じスキーマを使うため、スキーマの定義は 1 箇所です（08 D08-10「スキーマの二重管理を避ける」に対応）。
+- 1.9 版（M7 の PR-7.10。11-6 §2.8.2）: 育成・定着の出力のスキーマ `TrainingAiOutputSchema`（各段 `.strict()`。`urgent.why`・`role.why` は空でない。配列の数は指示より緩い上限: `hypotheses` 1〜5・`actions` 1〜6・`have` 1〜5・`lack` 1〜6・`steps` 1〜6・`daily` 1〜8・`oneonone` 1〜5。D07-07 と同じ考え方）と `HYPOTHESIS_LEVELS` を足し、`AI_OUTPUT_SCHEMAS` に登録した（経年比較は PR-7.11b）。`parseAiOutputText(kind, …)`・`parseStoredAiOutput(kind, …)` は表を引くだけなので変わらない。
 
 ### 3.3 付録D §2 スキーマとの対応表
 
@@ -626,6 +636,7 @@ export interface AiProvider {
 
 - 00 §3.6 の `generate()` の戻り値 `{ output, rawText, model }` は `AiGenerateResult` に含まれるため互換です。`options` は 00 の `{ model, promptVersion }` に `signal` を追加した形です（04 §7.1、D04-38）。
 - 1.8 版（11-6 §3.7.3）: `AiProvider.generate<K extends AiAnalysisKind>(kind: K, input: AiInputByKind[K], options: GenerateOptions): Promise<AiGenerateResult<K>>`。`AiInputByKind` は採用向けが `AiAnalysisInput`、育成・定着が 8 項目を足した `TrainingAiInput`、経年比較が入力文だけの `LongitudinalAiInput`。`AiGenerateResult<K>` の `output` は `AiOutputByKind[K]`、`analysisKind` は `K`。PR-7.9 では育成・定着と経年比較の出力の型が `never`（スキーマと一緒に PR-7.10・PR-7.11b が入れ替える）で、provider は採用向け以外を `config_error` にします。
+- 1.9 版（M7 の PR-7.10）: `AiOutputByKind.training` を `TrainingAiOutput`（11-6 §2.8.2 の `TrainingAiOutputSchema` と対応）にした。`TrainingAiInput` は `AiAnalysisInput` に `context: TrainingContext`（8 項目のコード）を足した形で、サービスが `{ ...buildAiAnalysisInput(…), context }` で組む。経年比較の出力の型は PR-7.11b まで `never`。
 - 差し替え時の契約: 新しい provider は `AiProvider` を実装し、`name` のユニオンに値を追加し、`provider.ts` の分岐に加えるだけで済みます。プロンプト（§2）とスキーマ（§3.2）は provider 非依存なので共用します。構造化出力を持たない provider は §3.1 C（プロンプト指示のみ + zod 検証）で実装します。
 
 ### 5.2 ファクトリ（`lib/ai/provider.ts`）
@@ -752,7 +763,8 @@ export function createAnthropicProvider(config: { readonly apiKey: string }): Ai
 | 項目 | 内容 |
 |---|---|
 | 用途 | `ANTHROPIC_API_KEY` を持たない開発者のローカル、CI の結合・E2E テスト（01 §6.2 は `AI_PROVIDER: stub`）。本番では起動時検証で拒否（01 §4.3） |
-| 種類（1.8 版） | `generate(kind, …)`。PR-7.9 は採用向けだけを返し、育成・定着と経年比較は `AiProviderError("config_error")`（スタブの出力は PR-7.10・PR-7.11b。11-6 §3.7.3）。種類の違う版も実 provider と同じく `config_error` |
+| 種類（1.8 版） | `generate(kind, …)`。PR-7.9 は採用向けだけを返し、育成・定着と経年比較は `AiProviderError("config_error")`（スタブの出力は PR-7.10・PR-7.11b。11-6 §3.7.3）。種類の違う版も実 provider と同じく `config_error`。1.9 版: 育成・定着も返す（経年比較だけ `config_error`。PR-7.11b） |
+| 育成・定着の出力（1.9 版。11-6 §3.7.3 の 1.2 版） | `verdict` は 8 項目と離職リスクの 4 項目の平均から決める（`risk` は付録D §6 の判定基準の離職リスクの (a)（平均の区分）と (b)（現場のサインの数）の高い方、`match` は現在の評価から、`support` は役割ギャップだけを数える）。ほかは固定の文（「（スタブ）…」。氏名を入れない）で、表示の条件を確かめられるように空の値と空でない値の両方を入れる。同じ入力で同じ出力。不正 JSON モード（D07-24）・`failWith`・`delayMs` は育成・定着にも効く |
 | 出力 | `AiAnalysisOutput` の固定値を、入力から決定的に組み立てる（`summary` の冒頭に `respondentName`、`cautions` の 1 件目に `result.risks` の最大項目名と値を入れる）。判定 3 種は付録D §3 の「判定基準」を簡略化した決定的な規則で決める（例: リスク 4 項目の平均で `teichaku_risk`、`sougou` は `要検討` 固定）。同じ入力で同じ出力になること |
 | 遅延 | 既定 500 ms（`createStubProvider({ delayMs })` で変更可）。06 の「生成中」表示の確認用 |
 | 失敗の再現（単体テスト用） | `createStubProvider({ failWith: "timeout" })` のように `AiFailureReason` を渡すと、その理由の `AiProviderError` を投げる。テストコードからのみ使い、環境変数では切り替えない（環境変数を増やさない） |
@@ -1186,10 +1198,10 @@ export async function renderResultPdf(args: RenderResultPdfArgs): Promise<Render
 | AI-04 | プロンプト定数 | `RECRUITMENT_V1.system` が付録D §3 の本文と、D07-03 の 1 語（コンタクター→コンダクター）以外で一致すること（付録D をテストのフィクスチャとして読み込み差分を検査）。「感性解放型」がプロンプト定数以外のコード・マスタに出現しないこと（00 §1.11 の 8 番） |
 | AI-05 | zod スキーマ | 付録D §2 の例が通る。`levers` の順序違反・0 個の配列・enum 外の判定値・余分なキー（`.strict()`）が失敗する。5 個の `strengths` は通る（D07-07）。`parseAiOutputText()` がコードフェンス付きテキスト・先頭が `{` でないテキスト・不正 JSON を `invalid_json` で拒否し、例外メッセージに入力テキストを含めない（08 U-10 に対応） |
 | AI-06 | Anthropic provider（モック） | SDK の `fetch` をモックした応答で `parsed_output` を得られること。`stop_reason = refusal` / `max_tokens` が `refusal` / `truncated` になること。429 / 500 / 接続エラーが §4.6 の `reason` に写ること。`AbortSignal` 発火で `timeout` になること |
-| AI-07 | stub provider | 決定的な出力、`failWith` の動作、`delayMs`、`model` が `options.model` と一致、`respondentName = "__INVALID_JSON__"` で `invalid_json` の `AiProviderError` を投げる（D07-24。08 I-43 の前提）。1.8 版: `generate("training", …)`・`generate("longitudinal", …)` が `config_error`（PR-7.9） |
+| AI-07 | stub provider | 決定的な出力、`failWith` の動作、`delayMs`、`model` が `options.model` と一致、`respondentName = "__INVALID_JSON__"` で `invalid_json` の `AiProviderError` を投げる（D07-24。08 I-43 の前提）。1.8 版: `generate("training", …)`・`generate("longitudinal", …)` が `config_error`（PR-7.9）。1.9 版: 育成・定着の出力がスキーマに合うこと、`verdict` の規則（離職リスクの平均の境目、サインの数、1 つで 1 段上げて非常に高いで止まること、`match` と `support` の対応）、育成・定着でも `__INVALID_JSON__` で `invalid_json` になること（11-6 の M7-ai-36・42 の前提） |
 | AI-08 | サービス結合（04 と共同。Firestore Emulator 上） | `completed` 後の `aiAnalyses` 文書のフィールド（§7.1）、`output` が provider の `output` と一致（`verdict` の map を含む）、`rawText` の保存、`results.latestAiAnalysisId` の更新と `aiGenerationStatus == "completed"` が同一バッチで反映される、失敗時に文書が作られず `results.aiGenerationError == reason` |
 | AI-09 | ログ | ログ行に氏名・生テキスト・API キーが含まれないこと（`summary` の文字列がログに現れない）。1.8 版: `ai.generate` に `kind`・`maxTokens` があること（11-6 の M7-ai-36） |
-| AI-10 | 種類ごとの API と状態（1.8 版。11-6 §5） | 11-6 の M7-ai-18（種類ごとの `max_tokens`・種類の違う版の `config_error`）・M7-ai-24・25（日次上限が無い）・27（責任者の受験の 409）・28（有効でない種類の 503）・32〜34・36 と、E2E の M7-ai-38・40・42・44・50（PR-7.9 の分） |
+| AI-10 | 種類ごとの API と状態（1.8 版。11-6 §5） | 11-6 の M7-ai-18（種類ごとの `max_tokens`・種類の違う版の `config_error`）・M7-ai-24・25（日次上限が無い）・27（責任者の受験の 409）・28（有効でない種類の 503）・32〜34・36 と、E2E の M7-ai-38・40・42・44・50（PR-7.9 の分）。1.9 版: 育成・定着の分（11-6 の M7-ai-06・08・17・18・19・26・28・33・34・36。11-6 §5 の「PR-7.10 での見方」） |
 | PDF-01 | E2E（Playwright、CI） | 詳細画面からダウンロード（`full` / `restricted`）し、`Content-Type: application/pdf`、先頭 `%PDF-`、`Content-Disposition` のファイル名に氏名が無いこと |
 | PDF-02 | 実機確認（Preview） | 日本語が正しく描画される（豆腐が無い）。A4 縦、ヘッダー・フッター、ページ番号。レーダー 4 個が描画され、色が画面と一致（信頼係数 90% が緑系、リスク 90% が赤） |
 | PDF-03 | `restricted` | PDF のテキスト抽出（08 が選ぶ PDF 解析ライブラリ）で「評価」「合致度」「リスク」の見出しと数値が含まれず、AI 解説（セクション 7 の見出し・7 ブロック・免責表示。1.8 版: AI 解説の領域（採用向けの表示の全体）と目次の「AI解説」）も含まれず、立ち位置が含まれること（D07-15）。同じ結果の `full` では AI 解説（`completed` の場合。1.8 版: 採用向けの表示の全体。PR-7.12 まで表示中のタブにかかわらず採用向け）が含まれること |
@@ -1246,7 +1258,7 @@ export async function renderResultPdf(args: RenderResultPdfArgs): Promise<Render
 | D07-21 | 設計判断（1.3 版で Cloud Storage for Firebase に読み替え） | PDF の Storage 保存 | 本フェーズは保存せず同期ストリーム返却（00 §2.1、§3.2 と一致）。保存する場合の仕様は §9.11 に確定（既定バケットの `pdf-exports/{organizationId}/{resultId}/{mode}-{timestamp}.pdf`、`storage.rules` は全拒否のまま、Admin SDK の署名付き URL 60 秒のみ、24 時間削除。署名付き URL の生成可否は実装時確認） | 01、02、04、07 |
 | D07-22 | 設計判断 | 印刷用ページのオリジン | 01 §4.3 の `appBaseUrl()`（`NEXT_PUBLIC_APP_BASE_URL`、無ければ `https://${VERCEL_URL}`）を使う。受信 `Host` からは組み立てない（`RequestMeta` に `Host` が無く、`Host` 改ざんで印刷トークン付き URL が外部へ送られる経路を作らないため。§9.13） | 04、07 |
 | D07-23 | 推定（Vercel の機能名） | Preview の Deployment Protection の回避 | Protection Bypass for Automation と `x-vercel-protection-bypass` ヘッダー（値は `serverEnv().VERCEL_AUTOMATION_BYPASS_SECRET`）。実装時に確認 | 01、07 |
-| D07-24 | 設計判断（08 D08-22 の提案を採用） | stub provider の不正 JSON モード | `respondentName = "__INVALID_JSON__"` のとき、コードフェンス付きテキストを `parseAiOutputText()` に通して `invalid_json` を発生させる。環境変数は増やさない。実 provider には分岐を置かない（§5.4） | 07、08 |
+| D07-24 | 設計判断（08 D08-22 の提案を採用） | stub provider の不正 JSON モード | `respondentName = "__INVALID_JSON__"` のとき、コードフェンス付きテキストを `parseAiOutputText()` に通して `invalid_json` を発生させる。環境変数は増やさない。実 provider には分岐を置かない（§5.4）。1.9 版: 育成・定着にも当てる（経年比較は氏名を入力に持たないので当てない。11-6 §3.7.3） | 07、08 |
 | D07-25 | 設計判断（1.3 版。10 K-06） | `aiAnalyses` の保存形 | 検証済み JSON を `output` map にそのまま保存し、`verdict` 3 種の別フィールドへの抜粋（1.x 版の `verdict_*` 列）と `raw_json` を廃止する（§3.3、§7.1）。理由: Firestore は map の入れ子をそのまま保存・読み戻しでき、判定 3 種で横断集計する要件が本フェーズに無い。`rawText`・`usage`・`stopReason`・`requestId` は 00 §2.2 のとおり保存する。`aiAnalyses` の作成と `results` の更新は同一バッチで行う | 02、04、07、08 |
 | D07-26 | 設計判断（1.8 版。10 K-25、11-6 §2.10） | AI 解説の生成の日次上限（D07-09 の `effort` とは別の判断） | 廃止する（組織あたり 1 日 200 回と 429 `AI_DAILY_LIMIT_EXCEEDED` を消す。参照元に回数の上限は無い）。費用は Anthropic Console の利用上限で管理する（01 D01-15・D01-17）。`countAiAnalysesSince` と 02 Q14 は verify とインデックスの結合テストのため残す（§6.4、§8.3） | 01、02、04、07、08 |
 
@@ -1263,3 +1275,4 @@ export async function renderResultPdf(args: RenderResultPdfArgs): Promise<Render
 | 1.6 | 2026-11-11 | M7 の PR-7.8a（結果詳細の枠と上半分。11-4）。§9.6 の描画完了の検知に、期待するレーダーの個数が PR-7.8a から 2 個（資質・ソーシャルスタイル）、PR-7.8b で 0 個になる注記だけを足した（§9.4〜§9.6 の作り直しは 11-5 の PR-7.12。11 総論 6.1）。表の版と作成日に、1.5 版の記載が漏れていたのを足した |
 | 1.7 | 2026-11-11 | M7 の PR-7.8b（結果詳細の下半分と片付け。11-4）。注記だけを足した（§9.4〜§9.6 の作り直しは 11-5 の PR-7.12。11 総論 6.1）: §9.6 の描画完了の検知に、期待する個数が 0 個になり印はハイドレーションの後に付くこと。§9.4 の描画の行に、印刷の形ではボタン類を処理なしで描くこと（11-4 §2.18）。§0.2 の決定事項 1 の行、§9.5 の育成方法・ソーシャルスタイルの行、§12 の D07-18・D07-19 に、PR-7.8b から印刷用ページは 11-4 の部品の印刷の形で、画面の状態は既定（第二候補は出さない・タイプ別の接し方はドライビングのタブの文）、ApexCharts は使わないこと（改版は PR-7.12。10 K-26）。検証のあと: §9.6 の見出しの下と方式・アニメーション・代替の行に、ApexCharts を外したので当たらないことを書いた |
 | 1.8 | 2026-11-14 | M7 の PR-7.9（AI 解説の 3 つのタブと採用向け。11-6 §3.4〜§3.7・§4.1。11 総論 5.4・6.1）。AI 解説の 3 種類と種類ごとの API・状態・provider（§0.2 の決定事項 5、§1.1 の流れ図と注記、§1.2 の `kinds.ts`・`schema.ts`・`prompts/index.ts`・`prompt-builder.ts`）。§4.2 の種類ごとの `max_tokens`（16000・16000・32000）と `format`。§4.8 のログの `kind`・`maxTokens`、監査ログの `details.kind`、`ai.output_unreadable`。§5.1 の `generate(kind, …)` と種類ごとの入力・出力、§5.3 の上限の注記、§5.4 のスタブの種類（PR-7.9 は採用向けだけ）。§6.1〜§6.4 の生成のきっかけ（種類ごとの生成ボタン）・状態（種類ごと）・作り直し（失敗の枠の下の同じ生成ボタン）・日次上限の廃止（D07-26 を足した。D07-09 は `effort` の判断で変えていない）。§7.1 の `analysisKind`、§7.2 の表示（11-6 の AI 解説の領域、生成日時なし、判定チップの 4 色）と PDF。§8 の費用（11-6 §2.9 の概算を正に）と §8.3 の日次上限。§9.5 の PDF の AI 解説（PR-7.12 まで採用向けの表示だけ）。§10 の AI-07・AI-09 と AI-10（11-6 の M7-ai のテスト）。§12 の D-10・D-17 と D07-26。§0 と §0.1 の API のパス・日次上限と画面表示の正（11-6 §2）、§3.3 の表の画面の列の注記、§6.1 の再生成の例のパス、§11 の 04 の行の (8)。検証のあと: §4.8 の `ai.output_unreadable` を出す場合（最新の分析の ID が無い・必須の項目が無いを足した）、§9.5 の AI 解説の行の 1.7 版までの記述（判定の色なし・7 ブロック）を前の版の記述と分かる形に、§10 の AI-07 の表の崩れ（コードの中の縦線）と PDF-03 の 1.8 版の読み方 |
+| 1.9 | 2026-11-19 | M7 の PR-7.10（育成・定着の AI 解説。11-6 §2.5・§2.7・§2.8.2・§3.7・§3.8・§4.1。11 総論 5.4・6.1）。§1.1 の注記（育成・定着の要求の本文と保存）、§1.2 の `training-v1.ts` と `prompt-builder.ts` の注記。§2.2 の 1.9 版の注記（`approvedForProduction`・`training-v1` の登録、種類ごとの版の環境変数 `AI_TRAINING_PROMPT_VERSION`、起動時の種類と承認の検証、転記ルール）。§2.3 の育成・定着の差し込み（48 個）。§3.2 の `TrainingAiOutputSchema`。§5.1 の `AiOutputByKind.training` と `TrainingAiInput`。§5.4 のスタブの育成・定着の出力と `verdict` の決め方。§10 の AI-07・AI-10、§12 の D07-24 |

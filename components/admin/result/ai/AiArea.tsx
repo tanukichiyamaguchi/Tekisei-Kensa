@@ -4,10 +4,10 @@
 // section#ai（読み上げの名前「AI解説」）に、上にタブの行（AiTabs）、その下に出せるタブのパネルをすべて描き、選んでいないパネルは hidden で
 // 隠す（タブを切り替えても読み直しを失わない。§2.1）。初めのタブ initialTab は、ページが URL の ai から initialAiTab で選んだもの
 // （§3.7.6）。選んだタブは、描いた直後とタブを変えるたびに画面の状態（useResultViewState() の aiTab）に書く（URL は変えない。PDF の
-// ダウンロード（PR-7.12）が読む）。PR-7.9 は経年比較のタブを出さない（visibleTabs は採用向けと育成・定着。責任者の受験は [] で、ページが
-// この領域を作らない。11-6 §4.4）。経年比較のパネルと 1 年経過の帯の reexamRequest（PR-7.11a）、名字の置き換えの respondentName
-// （PR-7.11b）、印刷の形の variant（PR-7.12）は後の PR が足す。ai-area.css はここで読み込む（印刷用ページは PR-7.12 まで
-// PrintResultDocument が読み込む）
+// ダウンロード（PR-7.12）が読む）。2 つのパネルには、押した生成ボタンが消えるときに選んでいるタブへ焦点を移す関数を渡す（§2.3.2）。
+// 経年比較のタブは PR-7.11a まで出さない（visibleTabs は採用向けと育成・定着。責任者の受験は [] で、ページがこの領域を作らない。
+// 11-6 §4.4）。経年比較のパネルと 1 年経過の帯の reexamRequest（PR-7.11a）、名字の置き換えの respondentName（PR-7.11b）、印刷の形の
+// variant（PR-7.12）は後の PR が足す。ai-area.css はここで読み込む（印刷用ページは PR-7.12 まで PrintResultDocument が読み込む）
 import { useEffect, useRef, useState } from "react";
 
 import { AiTabs, type AiTabRefs } from "./AiTabs";
@@ -53,7 +53,12 @@ export function AiArea(props: {
         />
       ) : null}
       {training !== null ? (
-        <TrainingPanel initial={training} selected={tab === "training"} />
+        <TrainingPanel
+          resultId={props.resultId}
+          initial={training}
+          selected={tab === "training"}
+          focusTab={(options) => tabRefs.current.training?.focus(options)}
+        />
       ) : null}
     </section>
   );
