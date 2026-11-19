@@ -4,7 +4,7 @@
 |---|---|
 | 文書名 | 適性検査システム 基本設計 07 AI 解説・PDF 出力設計 |
 | 版 | 1.9 |
-| 作成日 | 2026-09-17（1.1 版: 2026-09-21、1.2 版: 2026-09-21 最終点検、1.3 版: 2026-09-21 K-06（Supabase → Firebase）に伴う部分改版、1.4 版: 2026-09-21 Firebase 化後の分冊間整合（02・04 の 2.1 版に合わせた）、1.5 版: 2026-09-24 本番デプロイで判明した事項の反映、1.6 版: 2026-11-11 M7 の PR-7.8a（結果詳細の枠と上半分）で変わった描画完了の待ちの個数の注記（§9.6）、1.7 版: 2026-11-11 M7 の PR-7.8b（結果詳細の下半分と片付け）で変わった印刷用ページの注記（§0.2・§9.4〜§9.6・§12）、1.8 版: 2026-11-14 M7 の PR-7.9（AI 解説の 3 つのタブと採用向け。11-6）で変わった AI 解説の流れ・種類ごとの `max_tokens`・ログ・provider の形・状態と再試行・日次上限の廃止・保存と表示・費用・PR-7.12 までの PDF の AI 解説（§0.2・§1・§4.2・§4.8・§5.1・§5.3・§5.4・§6・§7・§8・§9.5・§10・§12）、1.9 版: 2026-11-19 M7 の PR-7.10（育成・定着の AI 解説。11-6）で変わったファイル構成・版とレジストリ（`approvedForProduction`）・種類ごとの版の環境変数と起動時の検証・育成・定着の差し込み・出力の型とスキーマ・スタブの育成・定着の出力（§1・§2.2・§2.3・§3.2・§5.1・§5.4・§10・§12）。§13） |
+| 作成日 | 2026-09-17（1.1 版: 2026-09-21、1.2 版: 2026-09-21 最終点検、1.3 版: 2026-09-21 K-06（Supabase → Firebase）に伴う部分改版、1.4 版: 2026-09-21 Firebase 化後の分冊間整合（02・04 の 2.1 版に合わせた）、1.5 版: 2026-09-24 本番デプロイで判明した事項の反映、1.6 版: 2026-11-11 M7 の PR-7.8a（結果詳細の枠と上半分）で変わった描画完了の待ちの個数の注記（§9.6）、1.7 版: 2026-11-11 M7 の PR-7.8b（結果詳細の下半分と片付け）で変わった印刷用ページの注記（§0.2・§9.4〜§9.6・§12）、1.8 版: 2026-11-14 M7 の PR-7.9（AI 解説の 3 つのタブと採用向け。11-6）で変わった AI 解説の流れ・種類ごとの `max_tokens`・ログ・provider の形・状態と再試行・日次上限の廃止・保存と表示・費用・PR-7.12 までの PDF の AI 解説（§0.2・§1・§4.2・§4.8・§5.1・§5.3・§5.4・§6・§7・§8・§9.5・§10・§12）、1.9 版: 2026-11-19 M7 の PR-7.10（育成・定着の AI 解説。11-6）で変わったファイル構成・版とレジストリ（`approvedForProduction`）・種類ごとの版の環境変数と起動時の検証・育成・定着の差し込み・出力の型とスキーマ・スタブの育成・定着の出力・育成・定着の保存と表示（§0.2・§1・§2.2・§2.3・§3.2・§4.2・§5.1・§5.4・§7.1・§7.2・§10・§12）。§13） |
 | 対象 | `lib/ai/`、`lib/pdf/`、印刷用ページ、`lib/services/ai-analysis.ts` / `pdf-export.ts` の 07 担当部分を実装する担当者。04（API）、06（管理者画面）、08（テスト）の担当者 |
 
 ## 0. 本書の位置づけ
@@ -51,7 +51,7 @@
 | 2 | 既存不具合 10 件を修正 | 信頼係数の色は PDF でも緑系逆順（06 の色関数を印刷用ページで再利用。§9.5）。内部名は「感性開放型」に統一し、付録D プロンプトの転記部分だけ例外（§2.2） |
 | 3 | 出題は Q1〜Q144 のみ | AI 入力は `ScoreResult`（採点済みの指標）だけを使い、回答そのものは送らない（§2.3） |
 | 4 | 既存データは移行しない | AI 解説・PDF は新システムで生成された結果だけを対象にする。旧版ロジックの扱いは対象外 |
-| 5 | AI 解説は Claude API（Anthropic）。差し替え可能な構造 | `AiProvider` インターフェース（00 §3.6）に `anthropic` と `stub` の 2 実装を持ち、`AI_PROVIDER` で切り替える（§5）。モデル ID・パラメータは skill「claude-api」に記載の仕様のみを根拠にする（§4）。1.8 版（M7 の PR-7.9）: AI 解説は 3 種類（採用向け・育成・定着・経年比較。11-6）になり、provider は種類を受け取る `generate(kind, …)` の形にした（PR-7.9 は採用向けだけを生成する） |
+| 5 | AI 解説は Claude API（Anthropic）。差し替え可能な構造 | `AiProvider` インターフェース（00 §3.6）に `anthropic` と `stub` の 2 実装を持ち、`AI_PROVIDER` で切り替える（§5）。モデル ID・パラメータは skill「claude-api」に記載の仕様のみを根拠にする（§4）。1.8 版（M7 の PR-7.9）: AI 解説は 3 種類（採用向け・育成・定着・経年比較。11-6）になり、provider は種類を受け取る `generate(kind, …)` の形にした（PR-7.9 は採用向けだけを生成する）。1.9 版（M7 の PR-7.10）: 育成・定着も生成する（経年比較は PR-7.11b） |
 | 6 | 日本語のみ。管理画面は PC 幅 | プロンプト・出力・PDF はすべて日本語。PDF は A4 縦（§9.5）。印刷用ページは管理者画面の部品を再利用する |
 
 ### 0.3 本書で使う略記
@@ -171,7 +171,7 @@ export function getPromptDefinition(version: string): PromptDefinition {
 
 1.9 版（M7 の PR-7.10。11-6 §2.7.1・§2.7.4・§3.7.2・§3.8）:
 
-- `PromptDefinition` に `approvedForProduction`（真偽）を足し、`analysisKind` は `AiAnalysisKind` の型にした。`recruitment-v1`・`recruitment-v2` は真、`training-v1`（`lib/ai/prompts/training-v1.ts`。付録D §6。11-6 別表A と一字一句同じ）は偽（依頼主の確認の前）。`PROMPT_VERSIONS` とレジストリに `training-v1` を足した（`longitudinal-v1` は PR-7.11b）。
+- `PromptDefinition` に `approvedForProduction`（真偽）を足した（上の写しの `analysisKind` の型は、PR-7.9 から `AiAnalysisKind`）。`recruitment-v1`・`recruitment-v2` は真、`training-v1`（`lib/ai/prompts/training-v1.ts`。付録D §6。11-6 別表A と一字一句同じ）は偽（依頼主の確認の前）。`PROMPT_VERSIONS` とレジストリに `training-v1` を足した（`longitudinal-v1` は PR-7.11b）。
 - 版は種類ごとの環境変数で選ぶ: 採用向けは `AI_PROMPT_VERSION`（必須。今のまま）、育成・定着は `AI_TRAINING_PROMPT_VERSION`（任意。未設定・空なら育成・定着は無効）。起動時検証（01 §4.3 の `validateServerEnv`）は、設定されている版がレジストリにあること・その種類の版であること（`AI_TRAINING_PROMPT_VERSION=recruitment-v2` などは止める）と、`VERCEL_ENV` が `production` か `preview` なら `approvedForProduction` が真であることを確かめ、合わなければ起動を止める。本番・Preview は確認まで `AI_TRAINING_PROMPT_VERSION` を設定しない。確認の後は、10_決定記録に K 番号で記録し `approvedForProduction` を真にする PR の後に設定する（11-6 §2.7.4）。確認の前は、出た直しを同じ版に当ててよい（本番の分析が無いため）。
 - `training-v1` の転記ルール: 参照元の育成・定着のプロンプトに 11-6 §2.7.2 の T-1〜T-11 を当てた全文（11-6 別表A）を、一字一句そのまま置く（参照元どおり残す 2 か所を含む。付録D §6）。参照元の原文と置き換えの表はコードに置かない。
 
@@ -412,7 +412,7 @@ export function parseAiOutputText(text: string): AiAnalysisOutput {
 | `messages` | `[{ role: "user", content: BuiltMessages.user }]` | §2.1 |
 | `thinking` | `{ type: "adaptive" }`（省略時も同じ。明示する） | skill: Claude Opus 5 は思考が既定で有効（省略時は adaptive）。`budget_tokens` は 400 になるため使わない。`display` は指定しない（既定 `omitted`。思考内容を表示・保存しないため） |
 | `output_config.effort` | `"high"` | skill: 既定 `high`（省略と同義）。既存の `thinkingLevel: high` に対応させて明示する。skill は「effort は最初の品質・コストのレバー」としているため、実測後に `medium` へ下げる余地を D07-09 として残す |
-| `output_config.format` | `zodOutputFormat(AiAnalysisOutputSchema)`（1.8 版から種類のスキーマ `AI_OUTPUT_SCHEMAS[kind]` から種類ごとに 1 回だけ作って使い回す。PR-7.9 は採用向けだけ） | §3.1 A |
+| `output_config.format` | `zodOutputFormat(AiAnalysisOutputSchema)`（1.8 版から種類のスキーマ `AI_OUTPUT_SCHEMAS[kind]` から種類ごとに 1 回だけ作って使い回す。PR-7.9 は採用向けだけ。1.9 版: 育成・定着の分（`TrainingAiOutputSchema`。11-6 §2.8.2）も作る。経年比較は PR-7.11b） | §3.1 A |
 | `temperature` / `top_p` / `top_k` | **送らない** | skill: Claude Opus 5 / Fable 5 / Opus 4.8 / 4.7 では削除済みで、送ると 400 |
 | `tool_choice` / `tools` | 送らない（方式 A） | §3.1 |
 | assistant prefill | 使わない | skill: 4.6 以降のモデルで 400 |
@@ -824,7 +824,8 @@ stateDiagram-v2
 | フィールド（00 §2.2。詳細は 02） | 値 | 取得元 |
 |---|---|---|
 | `organizationId`、`resultId`、`respondentId` | 対象結果の値（string の ID。`DocumentReference` は使わない。00 §2.1） | サービス |
-| `analysisKind` | `AiGenerateResult.analysisKind`（生成した種類。PR-7.9 は `recruitment` だけ。1.8 版で `saveAiAnalysis` に渡す `kind` と違えば保存しない） | provider（`PromptDefinition`） |
+| `analysisKind` | `AiGenerateResult.analysisKind`（生成した種類。PR-7.9 は `recruitment` だけ。1.8 版で `saveAiAnalysis` に渡す `kind` と違えば保存しない。1.9 版で `training` も） | provider（`PromptDefinition`） |
+| `trainingContext`・`previousResultId`・`usedTrainingAction`（1.9 版。02 §3.6、11-6 §3.2） | `trainingContext` は、育成・定着では生成の要求の 8 項目（検証したコード。11-6 §2.5.3）、ほかの種類では `null`。`previousResultId`・`usedTrainingAction` は経年比較の項目で、PR-7.11b まで `null` | サービス（要求の本文） |
 | `provider` | `AiProvider.name`（`anthropic` / `stub`） | provider |
 | `model` | `AiGenerateResult.model`（応答の `model`。`AI_MODEL` がエイリアスでも実際に応答したモデル名が入る） | provider |
 | `promptVersion` | `AiGenerateResult.promptVersion` | provider |
@@ -838,13 +839,14 @@ stateDiagram-v2
 | `generatedBy` | クレームの `uid`（ログイン中の管理者。00 §5）。02 §3.6 で同名に確定（04 2.0 版の `generatedByUid` は取り下げ） | サービス（`viewer.uid`） |
 | `createdAt`、`updatedAt` | `FieldValue.serverTimestamp()`（00 §2.1 の監査フィールド。1.x 版の `generated_at` は `createdAt` に統合） | サービス |
 
-- その種類の最新の分析の ID（採用向けは `results.latestAiAnalysisId`）を新しい文書の ID に向け、その種類の状態を `completed` にします（04 §5.9 手順 9。1.8 版）。`aiAnalyses` の作成と `results` の更新と監査ログ `result.ai_generate` は 02 の `saveAiAnalysis()` が同一バッチで行い、片方だけが残らないようにします（00 §2.2 の複数文書書き込みの方針。02 §8.6）。履歴は残りますが（00 §2.2「生成履歴」）、本フェーズでは再生成しないため 1 結果 1 文書です。
+- その種類の最新の分析の ID（採用向けは `results.latestAiAnalysisId`）を新しい文書の ID に向け、その種類の状態を `completed` にします（04 §5.9 手順 9。1.8 版）。`aiAnalyses` の作成と `results` の更新と監査ログ `result.ai_generate` は 02 の `saveAiAnalysis()` が同一バッチで行い、片方だけが残らないようにします（00 §2.2 の複数文書書き込みの方針。02 §8.6）。履歴は残りますが（00 §2.2「生成履歴」）、本フェーズでは再生成しないため 1 結果 1 文書です。1.9 版（M7 の PR-7.10）: 育成・定着の成功では、同じバッチで `results.trainingContext` に同じ 8 項目を書きます（02 I-ai-2。生成の開始と失敗では書かない。11-6 §3.5 の 12）。
 - `aiAnalyses` は組織に属する文書のため `organizationId` を必ず持ち、読み取り時はサーバでクレームの `organizationId` と照合します（00 §2.1）。論理削除の対象外です（00 §2.2）。
 
 ### 7.2 表示
 
 - 画面表示（1.8 版から 11-6 §2.1〜§2.4 の AI 解説の領域: タブ・生成前の案内・生成ボタン・生成中・失敗の枠・採用向けの表示（注意書き → 判定チップ → 要約 → 強み・注意点 → 質問 → 接し方 → 辞めそうなサイン → 末尾）、読み直し）は 11-6 と 06 §3.5.9 に従います。生成日時は出しません（ai-08）。判定チップは参照元の 4 色で塗り分けます（K-39 Q-28。06 D06-15 を改めた。値の文字は K-49 の色。11-6 §2.4.4）。
 - PDF への掲載: `results.aiGenerationStatus == "completed"` **かつ `mode = full`** のときだけ掲載します（1.8 版から、PR-7.12 までは表示上の役職が責任者でない受験の採用向けの表示（11-6 §2.4.3）を、AI 解説の領域 `#ai` に置く。§9.5）。**`restricted` モードでは掲載しません**（設計判断 D07-15。06 §3.5.11 の提案「`restricted` でも掲載する（判定はリスク値ではないため）」は **不採用**）。理由: (1) 付録D §3「cautions の書き方（必須）」は「注意点には根拠スコアを必ず『（◯◯リスク◯◯）』のように添える」「最低 3 箇所は実際の数値を引用する」と **必須** で指示し、同 §3「リスク」節も「cautions と retention（特に sign・action）に、関連するリスクの数値を根拠として反映する」と指示しているため、AI 解説の本文にはリスク値が「引用され得る」のではなく **必ず引用される**。(2) `verdict.teichaku_risk`（離職リスク）はリスク値と特性から判断した判定であり、それ自体がリスクの印字になる。(3) したがって `restricted` の要件「評価・組織との合致度・リスクを非表示」（要件定義書 §6.2 A-10、付録E §7）を満たす PDF は AI 解説を含められない。依頼主が「`restricted` でも AI 解説を掲載する」と明示的に確認した場合に限り、`visibilityForMode()`（§9.5）の 1 行を `showAiAnalysis: aiCompleted` に戻して切り替えます（依頼主確認事項として §12 に残す）。
+- 1.9 版（M7 の PR-7.10）: 育成・定着の表示（見出し帯・判定チップ 3 つ・4 つの節・末尾）は 11-6 §2.5.5 と 06 §3.5.9 に従います。PDF には PR-7.12 まで載せません（全画面の PDF の AI 解説は、育成・定着のタブを表示していても採用向けの表示だけ。11-6 §2.12 の 1.2 版）。
 - 免責表示（付録D §1）は PDF でも AI 解説の末尾に印字します。
 
 ## 8. コスト見積もり（概算）
@@ -1275,4 +1277,4 @@ export async function renderResultPdf(args: RenderResultPdfArgs): Promise<Render
 | 1.6 | 2026-11-11 | M7 の PR-7.8a（結果詳細の枠と上半分。11-4）。§9.6 の描画完了の検知に、期待するレーダーの個数が PR-7.8a から 2 個（資質・ソーシャルスタイル）、PR-7.8b で 0 個になる注記だけを足した（§9.4〜§9.6 の作り直しは 11-5 の PR-7.12。11 総論 6.1）。表の版と作成日に、1.5 版の記載が漏れていたのを足した |
 | 1.7 | 2026-11-11 | M7 の PR-7.8b（結果詳細の下半分と片付け。11-4）。注記だけを足した（§9.4〜§9.6 の作り直しは 11-5 の PR-7.12。11 総論 6.1）: §9.6 の描画完了の検知に、期待する個数が 0 個になり印はハイドレーションの後に付くこと。§9.4 の描画の行に、印刷の形ではボタン類を処理なしで描くこと（11-4 §2.18）。§0.2 の決定事項 1 の行、§9.5 の育成方法・ソーシャルスタイルの行、§12 の D07-18・D07-19 に、PR-7.8b から印刷用ページは 11-4 の部品の印刷の形で、画面の状態は既定（第二候補は出さない・タイプ別の接し方はドライビングのタブの文）、ApexCharts は使わないこと（改版は PR-7.12。10 K-26）。検証のあと: §9.6 の見出しの下と方式・アニメーション・代替の行に、ApexCharts を外したので当たらないことを書いた |
 | 1.8 | 2026-11-14 | M7 の PR-7.9（AI 解説の 3 つのタブと採用向け。11-6 §3.4〜§3.7・§4.1。11 総論 5.4・6.1）。AI 解説の 3 種類と種類ごとの API・状態・provider（§0.2 の決定事項 5、§1.1 の流れ図と注記、§1.2 の `kinds.ts`・`schema.ts`・`prompts/index.ts`・`prompt-builder.ts`）。§4.2 の種類ごとの `max_tokens`（16000・16000・32000）と `format`。§4.8 のログの `kind`・`maxTokens`、監査ログの `details.kind`、`ai.output_unreadable`。§5.1 の `generate(kind, …)` と種類ごとの入力・出力、§5.3 の上限の注記、§5.4 のスタブの種類（PR-7.9 は採用向けだけ）。§6.1〜§6.4 の生成のきっかけ（種類ごとの生成ボタン）・状態（種類ごと）・作り直し（失敗の枠の下の同じ生成ボタン）・日次上限の廃止（D07-26 を足した。D07-09 は `effort` の判断で変えていない）。§7.1 の `analysisKind`、§7.2 の表示（11-6 の AI 解説の領域、生成日時なし、判定チップの 4 色）と PDF。§8 の費用（11-6 §2.9 の概算を正に）と §8.3 の日次上限。§9.5 の PDF の AI 解説（PR-7.12 まで採用向けの表示だけ）。§10 の AI-07・AI-09 と AI-10（11-6 の M7-ai のテスト）。§12 の D-10・D-17 と D07-26。§0 と §0.1 の API のパス・日次上限と画面表示の正（11-6 §2）、§3.3 の表の画面の列の注記、§6.1 の再生成の例のパス、§11 の 04 の行の (8)。検証のあと: §4.8 の `ai.output_unreadable` を出す場合（最新の分析の ID が無い・必須の項目が無いを足した）、§9.5 の AI 解説の行の 1.7 版までの記述（判定の色なし・7 ブロック）を前の版の記述と分かる形に、§10 の AI-07 の表の崩れ（コードの中の縦線）と PDF-03 の 1.8 版の読み方 |
-| 1.9 | 2026-11-19 | M7 の PR-7.10（育成・定着の AI 解説。11-6 §2.5・§2.7・§2.8.2・§3.7・§3.8・§4.1。11 総論 5.4・6.1）。§1.1 の注記（育成・定着の要求の本文と保存）、§1.2 の `training-v1.ts` と `prompt-builder.ts` の注記。§2.2 の 1.9 版の注記（`approvedForProduction`・`training-v1` の登録、種類ごとの版の環境変数 `AI_TRAINING_PROMPT_VERSION`、起動時の種類と承認の検証、転記ルール）。§2.3 の育成・定着の差し込み（48 個）。§3.2 の `TrainingAiOutputSchema`。§5.1 の `AiOutputByKind.training` と `TrainingAiInput`。§5.4 のスタブの育成・定着の出力と `verdict` の決め方。§10 の AI-07・AI-10、§12 の D07-24 |
+| 1.9 | 2026-11-19 | M7 の PR-7.10（育成・定着の AI 解説。11-6 §2.5・§2.7・§2.8.2・§3.7・§3.8・§4.1。11 総論 5.4・6.1）。§0.2 の決定事項 5 の注記。§1.1 の流れ図の `generateAi` の `body` と注記（育成・定着の要求の本文と保存）、§1.2 の `training-v1.ts` と `prompt-builder.ts` の注記。§2.2 の 1.9 版の注記（`approvedForProduction`・`training-v1` の登録、種類ごとの版の環境変数 `AI_TRAINING_PROMPT_VERSION`、起動時の種類と承認の検証、転記ルール）。§2.3 の育成・定着の差し込み（48 個）。§3.2 の `TrainingAiOutputSchema`。§5.1 の `AiOutputByKind.training` と `TrainingAiInput`。§4.2 の `output_config.format` の注記。§5.4 のスタブの育成・定着の出力と `verdict` の決め方。§7.1 の `trainingContext` の行と `results.trainingContext` の注記、§7.2 の育成・定着の表示と PDF（PR-7.12 まで載せない）。§10 の AI-07・AI-10、§12 の D07-24 |
