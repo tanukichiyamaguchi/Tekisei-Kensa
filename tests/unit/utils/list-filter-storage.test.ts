@@ -1,6 +1,7 @@
 // 回答一覧の絞り込みの状態の保存（M7-list-16 の list-filter-storage の分。11-2 §2.21・§5.1）。読み書きと、消すこと（ログイン画面を
-// 開いたときとログインが成功したときに使う。1.5 版）、使えない環境で例外を投げないこと
-import { describe, expect, it } from "vitest";
+// 開いたときとログインが成功したときに使う。1.5 版）、使えない環境（window.sessionStorage を読むだけで例外になる場合を含む）で
+// 例外を投げないこと
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import * as resultListView from "@/lib/presentation/result-list-view";
 import {
@@ -90,5 +91,34 @@ describe("M7-list-16 list-filter-storage（sessionStorage の ad-filter の読�
     // 既定のストレージ: 単体テストの環境（node）には window が無い
     expect(readStoredListFilter()).toBeNull();
     expect(() => clearStoredListFilter()).not.toThrow();
+  });
+
+  describe("既定のストレージ（window.sessionStorage）", () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("window.sessionStorage を読むだけで例外になる環境（ストレージを拒むブラウザ）でも、読み書きと消すことは例外を投げない", () => {
+      // 既定の引数は関数の本体の try の外で決まるので、defaultStorage 自身が例外を握りつぶす必要がある（ログイン画面と
+      // establishSession から呼ぶため）
+      vi.stubGlobal("window", {
+        get sessionStorage(): Storage {
+          throw new Error("SecurityError");
+        },
+      });
+      expect(readStoredListFilter()).toBeNull();
+      expect(() => saveStoredListFilter(filter)).not.toThrow();
+      expect(() => clearStoredListFilter()).not.toThrow();
+    });
+
+    it("引数を省くと window.sessionStorage を使う", () => {
+      const storage = memoryStorage({ [LIST_FILTER_STORAGE_KEY]: JSON.stringify(filter) });
+      vi.stubGlobal("window", { sessionStorage: storage });
+      expect(readStoredListFilter()).toBe(JSON.stringify(filter));
+      clearStoredListFilter();
+      expect(storage.items.has(LIST_FILTER_STORAGE_KEY)).toBe(false);
+      saveStoredListFilter(filter);
+      expect(storage.items.get(LIST_FILTER_STORAGE_KEY)).toBe(JSON.stringify(filter));
+    });
   });
 });

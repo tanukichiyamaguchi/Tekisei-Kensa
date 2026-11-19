@@ -2,6 +2,7 @@
 // 検索語に氏名・電話番号が入り得るので、ログイン画面を開いたとき（LoginForm）と、ログインが成功してセッションができたとき
 // （lib/utils/admin-auth.ts の establishSession）に消す（1.5 版）。ログアウト・セッション切れのあとはログイン画面を通り、M-03 で新しい
 // パスワードを決めたあとの自動ログインはログインの成功を通るので、同じタブで次にログインした人に前の人の絞り込みを戻さない。
+// sessionStorage はタブごとなので、ログインしたまま残した別のタブの保存は消えない（制限。依頼主の判断。11-2 §2.21）。
 // 読み書きはすべて try/catch で囲み、使えない環境（プライベートモードなど）でも例外を投げない（保存しない・戻さないだけ）。
 // ログイン画面に回答一覧の表示の規則（lib/presentation/result-list-view.ts）を読み込ませないため、キーはここで定め、型だけを import する
 import type { ListFilterState } from "@/lib/presentation/result-list-view";

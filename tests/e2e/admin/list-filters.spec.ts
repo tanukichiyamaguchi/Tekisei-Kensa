@@ -311,14 +311,25 @@ test("M7-list-46 ログイン画面を開くと絞り込みの保存が消え、
 }) => {
   await loginViaUi(page, adminOrg.ownerEmail);
   const tools = listTools(page);
+  const tabTeamSortOnly = { seg: "cand", q: "", team: "A", sort: "old" };
+
+  // ログイン済みでログイン画面を開く: サーバが一覧（next が無いので /admin）へ移し、ログイン画面のフォームは描かれないので、
+  // 保存は消えずに一覧に戻る（11-2 §2.21 の 1.5 版。PR-7.13b でログイン画面を作り直しても変えない）
+  await changeTabTeamSort(page);
+  await page.goto("/admin/login");
+  await page.waitForURL((url) => url.pathname === "/admin");
+  await expect(tools.tab("求職者")).toHaveAttribute("aria-selected", "true");
+  await expect(tools.team).toHaveValue("A");
+  await expect(tools.sort).toHaveValue("old");
+  expect(await storedFilter(page)).toEqual(tabTeamSortOnly);
 
   // ログアウト（検索語を入れた直後）: 時計を止めて検索語を保存の待ちのままにすると、ログイン画面を開くときの pagehide が保存する
-  // （11-2 §2.21 の 1.4 版）。ログイン画面はその保存のあとに消すので、検索語も残らない（1.5 版）。pagehide の時点の保存は、
-  // 一覧の受け手のあとに足した受け手で別のキーに写して確かめる
-  await changeTabTeamSort(page);
+  // （11-2 §2.21 の 1.4 版）。ログイン画面はその保存のあとに消すので、検索語も残らない（1.5 版）。移る直前に検索語がまだ保存
+  // されていない（待ちのまま）ことを確かめ、pagehide の時点の保存は、一覧の受け手のあとに足した受け手で別のキーに写して確かめる
   await page.clock.install();
   await pauseClock(page);
   await tools.search.fill("テストテスト 05");
+  expect(await storedFilter(page)).toEqual(tabTeamSortOnly);
   await page.evaluate(() => {
     window.addEventListener(
       "pagehide",
@@ -363,13 +374,30 @@ test("M7-list-46 ログイン画面を開くと絞り込みの保存が消え、
 
   // セッション切れのあと、検索語を入れた直後に行を押す: アプリの中の移動でログイン画面に移る（同じ文書のまま）。時計を止めて検索語を
   // 保存の待ちのままにすると、一覧の部品が外れるときの片付けが保存し（1.4 版）、ログイン画面はそのあとに消す。同じ文書なので、
-  // 消したあとに止めた時計を進め、残った待ち（タイマー）が書き戻さないことも確かめる
+  // ad-filter への書き込みと削除を順に記録して、片付けの保存（検索語まで）の 1 回のあとに消した 1 回だけであることと、
+  // 止めた時計を進めて残った待ち（タイマー）を走らせても書き戻されないことを確かめる
   await changeTabTeamSort(page);
   await page.context().clearCookies();
   await pauseClock(page);
   await tools.search.fill("テストテスト 01");
+  expect(await storedFilter(page)).toEqual(tabTeamSortOnly);
   await page.evaluate(() => {
-    (window as unknown as { __sameDocument: boolean }).__sameDocument = true;
+    const w = window as unknown as {
+      __sameDocument: boolean;
+      __adFilterOps: Array<{ op: "set" | "remove"; value?: string }>;
+    };
+    const ops: typeof w.__adFilterOps = [];
+    w.__sameDocument = true;
+    w.__adFilterOps = ops;
+    const { setItem, removeItem } = Storage.prototype;
+    Storage.prototype.setItem = function (this: Storage, key: string, value: string) {
+      if (key === "ad-filter") ops.push({ op: "set", value });
+      setItem.call(this, key, value);
+    };
+    Storage.prototype.removeItem = function (this: Storage, key: string) {
+      if (key === "ad-filter") ops.push({ op: "remove" });
+      removeItem.call(this, key);
+    };
   });
   await rowOf(page, seedName(1)).locator(".rl-td--type").click();
   await page.waitForURL((url) => url.pathname === "/admin/login");
@@ -381,6 +409,17 @@ test("M7-list-46 ログイン画面を開くと絞り込みの保存が消え、
   await expect.poll(() => storedFilter(page)).toBeNull();
   await page.clock.runFor(1_000);
   expect(await storedFilter(page)).toBeNull();
+  const ops = await page.evaluate(
+    () =>
+      (window as unknown as { __adFilterOps: Array<{ op: "set" | "remove"; value?: string }> })
+        .__adFilterOps,
+  );
+  expect(
+    ops.map((o) => (o.op === "set" ? { op: o.op, filter: JSON.parse(o.value ?? "null") } : o)),
+  ).toEqual([
+    { op: "set", filter: { seg: "cand", q: "テストテスト 01", team: "A", sort: "old" } },
+    { op: "remove" },
+  ]);
   await page.clock.resume();
   await loginViaUi(page, adminOrg.ownerEmail);
   await expectDefaultFilter(page);
