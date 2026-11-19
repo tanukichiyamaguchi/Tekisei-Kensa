@@ -1,7 +1,8 @@
 "use client";
 // M-04 回答一覧の本体（11-2 §2.1・§2.21・§2.23・§2.25・§3.12）。初期データは Server Component（app/(admin)/admin/page.tsx）が
 // listResultRows で取得して渡す（取得の失敗は null）。区分・検索語・チーム・並び順は画面の状態に持ち、sessionStorage の ad-filter に
-// 保存して開き直したときに戻す（§2.21。マウントの直後に 1 回。サーバで描いた最初の表示は既定の状態）。
+// 保存して開き直したときに戻す（§2.21。マウントの直後に 1 回。サーバで描いた最初の表示は既定の状態。読み書きは
+// lib/utils/list-filter-storage.ts。ログイン画面を開いたときと、ログインが成功したときに消す: 1.5 版）。
 // 変更（チーム・除外・区分・日付・役職）は、表示をすぐ変え（代表の resultId ごとの上書き）、行を送信中にして PATCH を送り、同時に通知を
 // 出す。成功は読み直し（router.refresh。メニューが開いている間は待つ）、失敗は上書きを戻してエラーの通知（§2.23）。自動の読み直しはしない。
 // window と sessionStorage には effect とイベントの中でだけ触れる
@@ -36,7 +37,6 @@ import {
   DEFAULT_LIST_FILTER,
   emptyStateKind,
   filterAndSortRows,
-  LIST_FILTER_STORAGE_KEY,
   LIST_PAGE_STEP,
   parseStoredFilter,
   rowMenuModel,
@@ -50,6 +50,7 @@ import { RESULT_LIST_TEXTS, type ResultListLinkKind } from "@/lib/presentation/r
 import type { TeamCode } from "@/lib/scoring/types";
 import type { ResultListDto, ResultListRowDto } from "@/lib/services/dto/admin";
 import { AdminApiError, deleteRespondent, updatePerson } from "@/lib/utils/admin-api";
+import { readStoredListFilter, saveStoredListFilter } from "@/lib/utils/list-filter-storage";
 
 /** 削除の通知の表示の時間（11-2 §2.20。ほかの通知は Toast の既定 2.2 秒） */
 const DELETED_TOAST_MS = 2000;
@@ -75,14 +76,6 @@ type PersonPatch = Parameters<typeof updatePerson>[1];
 
 function employmentOf(row: ResultListRowDto): Employment {
   return { status: row.employmentStatus, hiredOn: row.hiredOn, leftOn: row.leftOn };
-}
-
-function saveFilter(filter: ListFilterState): void {
-  try {
-    window.sessionStorage.setItem(LIST_FILTER_STORAGE_KEY, JSON.stringify(filter));
-  } catch {
-    // ストレージが使えない環境では保存しないだけ（§2.21）
-  }
 }
 
 export interface ResultsViewProps {
@@ -152,13 +145,8 @@ export function ResultsView({
 
   // 開き直したときに状態を戻す（§2.21。最初の描画のあと 1 回）
   useEffect(() => {
-    let raw: string | null = null;
-    try {
-      raw = window.sessionStorage.getItem(LIST_FILTER_STORAGE_KEY);
-    } catch {
-      // ストレージが使えない環境では戻さない
-    }
-    const restored = parseStoredFilter(raw);
+    // ストレージが使えない環境では null が返り、既定のまま
+    const restored = parseStoredFilter(readStoredListFilter());
     filterRef.current = restored;
     setFilter(restored);
     setSearchText(restored.q);
@@ -171,7 +159,7 @@ export function ResultsView({
   useEffect(() => {
     const savePendingSearch = () => {
       if (pendingSearch.current !== null) {
-        saveFilter({ ...filterRef.current, q: pendingSearch.current });
+        saveStoredListFilter({ ...filterRef.current, q: pendingSearch.current });
       }
     };
     window.addEventListener("pagehide", savePendingSearch);
@@ -197,7 +185,7 @@ export function ResultsView({
   const applyFilter = (next: ListFilterState, resetLimit: boolean) => {
     filterRef.current = next;
     setFilter(next);
-    saveFilter(next);
+    saveStoredListFilter(next);
     if (resetLimit) setLimit(LIST_PAGE_STEP);
   };
 

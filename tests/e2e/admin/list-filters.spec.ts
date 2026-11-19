@@ -1,5 +1,5 @@
-// M7-list-36 検索・絞り込み・並び順、M7-list-37 受験から1年以上、M7-list-38 さらに表示、M7-list-46 状態の保存、
-// M7-list-47 0 件の表示（11-2 §5.3。§2.5〜§2.8・§2.19・§2.21）。
+// M7-list-36 検索・絞り込み・並び順、M7-list-37 受験から1年以上、M7-list-38 さらに表示、M7-list-46 状態の保存（ログイン画面を開いたときと
+// ログインの成功で消すことを含む）、M7-list-47 0 件の表示（11-2 §5.3。§2.5〜§2.8・§2.19・§2.21）。
 // 受験日を過去にするのは E2E に限った直接書き込み（M7-list-36 の並び順を分けるための受験日と、M7-list-37 の「受験から1年以上」。
 // API では受験日を変えられない）。101 行以上の組織と再受験のつながりは、seed:local と同じリポジトリの関数で作る（直接は書かない）
 import type { Page } from "@playwright/test";
@@ -8,10 +8,13 @@ import {
   addReexam,
   answerLink,
   backdateResult,
+  E2E_ADMIN_PASSWORD,
   expect,
   grantClipboard,
   listTools,
   loginViaUi,
+  logoutViaHeader,
+  passwordResetCode,
   readClipboard,
   resultRows,
   rowNames,
@@ -268,6 +271,187 @@ test("M7-list-46 区分・検索・チーム・並び順は結果詳細から「
   await other.waitForURL((url) => url.pathname === "/admin");
   await expect(resultRows(other)).toHaveCount(100);
   await other.context().close();
+});
+
+/** sessionStorage の ad-filter（11-2 §2.21）。無ければ null */
+async function storedFilter(page: Page): Promise<unknown> {
+  const saved = await page.evaluate(() => window.sessionStorage.getItem("ad-filter"));
+  return JSON.parse(saved ?? "null");
+}
+
+/** 区分を求職者・チームを A・並び順を古い順に変え、保存されるまで待つ */
+async function changeTabTeamSort(page: Page): Promise<void> {
+  const tools = listTools(page);
+  await tools.tab("求職者").click();
+  await tools.team.selectOption("A");
+  await tools.sort.selectOption("old");
+  await expect
+    .poll(() => storedFilter(page))
+    .toEqual({ seg: "cand", q: "", team: "A", sort: "old" });
+}
+
+/** 既定の状態（すべて・検索語なし・チームなし・新しい順）で全員（10 人）が出る */
+async function expectDefaultFilter(page: Page): Promise<void> {
+  const tools = listTools(page);
+  await expect(tools.tab("すべて")).toHaveAttribute("aria-selected", "true");
+  await expect(tools.search).toHaveValue("");
+  await expect(tools.team).toHaveValue("");
+  await expect(tools.sort).toHaveValue("new");
+  await expect(resultRows(page)).toHaveCount(10);
+}
+
+/** 時計を止め、入力から保存までの 150 ミリ秒の待ちを走らせない（先に page.clock.install() を呼んでおく） */
+async function pauseClock(page: Page): Promise<void> {
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1_000));
+}
+
+test("M7-list-46 ログイン画面を開くと絞り込みの保存が消え、同じタブでログインし直すと既定の状態（ログアウト・セッション切れ）", async ({
+  page,
+  adminOrg,
+}) => {
+  await loginViaUi(page, adminOrg.ownerEmail);
+  const tools = listTools(page);
+  const tabTeamSortOnly = { seg: "cand", q: "", team: "A", sort: "old" };
+
+  // ログイン済みでログイン画面を開く: サーバが一覧（next が無いので /admin）へ移し、ログイン画面のフォームは描かれないので、
+  // 保存は消えずに一覧に戻る（11-2 §2.21 の 1.5 版。PR-7.13b でログイン画面を作り直しても変えない）
+  await changeTabTeamSort(page);
+  await page.goto("/admin/login");
+  await page.waitForURL((url) => url.pathname === "/admin");
+  await expect(tools.tab("求職者")).toHaveAttribute("aria-selected", "true");
+  await expect(tools.team).toHaveValue("A");
+  await expect(tools.sort).toHaveValue("old");
+  expect(await storedFilter(page)).toEqual(tabTeamSortOnly);
+
+  // ログアウト（検索語を入れた直後）: 時計を止めて検索語を保存の待ちのままにすると、ログイン画面を開くときの pagehide が保存する
+  // （11-2 §2.21 の 1.4 版）。ログイン画面はその保存のあとに消すので、検索語も残らない（1.5 版）。移る直前に検索語がまだ保存
+  // されていない（待ちのまま）ことを確かめ、pagehide の時点の保存は、一覧の受け手のあとに足した受け手で別のキーに写して確かめる
+  await page.clock.install();
+  await pauseClock(page);
+  await tools.search.fill("テストテスト 05");
+  expect(await storedFilter(page)).toEqual(tabTeamSortOnly);
+  await page.evaluate(() => {
+    window.addEventListener(
+      "pagehide",
+      () => {
+        const saved = window.sessionStorage.getItem("ad-filter");
+        window.sessionStorage.setItem("e2e-ad-filter-at-pagehide", saved ?? "null");
+      },
+      { once: true },
+    );
+  });
+  await logoutViaHeader(page);
+  await page.clock.resume();
+  const atPagehide = await page.evaluate(() => {
+    const saved = window.sessionStorage.getItem("e2e-ad-filter-at-pagehide");
+    window.sessionStorage.removeItem("e2e-ad-filter-at-pagehide");
+    return saved;
+  });
+  expect(JSON.parse(atPagehide ?? "null")).toEqual({
+    seg: "cand",
+    q: "テストテスト 05",
+    team: "A",
+    sort: "old",
+  });
+  await expect.poll(() => storedFilter(page)).toBeNull();
+  await loginViaUi(page, adminOrg.ownerEmail);
+  await expectDefaultFilter(page);
+
+  // セッション切れ（Cookie の期限が切れ、ブラウザが捨てた）のあとに一覧を開き直す: ページを読み込む移動でログイン画面に移り、
+  // そこで消える
+  await changeTabTeamSort(page);
+  await tools.search.fill("テストテスト 02");
+  await expect.poll(() => rowNames(page)).toEqual([seedName(2)]);
+  await expect
+    .poll(() => storedFilter(page))
+    .toEqual({ seg: "cand", q: "テストテスト 02", team: "A", sort: "old" });
+  await page.context().clearCookies();
+  await page.reload();
+  await page.waitForURL((url) => url.pathname === "/admin/login");
+  await expect.poll(() => storedFilter(page)).toBeNull();
+  await loginViaUi(page, adminOrg.ownerEmail);
+  await expectDefaultFilter(page);
+
+  // セッション切れのあと、検索語を入れた直後に行を押す: アプリの中の移動でログイン画面に移る（同じ文書のまま）。時計を止めて検索語を
+  // 保存の待ちのままにすると、一覧の部品が外れるときの片付けが保存し（1.4 版）、ログイン画面はそのあとに消す。同じ文書なので、
+  // ad-filter への書き込みと削除を順に記録して、片付けの保存（検索語まで）の 1 回のあとに消した 1 回だけであることと、
+  // 止めた時計を進めて残った待ち（タイマー）を走らせても書き戻されないことを確かめる
+  await changeTabTeamSort(page);
+  await page.context().clearCookies();
+  await pauseClock(page);
+  await tools.search.fill("テストテスト 01");
+  expect(await storedFilter(page)).toEqual(tabTeamSortOnly);
+  await page.evaluate(() => {
+    const w = window as unknown as {
+      __sameDocument: boolean;
+      __adFilterOps: Array<{ op: "set" | "remove"; value?: string }>;
+    };
+    const ops: typeof w.__adFilterOps = [];
+    w.__sameDocument = true;
+    w.__adFilterOps = ops;
+    const { setItem, removeItem } = Storage.prototype;
+    Storage.prototype.setItem = function (this: Storage, key: string, value: string) {
+      if (key === "ad-filter") ops.push({ op: "set", value });
+      setItem.call(this, key, value);
+    };
+    Storage.prototype.removeItem = function (this: Storage, key: string) {
+      if (key === "ad-filter") ops.push({ op: "remove" });
+      removeItem.call(this, key);
+    };
+  });
+  await rowOf(page, seedName(1)).locator(".rl-td--type").click();
+  await page.waitForURL((url) => url.pathname === "/admin/login");
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { __sameDocument?: boolean }).__sameDocument ?? false,
+    ),
+  ).toBe(true);
+  await expect.poll(() => storedFilter(page)).toBeNull();
+  await page.clock.runFor(1_000);
+  expect(await storedFilter(page)).toBeNull();
+  const ops = await page.evaluate(
+    () =>
+      (window as unknown as { __adFilterOps: Array<{ op: "set" | "remove"; value?: string }> })
+        .__adFilterOps,
+  );
+  expect(
+    ops.map((o) => (o.op === "set" ? { op: o.op, filter: JSON.parse(o.value ?? "null") } : o)),
+  ).toEqual([
+    { op: "set", filter: { seg: "cand", q: "テストテスト 01", team: "A", sort: "old" } },
+    { op: "remove" },
+  ]);
+  await page.clock.resume();
+  await loginViaUi(page, adminOrg.ownerEmail);
+  await expectDefaultFilter(page);
+});
+
+test("M7-list-46 パスワードを再設定したあとの自動ログインでも絞り込みの保存が消え、既定の状態（ログイン画面を通らない）", async ({
+  page,
+  adminOrg,
+}) => {
+  await loginViaUi(page, adminOrg.ownerEmail);
+  const before = { seg: "cand", q: "テストテスト 05", team: "A", sort: "old" };
+  await changeTabTeamSort(page);
+  await listTools(page).search.fill("テストテスト 05");
+  await expect.poll(() => rowNames(page)).toEqual([seedName(5)]);
+  await expect.poll(() => storedFilter(page)).toEqual(before);
+
+  // 同じタブで M-03 の送信依頼をし、届いたリンクも同じタブで開く（ログイン画面は開かない）
+  await page.goto("/admin/password-reset");
+  await page.getByLabel("メールアドレス").fill(adminOrg.ownerEmail);
+  await page.getByRole("button", { name: "送信する" }).click();
+  await expect(page.getByRole("status")).toHaveText("入力したメールアドレス宛に案内を送信しました");
+  const oobCode = await passwordResetCode(adminOrg.ownerEmail);
+  await page.goto(`/admin/password-reset?mode=resetPassword&oobCode=${oobCode}`);
+  await page.getByLabel("新しいパスワード", { exact: true }).fill(E2E_ADMIN_PASSWORD);
+  await page.getByLabel("新しいパスワード（確認）").fill(E2E_ADMIN_PASSWORD);
+  // パスワードを決める直前まで、前の絞り込みの保存は残っている（再設定の画面では消さない）
+  expect(await storedFilter(page)).toEqual(before);
+  await page.getByRole("button", { name: "パスワードを設定する" }).click();
+  await page.waitForURL((url) => url.pathname === "/admin");
+  // ログインの成功（establishSession）で消え、一覧は既定の状態（11-2 §2.21 の 1.5 版）。一覧は開いただけでは保存しない
+  await expectDefaultFilter(page);
+  expect(await storedFilter(page)).toBeNull();
 });
 
 test("M7-list-47 0 件の表示: すべて・在籍・求職者・退職のタブごとの文言とコピーのボタン、検索で 0 件は「絞り込みを解除」", async ({

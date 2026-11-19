@@ -39,8 +39,8 @@ export const DEFAULT_LIST_FILTER: ListFilterState = Object.freeze({
 });
 /** 表示の上限の最初の値と、「さらに表示」で増やす数（§2.8） */
 export const LIST_PAGE_STEP = 100;
-/** 絞り込みの状態を保存する sessionStorage のキー（§2.21） */
-export const LIST_FILTER_STORAGE_KEY = "ad-filter";
+/** 絞り込みの状態を保存する sessionStorage のキー（§2.21。定めるのは保存と消す処理の lib/utils/list-filter-storage.ts） */
+export { LIST_FILTER_STORAGE_KEY } from "@/lib/utils/list-filter-storage";
 /** 最後の入力から検索語を当てて保存するまでの時間（§2.7） */
 export const SEARCH_DEBOUNCE_MS = 150;
 

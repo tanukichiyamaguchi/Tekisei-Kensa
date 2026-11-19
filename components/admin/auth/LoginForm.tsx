@@ -1,11 +1,12 @@
 "use client";
-// M-01 ログインフォーム（06 §3.1）
+// M-01 ログインフォーム（06 §3.1）。開いたときに、回答一覧の絞り込みの保存（11-2 §2.21）を消す（1.5 版）
 import Link from "next/link";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 import { ADMIN_TEXTS } from "@/lib/presentation/admin-texts";
 import { recordLoginEvent } from "@/lib/utils/admin-api";
 import { AdminAuthError, establishSession } from "@/lib/utils/admin-auth";
+import { clearStoredListFilter } from "@/lib/utils/list-filter-storage";
 
 export function LoginForm(props: { readonly next: string; readonly reset: boolean }) {
   const [email, setEmail] = useState("");
@@ -14,6 +15,14 @@ export function LoginForm(props: { readonly next: string; readonly reset: boolea
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showReset, setShowReset] = useState(props.reset);
+
+  // 前の人の回答一覧の絞り込み（検索語に氏名・電話番号が入り得る）を、ログイン画面を開いた時点で消す。ログアウト・セッション切れ・
+  // M-07 のパスワード変更のあとはこの画面を通る。前のページを離れるときの保存（ページを読み込む移動では pagehide、アプリの中の移動では
+  // 一覧の部品の片付け）より後に動くので、消したあとに書き戻されない。この画面を通らない M-03 の自動ログインは、ログインの成功
+  // （establishSession）で消す（11-2 §2.21 の 1.5 版）
+  useEffect(() => {
+    clearStoredListFilter();
+  }, []);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
