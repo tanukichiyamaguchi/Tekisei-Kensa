@@ -10,6 +10,7 @@ import {
 } from "firebase/auth";
 
 import { clientAuth } from "@/lib/firebase/client";
+import { clearStoredListFilter } from "@/lib/utils/list-filter-storage";
 
 export type AdminAuthErrorReason =
   | "invalid_credential"
@@ -46,7 +47,7 @@ async function safeSignOut(auth: Auth): Promise<void> {
 
 /**
  * signInWithEmailAndPassword → getIdToken → POST /auth/session → signOut の順に行い、セッション Cookie を発行させる
- * （06 §3.1、00 §4.2）。M-01 と M-03 が使う
+ * （06 §3.1、00 §4.2）。M-01 と M-03 が使う。成功したら回答一覧の絞り込みの保存を消す（11-2 §2.21 の 1.5 版）
  */
 export async function establishSession(email: string, password: string): Promise<void> {
   const auth = await clientAuth();
@@ -71,6 +72,9 @@ export async function establishSession(email: string, password: string): Promise
       throw new AdminAuthError("network");
     }
     if (!res.ok) throw new AdminAuthError("session_rejected");
+    // 新しいセッションができたら、前の人の回答一覧の絞り込み（検索語に氏名・電話番号が入り得る）を消す（11-2 §2.21 の 1.5 版）。
+    // M-03 で新しいパスワードを決めたあとの自動ログインは、ログイン画面（開いたときに消す）を通らないため
+    clearStoredListFilter();
   } finally {
     await safeSignOut(auth);
   }

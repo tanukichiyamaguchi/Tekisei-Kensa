@@ -1,15 +1,16 @@
-// 回答一覧の絞り込みの状態の保存（M7-list-16 の list-filter-storage の分。11-2 §2.21・§5.1）。読み書きと、ログイン画面を開いたときに
-// 消すこと（1.5 版）、使えない環境で例外を投げないこと
+// 回答一覧の絞り込みの状態の保存（M7-list-16 の list-filter-storage の分。11-2 §2.21・§5.1）。読み書きと、消すこと（ログイン画面を
+// 開いたときとログインが成功したときに使う。1.5 版）、使えない環境で例外を投げないこと
 import { describe, expect, it } from "vitest";
 
+import * as resultListView from "@/lib/presentation/result-list-view";
 import {
   DEFAULT_LIST_FILTER,
-  LIST_FILTER_STORAGE_KEY,
   parseStoredFilter,
   type ListFilterState,
 } from "@/lib/presentation/result-list-view";
 import {
   clearStoredListFilter,
+  LIST_FILTER_STORAGE_KEY,
   readStoredListFilter,
   saveStoredListFilter,
 } from "@/lib/utils/list-filter-storage";
@@ -45,6 +46,11 @@ const brokenStorage = {
 const filter: ListFilterState = { seg: "cand", q: "テストテスト 05", team: "A", sort: "old" };
 
 describe("M7-list-16 list-filter-storage（sessionStorage の ad-filter の読み書きと消すこと）", () => {
+  it("キーは ad-filter で、回答一覧の表示の規則からも同じキーを export する", () => {
+    expect(LIST_FILTER_STORAGE_KEY).toBe("ad-filter");
+    expect(resultListView.LIST_FILTER_STORAGE_KEY).toBe(LIST_FILTER_STORAGE_KEY);
+  });
+
   it("保存した値を読むと、parseStoredFilter で同じ状態に戻る", () => {
     const storage = memoryStorage();
     saveStoredListFilter(filter, storage);

@@ -150,6 +150,24 @@ export async function logoutViaHeader(page: Page): Promise<void> {
   await page.waitForURL((url) => url.pathname === "/admin/login");
 }
 
+/**
+ * email に送ったパスワード設定用のリンクの oobCode（最後に送ったもの）。メールは送られず Auth Emulator に溜まるので、
+ * Emulator の REST から取り出す（08 E-18、11-2 §5.3 M7-list-46）
+ */
+export async function passwordResetCode(email: string): Promise<string> {
+  const host = process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST ?? "127.0.0.1:9099";
+  const project = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "demo-tekisei";
+  const res = await fetch(`http://${host}/emulator/v1/projects/${project}/oobCodes`);
+  const { oobCodes } = (await res.json()) as {
+    oobCodes: Array<{ email: string; requestType: string; oobCode: string }>;
+  };
+  const code = oobCodes
+    .filter((c) => c.email === email && c.requestType === "PASSWORD_RESET")
+    .at(-1);
+  if (!code) throw new Error(`${email} に送ったパスワード設定用のリンクがありません`);
+  return code.oobCode;
+}
+
 // ---- 回答一覧（11-2 §2）の要素
 
 /** 表の行（data-testid="result-table" は旧一覧から引き継いだ目印。1 行 = 同じ人の受験をまとめた行） */

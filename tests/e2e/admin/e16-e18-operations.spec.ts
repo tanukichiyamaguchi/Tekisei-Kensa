@@ -11,6 +11,7 @@ import {
   obPanel,
   obTotal,
   openDialog,
+  passwordResetCode,
   resultRows,
   test,
 } from "../support/admin-ui";
@@ -93,18 +94,9 @@ test("E-18 招待リンクで登録すると T-35 とクレーム付きの Auth 
   expect(claims).toEqual({ organizationId: adminOrg.organizationId, role: "admin" });
 
   // Auth Emulator の REST から oobCode を取り出す（08 E-18）
-  const host = process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST ?? "127.0.0.1:9099";
-  const project = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "demo-tekisei";
-  const res = await fetch(`http://${host}/emulator/v1/projects/${project}/oobCodes`);
-  const { oobCodes } = (await res.json()) as {
-    oobCodes: Array<{ email: string; requestType: string; oobCode: string }>;
-  };
-  const code = oobCodes
-    .filter((c) => c.email === email && c.requestType === "PASSWORD_RESET")
-    .at(-1);
-  expect(code).toBeTruthy();
+  const oobCode = await passwordResetCode(email);
 
-  await page.goto(`/admin/password-reset?mode=resetPassword&oobCode=${code!.oobCode}`);
+  await page.goto(`/admin/password-reset?mode=resetPassword&oobCode=${oobCode}`);
   await page.getByLabel("新しいパスワード", { exact: true }).fill(E2E_ADMIN_PASSWORD);
   await page.getByLabel("新しいパスワード（確認）").fill(E2E_ADMIN_PASSWORD);
   await page.getByRole("button", { name: "パスワードを設定する" }).click();
@@ -113,7 +105,7 @@ test("E-18 招待リンクで登録すると T-35 とクレーム付きの Auth 
   await expect(page.locator("[data-testid=result-table] tbody tr")).toHaveCount(8);
 
   // 使用済みのリンクは T-23
-  await page.goto(`/admin/password-reset?mode=resetPassword&oobCode=${code!.oobCode}`);
+  await page.goto(`/admin/password-reset?mode=resetPassword&oobCode=${oobCode}`);
   await expect(page.locator(".notice--error")).toHaveText(
     "認証リンクが無効か期限切れです。もう一度お試しください",
   );
