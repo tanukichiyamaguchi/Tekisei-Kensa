@@ -73,7 +73,7 @@ sequenceDiagram
     participant DB as Firestore（results / aiAnalyses / auditLogs。Admin SDK）
 
     B->>API: 「採用向けAI解説を生成」
-    API->>S: generateAi(ctx, resultId, kind)
+    API->>S: generateAi(ctx, resultId, kind, body)
     S->>DB: results・respondents 取得と organizationId 照合、表示上の役職、その種類の状態判定、generating へトランザクションで条件付き更新（04）
     S->>P: buildAiAnalysisInput({ respondentName, occupationCode, score })
     S->>P: getAiProvider().generate(kind, input, { model, promptVersion, signal })
